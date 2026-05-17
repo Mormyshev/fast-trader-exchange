@@ -51,39 +51,46 @@ export default function Features() {
     };
 
     return (
-        <section className="max-w-7xl mx-auto p-8 bg-white">
+        /* 
+          ЯВНО ЗАДАЕМ bg-transparent И text-zinc-900, 
+          чтобы изолировать блок от глобальных стилей разметки layout
+        */
+        <section className="w-full py-4 bg-transparent text-zinc-900 dark:text-zinc-900">
             {/* Контейнер карточек */}
             <div
                 ref={scrollRef}
                 onScroll={handleScroll}
                 className="
-          flex overflow-x-auto gap-4 pb-4 scrollbar-none 
-          snap-x snap-mandatory scroll-smooth
-          md:grid md:grid-cols-3 md:gap-5 md:overflow-x-visible md:pb-0 md:snap-none
-        "
+                  flex overflow-x-auto gap-4 pb-4 scrollbar-none 
+                  snap-x snap-mandatory scroll-smooth
+                  md:grid md:grid-cols-3 md:gap-5 md:overflow-x-visible md:pb-0 md:snap-none
+                "
             >
                 {cards.map((card, index) => (
                     <div
                         key={index}
                         className="
-              relative overflow-hidden bg-[#FFDD2D] text-zinc-900 rounded-[24px] p-6 min-h-[175px] flex flex-col justify-between shadow-sm border border-yellow-400/30 group cursor-pointer transition-all duration-300 hover:shadow-md hover:border-yellow-400
-              min-w-[85vw] sm:min-w-[70vw] snap-center
-              md:min-w-0 md:w-full md:snap-align-none
-            "
+                          relative overflow-hidden bg-[#FFDD2D] rounded-[24px] p-6 min-h-[175px] flex flex-col justify-between shadow-sm border border-yellow-400/30 group cursor-pointer transition-all duration-300 hover:shadow-md hover:border-yellow-400
+                          min-w-[85vw] sm:min-w-[70vw] snap-center
+                          md:min-w-0 md:w-full md:snap-align-none
+                        "
                     >
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/[0.02] pointer-events-none" />
+                        {/* Эффект матового блеска */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/[0.02] pointer-events-none" />
 
-                        <div className="absolute right-6 bottom-6 flex items-center justify-center">
+                        {/* Контейнер иконки справа внизу */}
+                        <div className="absolute right-6 bottom-6 flex items-center justify-center z-20">
                             <div className="absolute w-16 h-16 bg-white/20 rounded-full blur-md pointer-events-none" />
                             {card.icon}
                         </div>
 
+                        {/* Текст (Явно указываем цвета, чтобы они не инвертировались в темной теме) */}
                         <div className="relative z-10 max-w-[70%] flex flex-col justify-between h-full">
                             <div>
                                 <h3 className="font-bold text-lg md:text-xl leading-snug tracking-tight mb-2 text-zinc-950">
                                     {card.title}
                                 </h3>
-                                <p className="text-xs md:text-sm font-medium text-zinc-800/90 leading-relaxed whitespace-pre-line">
+                                <p className="text-xs md:text-sm font-medium text-zinc-900/90 leading-relaxed whitespace-pre-line">
                                     {card.description}
                                 </p>
                             </div>
@@ -99,9 +106,9 @@ export default function Features() {
                         key={index}
                         onClick={() => scrollToCard(index)}
                         className={`
-              h-2 rounded-full transition-all duration-300
-              ${activeIndex === index ? "w-6 bg-zinc-900 dark:bg-zinc-100" : "w-2 bg-zinc-300 dark:bg-zinc-700"}
-            `}
+                          h-2 rounded-full transition-all duration-300
+                          ${activeIndex === index ? "w-6 bg-zinc-900 dark:bg-zinc-100" : "w-2 bg-zinc-300 dark:bg-zinc-700"}
+                        `}
                         aria-label={`Перейти к слайду ${index + 1}`}
                     />
                 ))}

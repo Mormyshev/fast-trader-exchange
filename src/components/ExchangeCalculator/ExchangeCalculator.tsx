@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { ArrowLeftRight, ChevronDown, Check } from "lucide-react";
+import Link from "next/link";
 
 interface Currency {
     id: string;
@@ -277,12 +278,12 @@ export default function ExchangeCalculator() {
 
                 {/* Кнопка */}
                 <div className="mt-8">
-                    <button
-                        type="button"
-                        className="w-full bg-[#FFDD2D] text-zinc-900 font-bold text-base py-4 rounded-full hover:bg-[#e6c628] shadow-xs active:scale-[0.99] transition-all"
+                    <Link
+                        href="/exchange"
+                        className="inline-block text-center w-full bg-[#FFDD2D] text-zinc-900 font-bold text-base py-4 rounded-full hover:bg-[#e6c628] shadow-sm active:scale-[0.99] transition-all"
                     >
                         Продолжить
-                    </button>
+                    </Link>
                 </div>
             </div>
         </div>

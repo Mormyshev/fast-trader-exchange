@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "./context/AuthContext";
+import SmoothScroll from "../components/SmoothScroll";
 
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
@@ -12,7 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 enableSystem
                 disableTransitionOnChange // Полезно: отключает анимации при смене темы во время загрузки
             >
-                {children}
+                <SmoothScroll>{children}</SmoothScroll>
             </ThemeProvider>
         </AuthProvider>
     );
