@@ -37,7 +37,7 @@ export default function Header() {
     const [isOpen, setIsOpen] = useState(false);
     const [isAuthOpen, setIsAuthOpen] = useState(false);
     const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-    const { resolvedTheme, setTheme } = useTheme();
+    // const { resolvedTheme, setTheme } = useTheme("light");
     const [mounted, setMounted] = useState(false);
 
     const { role, logoutUser } = useAuth();
@@ -46,9 +46,9 @@ export default function Header() {
         setMounted(true);
     }, []);
 
-    const toggleTheme = () => {
-        setTheme(resolvedTheme === "dark" ? "light" : "dark");
-    };
+    // const toggleTheme = () => {
+    //     setTheme(resolvedTheme === "dark" ? "light" : "dark");
+    // };
 
     // Методы бесшовного переключения модалок
     const openLoginAndCloseRegister = () => {
@@ -112,7 +112,7 @@ export default function Header() {
                             </button>
 
                             {/* Переключатель темы (Десктоп) */}
-                            {mounted && (
+                            {/* {mounted && (
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -126,7 +126,7 @@ export default function Header() {
                                         <Moon className="h-5 w-5 text-zinc-700" />
                                     )}
                                 </Button>
-                            )}
+                            )} */}
 
                             {/* Кнопки авторизации (Десктоп) */}
                             {role === "guest" ? (
@@ -171,7 +171,7 @@ export default function Header() {
 
                         {/* Мобильный блок (Тема + Бургер) */}
                         <div className="flex items-center space-x-2 md:hidden">
-                            {mounted && (
+                            {/* {mounted && (
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -184,7 +184,7 @@ export default function Header() {
                                         <Moon className="h-5 w-5 text-zinc-700" />
                                     )}
                                 </Button>
-                            )}
+                            )} */}
 
                             <Sheet open={isOpen} onOpenChange={setIsOpen}>
                                 <SheetTrigger asChild>
