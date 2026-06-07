@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { X, RefreshCw } from "lucide-react";
-import Link from "next/link";
-import { useAuth } from "../../app/context/AuthContext";
+import { useAuth } from "@/src/app/context/AuthContext";
+import { useLenis } from "lenis/react";
 
 interface AuthModalProps {
     isOpen: boolean;
@@ -11,46 +11,70 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
+    const [shouldRender, setShouldRender] = useState(isOpen);
+    const [isAnimated, setIsAnimated] = useState(isOpen);
     const [login, setLogin] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const { loginUser } = useAuth();
 
+    const lenis = useLenis();
+
     useEffect(() => {
         if (isOpen) {
-            document.body.style.overflow = "hidden";
-            setError(""); // Сбрасываем ошибку при открытии
+            setError("");
+            setShouldRender(true);
+
+            if (lenis) {
+                lenis.stop();
+            }
+
+            const timer = setTimeout(() => setIsAnimated(true), 10);
+            return () => clearTimeout(timer);
         } else {
-            document.body.style.overflow = "unset";
+            setIsAnimated(false);
+            const timer = setTimeout(() => {
+                setShouldRender(false);
+
+                if (lenis) {
+                    lenis.start();
+                }
+            }, 300); // Время совпадает с длительностью CSS-анимации
+            return () => clearTimeout(timer);
         }
-        return () => {
-            document.body.style.overflow = "unset";
-        };
     }, [isOpen]);
 
-    if (!isOpen) return null;
+    if (!shouldRender) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const success = loginUser(login, password);
-
-        if (success) {
-            onClose(); // Закрываем модалку при успешном входе
-        } else {
-            setError("Неверный логин или пароль");
-        }
+        if (success) onClose();
+        else setError("Неверный логин или пароль");
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+        /* data-lenis-prevent сообщает плагину Lenis, что скроллить страницу под модалкой нельзя */
+        <div
+            data-lenis-prevent
+            className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs transition-opacity duration-300 ease-in-out ${
+                isAnimated ? "opacity-100" : "opacity-0"
+            }`}
+        >
             <div className="absolute inset-0" onClick={onClose} />
-            <div className="relative w-full max-w-[480px] bg-white text-zinc-900 rounded-[32px] p-8 md:p-10 shadow-2xl z-10 border border-zinc-100">
+
+            <div
+                className={`relative w-full max-w-[480px] bg-white text-zinc-900 rounded-[32px] p-8 md:p-10 shadow-2xl z-10 border border-zinc-100 transform transition-all duration-300 ease-in-out ${
+                    isAnimated ? "scale-100 opacity-100" : "scale-95 opacity-0"
+                }`}
+            >
                 <button
                     onClick={onClose}
                     className="absolute top-6 right-6 text-zinc-400 hover:text-zinc-600"
                 >
                     <X className="w-5 h-5" />
                 </button>
+
                 <h2 className="text-xl md:text-2xl font-bold text-center text-[#2A2A2A] mb-6">
                     Авторизация
                 </h2>
@@ -70,7 +94,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             type="text"
                             value={login}
                             onChange={(e) => setLogin(e.target.value)}
-                            className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium shadow-[0_0_12px_rgba(255,221,45,0.15)] focus:outline-hidden focus:border-[#FFDD2D]"
+                            className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D]"
                             required
                         />
                     </div>
@@ -83,7 +107,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium shadow-[0_0_12px_rgba(255,221,45,0.15)] focus:outline-hidden focus:border-[#FFDD2D]"
+                            className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D]"
                             required
                         />
                     </div>
