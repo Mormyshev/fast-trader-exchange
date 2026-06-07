@@ -20,29 +20,34 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     const lenis = useLenis();
 
+    // Логика плавной анимации и жесткой блокировки скролла
     useEffect(() => {
         if (isOpen) {
             setError("");
             setShouldRender(true);
 
-            if (lenis) {
-                lenis.stop();
-            }
+            // Блокируем Lenis скролл
+            if (lenis) lenis.stop();
+            // Блокируем стандартный скролл браузера
+            document.body.style.overflow = "hidden";
 
             const timer = setTimeout(() => setIsAnimated(true), 10);
             return () => clearTimeout(timer);
         } else {
             setIsAnimated(false);
+
             const timer = setTimeout(() => {
                 setShouldRender(false);
 
-                if (lenis) {
-                    lenis.start();
-                }
-            }, 300); // Время совпадает с длительностью CSS-анимации
+                // Включаем Lenis обратно
+                if (lenis) lenis.start();
+                // Возвращаем стандартный скролл браузера
+                document.body.style.overflow = "";
+            }, 300); // Соответствует duration-300
+
             return () => clearTimeout(timer);
         }
-    }, [isOpen]);
+    }, [isOpen, lenis]);
 
     if (!shouldRender) return null;
 

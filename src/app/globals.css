@@ -51,6 +51,11 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+body[style*="overflow: hidden"] {
+  /* Компенсируем исчезновение скроллбара стандартным паддингом */
+  padding-right: var(--removed-body-scroll-width, 16px);
+}
+
 html.lenis, html.lenis body {
   height: auto;
 }
