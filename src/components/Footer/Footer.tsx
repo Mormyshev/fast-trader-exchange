@@ -64,7 +64,7 @@ export default function Footer() {
                 Пользовательское соглашение
               </Link>
               <Link
-                href="/aml-check"
+                href="#"
                 className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
               >
                 Проверить адрес перед обменом
