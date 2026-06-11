@@ -4,11 +4,13 @@ import { useState, useEffect } from "react";
 import { X, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useLenis } from "lenis/react";
+import { createClient } from "@/src/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 interface RegisterModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSwitchToLogin: () => void; // Функция для быстрого перехода на окно входа
+    onSwitchToLogin: () => void;
 }
 
 export default function RegisterModal({
@@ -19,104 +21,161 @@ export default function RegisterModal({
     const [shouldRender, setShouldRender] = useState(isOpen);
     const [isAnimated, setIsAnimated] = useState(isOpen);
 
+    // Поля ввода формы
     const [login, setLogin] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [passwordConfirm, setPasswordConfirm] = useState("");
     const [captchaInput, setCaptchaInput] = useState("");
     const [agreeTerms, setAgreeTerms] = useState(false);
+
+    // Статусы отправки
     const [error, setError] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Переменные для капчи
+    const [num1, setNum1] = useState(3);
+    const [num2, setNum2] = useState(4);
 
     const lenis = useLenis();
+    const router = useRouter();
+    const supabase = createClient();
+    const generateCaptcha = () => {
+        setNum1(Math.floor(Math.random() * 10) + 1);
+        setNum2(Math.floor(Math.random() * 10) + 1);
+        setCaptchaInput("");
+    };
 
-    // Логика плавной анимации и интеграции с Lenis скроллом
     useEffect(() => {
         if (isOpen) {
             setError("");
+            setSuccessMessage("");
+            setIsLoading(false);
+            generateCaptcha();
             setShouldRender(true);
-
-            // Блокируем Lenis скролл
             if (lenis) lenis.stop();
-            // Блокируем стандартный скролл браузера
             document.body.style.overflow = "hidden";
-
             const timer = setTimeout(() => setIsAnimated(true), 10);
             return () => clearTimeout(timer);
         } else {
             setIsAnimated(false);
-
             const timer = setTimeout(() => {
                 setShouldRender(false);
-
-                // Включаем Lenis обратно
                 if (lenis) lenis.start();
-                // Возвращаем стандартный скролл браузера
                 document.body.style.overflow = "";
-            }, 300); // Соответствует duration-300
-
+            }, 300);
             return () => clearTimeout(timer);
         }
     }, [isOpen, lenis]);
 
     if (!shouldRender) return null;
-
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError("");
+        setSuccessMessage("");
 
         if (password !== passwordConfirm) {
             setError("Пароли не совпадают");
             return;
         }
 
-        // Ваша логика регистрации
-        console.log("Регистрация:", {
-            login,
+        if (parseInt(captchaInput) !== num1 + num2) {
+            setError("Неверный ответ на капчу");
+            generateCaptcha();
+            return;
+        }
+
+        if (!agreeTerms) {
+            setError("Необходимо согласиться с правилами");
+            return;
+        }
+
+        setIsLoading(true);
+
+        const { data, error: signUpError } = await supabase.auth.signUp({
             email,
             password,
-            captchaInput,
-            agreeTerms,
+            options: {
+                data: { username: login },
+                emailRedirectTo: `${window.location.origin}/auth/callback`,
+            },
         });
+
+        if (signUpError) {
+            setIsLoading(false);
+            setError(signUpError.message);
+            generateCaptcha();
+            return;
+        }
+
+        // ДЕЙСТВИЯ ПРИ УСПЕХЕ:
+        setIsLoading(false);
+
+        if (data?.session) {
+            // Вариант А: Подтверждение отключено, юзер сразу авторизован
+            setLogin("");
+            setEmail("");
+            setPassword("");
+            setPasswordConfirm("");
+            onClose(); // Закрываем окно
+            router.refresh(); // Обновляем страницу
+        } else {
+            // Вариант Б: Подтверждение включено, показываем текст
+            setSuccessMessage(
+                "Регистрация успешна! Проверьте вашу почту для подтверждения аккаунта.",
+            );
+            setLogin("");
+            setEmail("");
+            setPassword("");
+            setPasswordConfirm("");
+            generateCaptcha();
+
+            // (Опционально) Автоматически закрыть окно через 5 секунд, чтобы юзер успел прочитать
+            setTimeout(() => {
+                onClose();
+            }, 5000);
+        }
     };
 
     return (
-        /* data-lenis-prevent запрещает скролл подложки в Lenis */
         <div
             data-lenis-prevent
             className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs transition-opacity duration-300 ease-in-out ${
                 isAnimated ? "opacity-100" : "opacity-0"
             }`}
         >
-            {/* Подложка для закрытия по клику вне формы */}
             <div className="absolute inset-0" onClick={onClose} />
-
-            {/* Белое модальное окно */}
             <div
                 className={`relative w-full max-w-[480px] bg-white text-zinc-900 rounded-[32px] p-8 md:p-10 shadow-2xl z-10 border border-zinc-100 transform transition-all duration-300 ease-in-out max-h-[90vh] overflow-y-auto scrollbar-none ${
                     isAnimated ? "scale-100 opacity-100" : "scale-95 opacity-0"
                 }`}
             >
-                {/* Кнопка закрытия */}
                 <button
                     onClick={onClose}
                     className="absolute top-6 right-6 text-zinc-400 hover:text-zinc-600 transition-colors"
+                    disabled={isLoading}
                 >
                     <X className="w-5 h-5" />
                 </button>
 
-                {/* Заголовок */}
                 <h2 className="text-xl md:text-2xl font-bold text-center text-[#2A2A2A] mb-6">
                     Регистрация
                 </h2>
 
-                {/* Форма */}
                 <form onSubmit={handleSubmit} className="space-y-5">
                     {error && (
-                        <div className="text-xs font-bold text-red-500 text-center bg-red-50 py-2 rounded-full">
+                        <div className="text-xs font-bold text-red-500 text-center bg-red-50 py-2 rounded-full px-4">
                             {error}
                         </div>
                     )}
 
-                    {/* Поле: Логин */}
+                    {successMessage && (
+                        <div className="text-xs font-bold text-green-600 text-center bg-green-50 py-3 rounded-2xl px-4">
+                            {successMessage}
+                        </div>
+                    )}
+
                     <div className="space-y-2">
                         <label className="block text-xs font-semibold text-zinc-500 pl-1">
                             Логин *
@@ -127,10 +186,11 @@ export default function RegisterModal({
                             onChange={(e) => setLogin(e.target.value)}
                             className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D] transition-all"
                             required
+                            disabled={isLoading}
+                            placeholder="my_username"
                         />
                     </div>
 
-                    {/* Поле: E-mail */}
                     <div className="space-y-2">
                         <label className="block text-xs font-semibold text-zinc-500 pl-1">
                             E-mail *
@@ -141,10 +201,11 @@ export default function RegisterModal({
                             onChange={(e) => setEmail(e.target.value)}
                             className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D] transition-all"
                             required
+                            disabled={isLoading}
+                            placeholder="example@mail.com"
                         />
                     </div>
 
-                    {/* Поле: Пароль */}
                     <div className="space-y-2">
                         <label className="block text-xs font-semibold text-zinc-500 pl-1">
                             Пароль *
@@ -155,10 +216,10 @@ export default function RegisterModal({
                             onChange={(e) => setPassword(e.target.value)}
                             className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D] transition-all"
                             required
+                            disabled={isLoading}
                         />
                     </div>
 
-                    {/* Поле: Повтор пароля */}
                     <div className="space-y-2">
                         <label className="block text-xs font-semibold text-zinc-500 pl-1">
                             Повторите пароль *
@@ -169,30 +230,31 @@ export default function RegisterModal({
                             onChange={(e) => setPasswordConfirm(e.target.value)}
                             className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D] transition-all"
                             required
+                            disabled={isLoading}
                         />
                     </div>
-
-                    {/* Капча */}
                     <div className="flex items-center space-x-4 pt-2">
                         <div className="flex items-center bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2 font-bold text-lg text-zinc-700 select-none">
-                            3 + 4 =
+                            {num1} + {num2} =
                         </div>
                         <input
                             type="number"
                             value={captchaInput}
                             onChange={(e) => setCaptchaInput(e.target.value)}
-                            className="w-12 h-12 bg-white border border-zinc-200 rounded-full text-center font-bold focus:outline-hidden focus:border-[#FFDD2D] transition-all"
+                            className="w-16 h-12 bg-white border border-zinc-200 rounded-full text-center font-bold focus:outline-hidden focus:border-[#FFDD2D] transition-all"
                             required
+                            disabled={isLoading}
                         />
                         <button
                             type="button"
+                            onClick={generateCaptcha}
                             className="p-2 text-amber-400 hover:text-amber-500 transition-colors"
+                            disabled={isLoading}
                         >
                             <RefreshCw className="w-4 h-4" />
                         </button>
                     </div>
 
-                    {/* Чекбокс согласия с правилами */}
                     <div className="flex items-start space-x-2.5 pt-2">
                         <input
                             type="checkbox"
@@ -201,6 +263,8 @@ export default function RegisterModal({
                             onChange={(e) => setAgreeTerms(e.target.checked)}
                             className="mt-0.5 w-4 h-4 rounded-xs border-zinc-300 text-[#FFDD2D] focus:ring-[#FFDD2D] accent-[#FFDD2D] cursor-pointer"
                             required
+                            disabled={isLoading}
+                            style={{ accentColor: "#FFDD2D" }}
                         />
                         <label
                             htmlFor="agreeTerms"
@@ -217,18 +281,19 @@ export default function RegisterModal({
                         </label>
                     </div>
 
-                    {/* Кнопка Регистрация */}
                     <div className="pt-4">
                         <button
                             type="submit"
-                            className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 font-bold py-3.5 rounded-full shadow-xs transition-all"
+                            disabled={isLoading}
+                            className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-3.5 rounded-full shadow-xs transition-all flex items-center justify-center"
                         >
-                            Зарегистрироваться
+                            {isLoading
+                                ? "Регистрация..."
+                                : "Зарегистрироваться"}
                         </button>
                     </div>
                 </form>
 
-                {/* Ссылка быстрого переключения на вход */}
                 <div className="mt-6 text-center text-xs font-semibold">
                     <span className="text-zinc-400">
                         Уже зарегистрированы?{" "}
@@ -236,6 +301,7 @@ export default function RegisterModal({
                     <button
                         onClick={onSwitchToLogin}
                         className="text-amber-400 hover:underline"
+                        disabled={isLoading}
                     >
                         Войти
                     </button>

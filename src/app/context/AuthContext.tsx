@@ -1,54 +1,108 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
-
-// Доступные роли в приложении
-export type UserRole = "guest" | "admin" | "maker" | "user";
+import { createContext, useContext, useEffect, useState } from "react";
+import { createClient } from "@/src/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 interface AuthContextType {
-    role: UserRole;
-    loginUser: (login: string, pass: string) => boolean;
-    logoutUser: () => void;
+    user: any | null;
+    role: "guest" | "user" | "manager" | "admin";
+    isLoading: boolean;
+    logoutUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+    user: null,
+    role: "guest",
+    isLoading: true,
+    logoutUser: async () => {},
+});
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-    const [role, setRole] = useState<UserRole>("guest");
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+    const [user, setUser] = useState<any | null>(null);
+    const [role, setRole] = useState<"guest" | "user" | "manager" | "admin">(
+        "guest",
+    );
+    const [isLoading, setIsLoading] = useState(true);
 
-    const loginUser = (login: string, pass: string): boolean => {
-        const u = login.trim().toLowerCase();
-        const p = pass.trim();
+    const supabase = createClient();
+    const router = useRouter();
 
-        if (u === "admin" && p === "admin") {
-            setRole("admin");
-            return true;
+    // Функция получения роли пользователя из таблицы profiles
+    const fetchUserRole = async (userId: string) => {
+        const { data, error } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", userId)
+            .single();
+
+        if (!error && data?.role) {
+            setRole(data.role as any);
+        } else {
+            setRole("user"); // Роль по умолчанию при сбое запроса
         }
-        if (u === "maker" && p === "maker") {
-            setRole("maker");
-            return true;
-        }
-        if (u === "user" && p === "user") {
-            setRole("user");
-            return true;
-        }
-        return false; // Если данные не совпали
     };
 
-    const logoutUser = () => {
+    useEffect(() => {
+        // 1. Проверяем текущую сессию при загрузке страницы
+        const initAuth = async () => {
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+            if (session?.user) {
+                setUser(session.user);
+                await fetchUserRole(session.user.id);
+            } else {
+                setUser(null);
+                setRole("guest");
+            }
+            setIsLoading(false);
+        };
+
+        initAuth();
+
+        // 2. Подписываемся на динамические изменения (вход, выход, смена токена)
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session?.user) {
+                setUser(session.user);
+                await fetchUserRole(session.user.id);
+            } else {
+                setUser(null);
+                setRole("guest");
+            }
+            setIsLoading(false);
+        });
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, []);
+
+    // Функция выхода
+    const logoutUser = async () => {
+        setIsLoading(true);
+
+        // Разлогиниваем пользователя в самом Supabase (очищает локальное хранилище)
+        await supabase.auth.signOut();
+
+        setUser(null);
         setRole("guest");
+        setIsLoading(false);
+
+        // Вместо router.push жестко перезагружаем страницу на главную.
+        // Это гарантированно стирает старые серверные куки Next.js!
+        window.location.origin
+            ? (window.location.href = window.location.origin)
+            : router.push("/");
     };
 
     return (
-        <AuthContext.Provider value={{ role, loginUser, logoutUser }}>
+        <AuthContext.Provider value={{ user, role, isLoading, logoutUser }}>
             {children}
         </AuthContext.Provider>
     );
 }
 
-export function useAuth() {
-    const context = useContext(AuthContext);
-    if (!context)
-        throw new Error("useAuth must be used within an AuthProvider");
-    return context;
-}
+export const useAuth = () => useContext(AuthContext);

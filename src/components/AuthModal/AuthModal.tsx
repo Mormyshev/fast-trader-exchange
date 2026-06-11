@@ -2,64 +2,103 @@
 
 import { useState, useEffect } from "react";
 import { X, RefreshCw } from "lucide-react";
-import { useAuth } from "@/src/app/context/AuthContext";
 import { useLenis } from "lenis/react";
+import { createClient } from "@/src/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 interface AuthModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onSwitchToRegister: () => void; // 1. Добавляем новое свойство в интерфейс
 }
 
-export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export default function AuthModal({
+    isOpen,
+    onClose,
+    onSwitchToRegister, // 2. Принимаем свойство в аргументах компонента
+}: AuthModalProps) {
     const [shouldRender, setShouldRender] = useState(isOpen);
     const [isAnimated, setIsAnimated] = useState(isOpen);
+
     const [login, setLogin] = useState("");
     const [password, setPassword] = useState("");
+    const [captchaAnswer, setCaptchaAnswer] = useState("");
+
     const [error, setError] = useState("");
-    const { loginUser } = useAuth();
+    const [isLoading, setIsLoading] = useState(false);
+
+    const [num1, setNum1] = useState(6);
+    const [num2, setNum2] = useState(6);
 
     const lenis = useLenis();
+    const router = useRouter();
+    const supabase = createClient();
 
-    // Логика плавной анимации и жесткой блокировки скролла
+    const generateCaptcha = () => {
+        setNum1(Math.floor(Math.random() * 10) + 1);
+        setNum2(Math.floor(Math.random() * 10) + 1);
+        setCaptchaAnswer("");
+    };
+
     useEffect(() => {
         if (isOpen) {
             setError("");
+            setIsLoading(false);
+            generateCaptcha();
             setShouldRender(true);
-
-            // Блокируем Lenis скролл
             if (lenis) lenis.stop();
-            // Блокируем стандартный скролл браузера
             document.body.style.overflow = "hidden";
-
             const timer = setTimeout(() => setIsAnimated(true), 10);
             return () => clearTimeout(timer);
         } else {
             setIsAnimated(false);
-
             const timer = setTimeout(() => {
                 setShouldRender(false);
-
-                // Включаем Lenis обратно
                 if (lenis) lenis.start();
-                // Возвращаем стандартный скролл браузера
                 document.body.style.overflow = "";
-            }, 300); // Соответствует duration-300
-
+            }, 300);
             return () => clearTimeout(timer);
         }
     }, [isOpen, lenis]);
 
     if (!shouldRender) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const success = loginUser(login, password);
-        if (success) onClose();
-        else setError("Неверный логин или пароль");
+        setError("");
+
+        if (parseInt(captchaAnswer) !== num1 + num2) {
+            setError("Неверный ответ на капчу");
+            generateCaptcha();
+            return;
+        }
+
+        setIsLoading(true);
+
+        const { error: authError } = await supabase.auth.signInWithPassword({
+            email: login,
+            password: password,
+        });
+
+        if (authError) {
+            setIsLoading(false);
+            if (authError.message.includes("Invalid login credentials")) {
+                setError("Неверный логин или пароль");
+            } else {
+                setError(authError.message);
+            }
+            generateCaptcha();
+        } else {
+            // ДЕЙСТВИЯ ПРИ УСПЕХЕ:
+            setLogin(""); // Очищаем поля
+            setPassword("");
+            setIsLoading(false);
+            onClose(); // Закрываем модалку (запустится анимация fade-out)
+            router.refresh(); // Обновляем серверные компоненты Next.js
+        }
     };
 
     return (
-        /* data-lenis-prevent сообщает плагину Lenis, что скроллить страницу под модалкой нельзя */
         <div
             data-lenis-prevent
             className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs transition-opacity duration-300 ease-in-out ${
@@ -67,7 +106,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             }`}
         >
             <div className="absolute inset-0" onClick={onClose} />
-
             <div
                 className={`relative w-full max-w-[480px] bg-white text-zinc-900 rounded-[32px] p-8 md:p-10 shadow-2xl z-10 border border-zinc-100 transform transition-all duration-300 ease-in-out ${
                     isAnimated ? "scale-100 opacity-100" : "scale-95 opacity-0"
@@ -76,6 +114,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <button
                     onClick={onClose}
                     className="absolute top-6 right-6 text-zinc-400 hover:text-zinc-600"
+                    disabled={isLoading}
                 >
                     <X className="w-5 h-5" />
                 </button>
@@ -86,21 +125,23 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                     {error && (
-                        <div className="text-xs font-bold text-red-500 text-center bg-red-50 py-2 rounded-full">
+                        <div className="text-xs font-bold text-red-500 text-center bg-red-50 py-2 rounded-full px-4">
                             {error}
                         </div>
                     )}
 
                     <div className="space-y-2">
                         <label className="block text-xs font-semibold text-zinc-500 pl-1">
-                            Логин или e-mail *
+                            E-mail *
                         </label>
                         <input
-                            type="text"
+                            type="email"
                             value={login}
                             onChange={(e) => setLogin(e.target.value)}
                             className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D]"
                             required
+                            disabled={isLoading}
+                            placeholder="example@mail.com"
                         />
                     </div>
 
@@ -114,19 +155,28 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             onChange={(e) => setPassword(e.target.value)}
                             className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D]"
                             required
+                            disabled={isLoading}
                         />
                     </div>
 
                     <div className="flex items-center space-x-4 pt-2">
                         <div className="flex items-center bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2 font-bold text-lg text-zinc-700 select-none">
-                            6 + 6 =
+                            {num1} + {num2} =
                         </div>
                         <input
                             type="number"
-                            className="w-12 h-12 bg-white border border-zinc-200 rounded-full text-center font-bold focus:outline-hidden focus:border-[#FFDD2D]"
+                            value={captchaAnswer}
+                            onChange={(e) => setCaptchaAnswer(e.target.value)}
+                            className="w-16 h-12 bg-white border border-zinc-200 rounded-full text-center font-bold focus:outline-hidden focus:border-[#FFDD2D]"
                             required
+                            disabled={isLoading}
                         />
-                        <button type="button" className="p-2 text-amber-400">
+                        <button
+                            type="button"
+                            onClick={generateCaptcha}
+                            className="p-2 text-amber-400 hover:text-amber-500 transition-colors"
+                            disabled={isLoading}
+                        >
                             <RefreshCw className="w-4 h-4" />
                         </button>
                     </div>
@@ -134,12 +184,25 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     <div className="pt-4">
                         <button
                             type="submit"
-                            className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 font-bold py-3.5 rounded-full shadow-xs transition-all"
+                            disabled={isLoading}
+                            className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-3.5 rounded-full shadow-xs transition-all flex items-center justify-center"
                         >
-                            Войти
+                            {isLoading ? "Вход..." : "Войти"}
                         </button>
                     </div>
                 </form>
+
+                {/* Кнопка быстрого перехода на регистрацию */}
+                <div className="mt-6 text-center text-xs font-semibold">
+                    <span className="text-zinc-400">Ещё нет аккаунта? </span>
+                    <button
+                        onClick={onSwitchToRegister}
+                        className="text-amber-400 hover:underline"
+                        disabled={isLoading}
+                    >
+                        Создать аккаунт
+                    </button>
+                </div>
             </div>
         </div>
     );

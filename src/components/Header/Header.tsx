@@ -13,7 +13,7 @@ import {
     LogOut,
     User,
 } from "lucide-react";
-import Image from "next/image";
+import Image from "next/image"; // Замените обратно на "next/image"
 import AuthModal from "../AuthModal/AuthModal";
 import RegisterModal from "../RegisterModal/RegisterModal";
 import { useAuth } from "@/src/app/context/AuthContext";
@@ -37,33 +37,27 @@ export default function Header() {
     const [isOpen, setIsOpen] = useState(false);
     const [isAuthOpen, setIsAuthOpen] = useState(false);
     const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-    // const { resolvedTheme, setTheme } = useTheme("light");
     const [mounted, setMounted] = useState(false);
 
+    // Подключаем реальные данные авторизации из контекста Supabase
     const { role, logoutUser } = useAuth();
 
     useEffect(() => {
         setMounted(true);
     }, []);
-
-    // const toggleTheme = () => {
-    //     setTheme(resolvedTheme === "dark" ? "light" : "dark");
-    // };
-
-    // Методы бесшовного переключения модалок
+    // Методы бесшовного переключения модалок в обе стороны
     const openLoginAndCloseRegister = () => {
         setIsRegisterOpen(false);
-        setIsAuthOpen(true);
+        setTimeout(() => setIsAuthOpen(true), 200);
     };
 
     const openRegisterAndCloseLogin = () => {
         setIsAuthOpen(false);
-        setIsRegisterOpen(true);
+        setTimeout(() => setIsRegisterOpen(true), 200);
     };
 
     return (
         <>
-            {/* Шапка теперь ВСЕГДА белая (bg-white/80) */}
             <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md transition-colors duration-200 dark:border-zinc-900">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div className="flex h-20 items-center justify-between">
@@ -103,7 +97,6 @@ export default function Header() {
                                 </NextLink>
                             ))}
                         </nav>
-
                         {/* Правая часть (Десктоп управление) */}
                         <div className="hidden md:flex items-center space-x-6">
                             <button className="flex items-center space-x-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-zinc-400 dark:hover:text-zinc-50">
@@ -111,24 +104,7 @@ export default function Header() {
                                 <span>RU</span>
                             </button>
 
-                            {/* Переключатель темы (Десктоп) */}
-                            {/* {mounted && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={toggleTheme}
-                                    className="rounded-full text-gray-600 hover:bg-gray-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
-                                    aria-label="Переключить тему"
-                                >
-                                    {resolvedTheme === "dark" ? (
-                                        <Sun className="h-5 w-5 text-amber-400" />
-                                    ) : (
-                                        <Moon className="h-5 w-5 text-zinc-700" />
-                                    )}
-                                </Button>
-                            )} */}
-
-                            {/* Кнопки авторизации (Десктоп) */}
+                            {/* Кнопки авторизации (Десктоп) в зависимости от роли из Supabase */}
                             {role === "guest" ? (
                                 <div className="flex items-center space-x-3">
                                     <Button
@@ -168,24 +144,8 @@ export default function Header() {
                                 </div>
                             )}
                         </div>
-
                         {/* Мобильный блок (Тема + Бургер) */}
                         <div className="flex items-center space-x-2 md:hidden">
-                            {/* {mounted && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={toggleTheme}
-                                    className="rounded-full text-gray-600 dark:text-zinc-400"
-                                >
-                                    {resolvedTheme === "dark" ? (
-                                        <Sun className="h-5 w-5 text-amber-400" />
-                                    ) : (
-                                        <Moon className="h-5 w-5 text-zinc-700" />
-                                    )}
-                                </Button>
-                            )} */}
-
                             <Sheet open={isOpen} onOpenChange={setIsOpen}>
                                 <SheetTrigger asChild>
                                     <Button
@@ -199,7 +159,8 @@ export default function Header() {
                                         </span>
                                     </Button>
                                 </SheetTrigger>
-                                {/* Шторка мобильного меню теперь ВСЕГДА белая (bg-white/95) */}
+
+                                {/* Шторка мобильного меню */}
                                 <SheetContent
                                     side="right"
                                     className="w-full sm:max-w-xs border-l border-gray-100 bg-white/95 backdrop-blur-md p-6 flex flex-col justify-between dark:border-zinc-900"
@@ -246,8 +207,7 @@ export default function Header() {
                                             </button>
                                         </div>
                                     </div>
-
-                                    {/* Нижний ряд кнопок в мобильной шторке */}
+                                    {/* Нижний ряд кнопок в мобильной шторке в зависимости от авторизации */}
                                     <div className="pt-4 border-t border-gray-100 dark:border-zinc-900">
                                         {role === "guest" ? (
                                             <div className="grid grid-cols-2 gap-3">
@@ -311,9 +271,11 @@ export default function Header() {
                 </div>
             </header>
 
+            {/* Вызов модалок с пропсами закрытия и плавного переключения */}
             <AuthModal
                 isOpen={isAuthOpen}
                 onClose={() => setIsAuthOpen(false)}
+                onSwitchToRegister={openRegisterAndCloseLogin}
             />
             <RegisterModal
                 isOpen={isRegisterOpen}
