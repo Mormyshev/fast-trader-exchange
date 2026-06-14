@@ -58,19 +58,19 @@ export default function Footer() {
             {/* Навигация (Колонка 1) */}
             <div className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400">
               <Link
-                href="#"
+                href="/#"
                 className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
               >
                 Пользовательское соглашение
               </Link>
               <Link
-                href="#"
+                href="/#"
                 className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
               >
                 Проверить адрес перед обменом
               </Link>
               <Link
-                href="#"
+                href="/#"
                 className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
               >
                 AML/KYC
@@ -80,13 +80,13 @@ export default function Footer() {
             {/* Навигация (Колонка 2) */}
             <div className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400">
               <Link
-                href="#"
+                href="/#"
                 className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
               >
                 Сообщество в телеграм
               </Link>
               <Link
-                href="#"
+                href="/#"
                 className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors leading-normal"
               >
                 Пользовательское соглашение по обработке персональных данных

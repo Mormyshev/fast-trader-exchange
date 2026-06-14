@@ -28,9 +28,9 @@ import {
 } from "@/components/ui/sheet";
 
 const navLinks = [
-  { label: "Сообщество в телеграм", href: "#" },
-  { label: "Отзывы", href: "#" },
-  { label: "Контакты", href: "#" },
+  { label: "Сообщество в телеграм", href: "/#" },
+  { label: "Отзывы", href: "/#" },
+  { label: "Контакты", href: "/#" },
 ];
 
 export default function Header() {
@@ -77,7 +77,7 @@ export default function Header() {
                   FAST TRADER
                 </span>
                 <span className="mt-1 text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                  с нами надёжно
+                  Exchange
                 </span>
               </div>
             </NextLink>
@@ -86,7 +86,7 @@ export default function Header() {
             <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-600 dark:text-zinc-400">
               {navLinks.map((link) => (
                 <NextLink
-                  key={link.href}
+                  key={link.label}
                   href={link.href}
                   className="transition-colors hover:text-gray-900 dark:hover:text-zinc-50"
                 >
@@ -96,7 +96,7 @@ export default function Header() {
             </nav>
             {/* Правая часть (Десктоп управление) */}
             <div className="hidden md:flex items-center space-x-6">
-              <button className="flex items-center space-x-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              <button className="flex items-center space-x-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-zinc-400 dark:hover:text-zinc-50 cursor-pointer">
                 <Globe className="h-4 w-4 text-[#FFDD2D]" />
                 <span>RU</span>
               </button>
@@ -107,13 +107,13 @@ export default function Header() {
                   <Button
                     variant="ghost"
                     onClick={() => setIsAuthOpen(true)}
-                    className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-zinc-300 dark:hover:text-zinc-50"
+                    className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-zinc-300 dark:hover:text-zinc-50 cursor-pointer"
                   >
                     Войти
                   </Button>
                   <Button
                     onClick={() => setIsRegisterOpen(true)}
-                    className="rounded-full bg-[#FFDD2D] px-6 text-sm font-semibold text-black hover:bg-[#e6c625] transition-colors shadow-sm"
+                    className="rounded-full bg-[#FFDD2D] px-6 text-sm font-semibold text-black hover:bg-[#e6c625] transition-colors shadow-sm cursor-pointer"
                   >
                     Регистрация
                   </Button>
@@ -123,7 +123,7 @@ export default function Header() {
                   <NextLink href="/dashboard">
                     <Button
                       variant="ghost"
-                      className="text-sm font-medium text-gray-700 dark:text-zinc-300"
+                      className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer"
                     >
                       Аккаунт
                       <span className="ml-1.5 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase font-bold text-gray-500 dark:bg-zinc-800 dark:text-zinc-400">
@@ -134,7 +134,7 @@ export default function Header() {
                   <Button
                     onClick={logoutUser}
                     variant="secondary"
-                    className="rounded-full px-6 text-sm font-semibold transition-all"
+                    className="rounded-full px-6 text-sm font-semibold transition-all cursor-pointer"
                   >
                     Выйти
                   </Button>

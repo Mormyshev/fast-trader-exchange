@@ -4,115 +4,97 @@ import { useState, useRef } from "react";
 import { Globe, ShieldCheck, Send } from "lucide-react";
 
 export default function Features() {
-    const [activeIndex, setActiveIndex] = useState(0);
-    const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-    const cards = [
-        {
-            title: "Международные переводы",
-            description:
-                "Оплата инвойсов, Swift, Sepa\nВ нужной вам валюте USD, EUR, CNY\nВ течение 1-2 дней",
-            icon: (
-                <Globe className="relative w-12 h-12 text-zinc-950/80 stroke-[1.5] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6" />
-            ),
-        },
-        {
-            title: "Проверить адрес перед обменом",
-            description: "AML проверка безопасных транзакций",
-            icon: (
-                <ShieldCheck className="relative w-12 h-12 text-zinc-950/80 stroke-[1.5] transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6" />
-            ),
-        },
-        {
-            title: "Подписывайся на наш телеграм",
-            description:
-                "Finex24 | exchange - все актуальные новости о нашем сервисе",
-            icon: (
-                <Send className="relative w-12 h-12 text-zinc-950/80 stroke-[1.5] transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
-            ),
-        },
-    ];
+  const cards = [
+    {
+      title: "Международные переводы",
+      description:
+        "Быстрый криптообмен\nТоповые монеты: USDT, BTC, ETH\nВывод на карты\nФиксация курса на сделку",
+      icon: (
+        <Globe className="w-6 h-6 text-zinc-950 stroke-[1.5] transition-transform duration-500 group-hover:rotate-12" />
+      ),
+    },
+    {
+      title: "Проверить адрес перед обменом",
+      description: "AML проверка безопасных транзакций в один клик",
+      icon: (
+        <ShieldCheck className="w-6 h-6 text-zinc-950 stroke-[1.5] transition-transform duration-500 group-hover:scale-110" />
+      ),
+    },
+    {
+      title: "Подписывайся на наш телеграм",
+      description: "@FastTraderTeam — все актуальные новости о нашем сервисе",
+      icon: (
+        <Send className="w-6 h-6 text-zinc-950 stroke-[1.5] transition-transform duration-500 group-hover:translate-x-1 group-hover:-translate-y-1" />
+      ),
+    },
+  ];
 
-    const handleScroll = () => {
-        if (!scrollRef.current) return;
-        const { scrollLeft, clientWidth } = scrollRef.current;
-        const index = Math.round(scrollLeft / clientWidth);
-        setActiveIndex(index);
-    };
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, clientWidth } = scrollRef.current;
+    const index = Math.round(scrollLeft / clientWidth);
+    setActiveIndex(index);
+  };
 
-    const scrollToCard = (index: number) => {
-        if (!scrollRef.current) return;
-        const clientWidth = scrollRef.current.clientWidth;
-        scrollRef.current.scrollTo({
-            left: index * clientWidth,
-            behavior: "smooth",
-        });
-        setActiveIndex(index);
-    };
+  const scrollToCard = (index: number) => {
+    if (!scrollRef.current) return;
+    const clientWidth = scrollRef.current.clientWidth;
+    scrollRef.current.scrollTo({
+      left: index * clientWidth,
+      behavior: "smooth",
+    });
+    setActiveIndex(index);
+  };
 
-    return (
-        /* 
-          ЯВНО ЗАДАЕМ bg-transparent И text-zinc-900, 
-          чтобы изолировать блок от глобальных стилей разметки layout
-        */
-        <section className="w-full py-4 bg-transparent text-zinc-900 dark:text-zinc-900">
-            {/* Контейнер карточек */}
-            <div
-                ref={scrollRef}
-                onScroll={handleScroll}
-                className="
-                  flex overflow-x-auto gap-4 pb-4 scrollbar-none 
-                  snap-x snap-mandatory scroll-smooth
-                  md:grid md:grid-cols-3 md:gap-5 md:overflow-x-visible md:pb-0 md:snap-none
-                "
-            >
-                {cards.map((card, index) => (
-                    <div
-                        key={index}
-                        className="
-                          relative overflow-hidden bg-[#FFDD2D] rounded-[24px] p-6 min-h-[175px] flex flex-col justify-between shadow-sm border border-yellow-400/30 group cursor-pointer transition-all duration-300 hover:shadow-md hover:border-yellow-400
-                          min-w-[85vw] sm:min-w-[70vw] snap-center
-                          md:min-w-0 md:w-full md:snap-align-none
-                        "
-                    >
-                        {/* Эффект матового блеска */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/[0.02] pointer-events-none" />
-
-                        {/* Контейнер иконки справа внизу */}
-                        <div className="absolute right-6 bottom-6 flex items-center justify-center z-20">
-                            <div className="absolute w-16 h-16 bg-white/20 rounded-full blur-md pointer-events-none" />
-                            {card.icon}
-                        </div>
-
-                        {/* Текст (Явно указываем цвета, чтобы они не инвертировались в темной теме) */}
-                        <div className="relative z-10 max-w-[70%] flex flex-col justify-between h-full">
-                            <div>
-                                <h3 className="font-bold text-lg md:text-xl leading-snug tracking-tight mb-2 text-zinc-950">
-                                    {card.title}
-                                </h3>
-                                <p className="text-xs md:text-sm font-medium text-zinc-900/90 leading-relaxed whitespace-pre-line">
-                                    {card.description}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                ))}
+  return (
+    <section className="w-full py-4 bg-transparent text-zinc-950">
+      {/* Контейнер карточек */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex overflow-x-auto gap-4 pb-4 scrollbar-none snap-x snap-mandatory scroll-smooth md:grid md:grid-cols-3 md:gap-5 md:overflow-x-visible md:pb-0 md:snap-none"
+      >
+        {cards.map((card, index) => (
+          <div
+            key={index}
+            className="relative overflow-hidden bg-[#FFDD2D] hover:bg-[#E2C21E] rounded-[24px] p-6 min-h-[220px] flex flex-col justify-start border border-black/[0.04] shadow-[0_4px_12px_rgba(0,0,0,0.03),0_1px_2px_rgba(0,0,0,0.04)] group cursor-pointer transition-all duration-500 ease-out hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(0,0,0,0.05)] min-w-[85vw] sm:min-w-[70vw] snap-center md:min-w-0 md:w-full md:snap-align-none"
+          >
+            {/* Иконка сверху в аккуратном матовом контейнере */}
+            <div className="flex mb-4 relative z-10">
+              <div className="flex items-center justify-center w-11 h-11 bg-white/40 rounded-xl border border-white/60 shadow-sm backdrop-blur-sm group-hover:bg-white/60 transition-colors duration-300">
+                {card.icon}
+              </div>
             </div>
 
-            {/* Пагинация для мобильных */}
-            <div className="flex justify-center items-center space-x-2 mt-4 md:hidden">
-                {cards.map((_, index) => (
-                    <button
-                        key={index}
-                        onClick={() => scrollToCard(index)}
-                        className={`
-                          h-2 rounded-full transition-all duration-300
-                          ${activeIndex === index ? "w-6 bg-zinc-900 dark:bg-zinc-100" : "w-2 bg-zinc-300 dark:bg-zinc-700"}
-                        `}
-                        aria-label={`Перейти к слайду ${index + 1}`}
-                    />
-                ))}
+            {/* Текстовый контент */}
+            <div className="relative z-10 flex flex-col flex-1">
+              <h3 className="font-bold text-lg md:text-xl leading-snug tracking-tight mb-2 text-zinc-950">
+                {card.title}
+              </h3>
+              <p className="text-xs md:text-sm font-medium text-zinc-900/80 leading-relaxed whitespace-pre-line">
+                {card.description}
+              </p>
             </div>
-        </section>
-    );
+          </div>
+        ))}
+      </div>
+
+      {/* Пагинация для мобильных */}
+      <div className="flex justify-center items-center space-x-2 mt-4 md:hidden">
+        {cards.map((_, index) => (
+          <button
+            key={index}
+            onClick={() => scrollToCard(index)}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              activeIndex === index ? "w-6 bg-zinc-900" : "w-2 bg-zinc-300"
+            }`}
+            aria-label={`Перейти к слайду ${index + 1}`}
+          />
+        ))}
+      </div>
+    </section>
+  );
 }

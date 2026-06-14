@@ -271,7 +271,7 @@ export default function RegisterModal({
               className="text-[11px] font-medium text-zinc-500 leading-normal cursor-pointer select-none"
             >
               Я согласен с{" "}
-              <Link href="#" className="text-amber-400 hover:underline">
+              <Link href="/#" className="text-amber-400 hover:underline">
                 правилами сервиса
               </Link>{" "}
               и обработкой персональных данных
