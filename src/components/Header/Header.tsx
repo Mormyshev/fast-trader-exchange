@@ -126,9 +126,6 @@ export default function Header() {
                       className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer"
                     >
                       Аккаунт
-                      <span className="ml-1.5 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase font-bold text-gray-500 dark:bg-zinc-800 dark:text-zinc-400">
-                        {role}
-                      </span>
                     </Button>
                   </NextLink>
                   <Button

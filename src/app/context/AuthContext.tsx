@@ -5,104 +5,94 @@ import { createClient } from "@/src/utils/supabase/client";
 import { useRouter } from "next/navigation";
 
 interface AuthContextType {
-    user: any | null;
-    role: "guest" | "user" | "manager" | "admin";
-    isLoading: boolean;
-    logoutUser: () => Promise<void>;
+  user: any | null;
+  role: "guest" | "user" | "operator" | "admin";
+  isLoading: boolean;
+  logoutUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
-    user: null,
-    role: "guest",
-    isLoading: true,
-    logoutUser: async () => {},
+  user: null,
+  role: "guest",
+  isLoading: true,
+  logoutUser: async () => {},
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<any | null>(null);
-    const [role, setRole] = useState<"guest" | "user" | "manager" | "admin">(
-        "guest",
-    );
-    const [isLoading, setIsLoading] = useState(true);
+export function AuthProvider({
+  children,
+  initialUser,
+  initialRole,
+}: {
+  children: React.ReactNode;
+  initialUser: any;
+  initialRole: any;
+}) {
+  // Инициализируем стейт данными с сервера!
+  const [user, setUser] = useState<any | null>(initialUser);
+  const [role, setRole] = useState<"guest" | "user" | "operator" | "admin">(
+    initialRole,
+  );
+  const [isLoading, setIsLoading] = useState(!initialUser); // если юзер уже есть, загрузка не нужна
 
-    const supabase = createClient();
-    const router = useRouter();
+  const supabase = createClient();
+  const router = useRouter();
 
-    // Функция получения роли пользователя из таблицы profiles
-    const fetchUserRole = async (userId: string) => {
-        const { data, error } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", userId)
-            .single();
+  const fetchUserRole = async (userId: string) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+    if (!error && data?.role) {
+      setRole(data.role as any);
+    } else {
+      setRole("user");
+    }
+  };
 
-        if (!error && data?.role) {
-            setRole(data.role as any);
-        } else {
-            setRole("user"); // Роль по умолчанию при сбое запроса
-        }
-    };
-
-    useEffect(() => {
-        // 1. Проверяем текущую сессию при загрузке страницы
-        const initAuth = async () => {
-            const {
-                data: { session },
-            } = await supabase.auth.getSession();
-            if (session?.user) {
-                setUser(session.user);
-                await fetchUserRole(session.user.id);
-            } else {
-                setUser(null);
-                setRole("guest");
-            }
-            setIsLoading(false);
-        };
-
-        initAuth();
-
-        // 2. Подписываемся на динамические изменения (вход, выход, смена токена)
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (session?.user) {
-                setUser(session.user);
-                await fetchUserRole(session.user.id);
-            } else {
-                setUser(null);
-                setRole("guest");
-            }
-            setIsLoading(false);
-        });
-
-        return () => {
-            subscription.unsubscribe();
-        };
-    }, []);
-
-    // Функция выхода
-    const logoutUser = async () => {
-        setIsLoading(true);
-
-        // Разлогиниваем пользователя в самом Supabase (очищает локальное хранилище)
-        await supabase.auth.signOut();
-
+  useEffect(() => {
+    // Подписка остается для отслеживания динамических входов/выходов
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        await fetchUserRole(session.user.id);
+      } else {
         setUser(null);
         setRole("guest");
-        setIsLoading(false);
+      }
+      setIsLoading(false);
+    });
 
-        // Вместо router.push жестко перезагружаем страницу на главную.
-        // Это гарантированно стирает старые серверные куки Next.js!
-        window.location.origin
-            ? (window.location.href = window.location.origin)
-            : router.push("/");
+    return () => {
+      subscription.unsubscribe();
     };
+  }, []);
 
-    return (
-        <AuthContext.Provider value={{ user, role, isLoading, logoutUser }}>
-            {children}
-        </AuthContext.Provider>
-    );
+  // Функция выхода
+  const logoutUser = async () => {
+    setIsLoading(true);
+
+    // Разлогиниваем пользователя в самом Supabase (очищает локальное хранилище)
+    await supabase.auth.signOut();
+
+    setUser(null);
+    setRole("guest");
+    setIsLoading(false);
+
+    // Вместо router.push жестко перезагружаем страницу на главную.
+    // Это гарантированно стирает старые серверные куки Next.js!
+    window.location.origin
+      ? (window.location.href = window.location.origin)
+      : router.push("/");
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, role, isLoading, logoutUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export const useAuth = () => useContext(AuthContext);
