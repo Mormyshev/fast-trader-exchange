@@ -1,61 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import https from "https";
+import axios from "axios";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Описываем структуру данных, которую возвращает Mexc API
-interface MexcTicker {
-  symbol: string;
-  price: string;
-}
-
-// Изолированная функция сетевого запроса с автоматической поддержкой редиректов (до 3 переходов)
-const nativeRequest = (url: string, redirectsFollowed = 0): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    if (redirectsFollowed > 3) return reject(new Error("Too many redirects"));
-
-    const req = https.get(
-      url,
-      {
-        timeout: 5000,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-          Accept: "application/json",
-        },
-      },
-      (res) => {
-        // Автоматический переход по 301/302 редиректам
-        if (
-          [301, 302, 307, 308].includes(res.statusCode || 0) &&
-          res.headers.location
-        ) {
-          let redirectUrl = res.headers.location;
-          if (redirectUrl.startsWith("/")) {
-            redirectUrl = new URL(url).origin + redirectUrl;
-          }
-          return resolve(nativeRequest(redirectUrl, redirectsFollowed + 1));
-        }
-
-        let data = "";
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
-        res.on("end", () => resolve(data));
-      },
-    );
-
-    req.on("error", (err) => reject(err));
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error("Timeout"));
-    });
-  });
-};
-
 export async function GET() {
-  console.log("\n=== [API] СИНХРОНИЗАЦИЯ ЧЕРЕЗ NATIVE NODE.JS (FINAL) ===");
+  console.log("\n=== [API] СИНХРОНИЗАЦИЯ ЧЕРЕЗ AXIOS ===");
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -80,61 +31,46 @@ export async function GET() {
 
   let diagnostics: any = {};
 
-  // 1. ЗАПРОС К ЦБ РФ (Фиат с обработкой 301 редиректа)
+  // 1. ЗАПРОС К ЦБ РФ (Фиат)
   try {
-    const fiatRaw = await nativeRequest("https://cbr-xml-daily.ru");
-    if (fiatRaw.trim().startsWith("{")) {
-      const parsed = JSON.parse(fiatRaw);
-      if (parsed.Valute?.USD?.Value) {
-        dynamicUsdtRubPrice = parseFloat(
-          (parsed.Valute.USD.Value * 1.015).toFixed(2),
-        );
-      }
+    const fiatRes = await axios.get("https://cbr-xml-daily.ru", {
+      timeout: 4000,
+    });
+
+    if (fiatRes.data && fiatRes.data.Valute?.USD?.Value) {
+      dynamicUsdtRubPrice = parseFloat(
+        (fiatRes.data.Valute.USD.Value * 1.015).toFixed(2),
+      );
     } else {
-      diagnostics.fiatRawSample = fiatRaw.substring(0, 100);
+      diagnostics.fiatStructureError = "Неверная структура ответа ЦБ";
     }
   } catch (e: any) {
-    diagnostics.fiatError = e.message;
+    diagnostics.fiatError = `Axios сбой ЦБ: ${e.message}. Тип данных: ${typeof e.response?.data}`;
   }
 
-  // 2. ЗАПРОС К MEXC API (Крипта без блокировок Cloudflare)
-  // 2. ЗАПРОС К MEXC API (Крипта без блокировок Cloudflare)
+  // 2. ЗАПРОС К MEXC API (Крипта)
   try {
-    const cryptoRaw = await nativeRequest("https://mexc.com");
-    if (cryptoRaw.trim().startsWith("[")) {
-      // ИСПОЛЬЗУЕМ any[], ЧТОБЫ ГАРАНТИРОВАННО УБРАТЬ ОШИБКУ PROPERTY 'PRICE' DOES NOT EXIST
-      const tickerList = JSON.parse(cryptoRaw) as any[];
+    const cryptoRes = await axios.get("https://mexc.com", { timeout: 4000 });
+    const tickerList = cryptoRes.data;
 
-      if (Array.isArray(tickerList)) {
-        const btcTicker: any = tickerList.find(
-          (t: any) => t.symbol === "BTCUSDT",
-        );
-        const ethTicker: any = tickerList.find(
-          (t: any) => t.symbol === "ETHUSDT",
-        );
-        const tonTicker: any = tickerList.find(
-          (t: any) => t.symbol === "TONUSDT",
-        );
-        const solTicker: any = tickerList.find(
-          (t: any) => t.symbol === "SOLUSDT",
-        );
+    if (Array.isArray(tickerList)) {
+      const btcTicker = tickerList.find((t: any) => t.symbol === "BTCUSDT");
+      const ethTicker = tickerList.find((t: any) => t.symbol === "ETHUSDT");
+      const tonTicker = tickerList.find((t: any) => t.symbol === "TONUSDT");
+      const solTicker = tickerList.find((t: any) => t.symbol === "SOLUSDT");
 
-        if (btcTicker && btcTicker.price)
-          btcPrice = parseFloat(btcTicker.price);
-        if (ethTicker && ethTicker.price)
-          ethPrice = parseFloat(ethTicker.price);
-        if (tonTicker && tonTicker.price)
-          tonPrice = parseFloat(tonTicker.price);
-        if (solTicker && solTicker.price)
-          solPrice = parseFloat(solTicker.price);
+      if (btcTicker?.price) btcPrice = parseFloat(btcTicker.price);
+      if (ethTicker?.price) ethPrice = parseFloat(ethTicker.price);
+      if (tonTicker?.price) tonPrice = parseFloat(tonTicker.price);
+      // ИСПРАВЛЕНО: Теперь свойство .price берётся у правильного объекта solTicker
+      if (solTicker?.price) solPrice = parseFloat(solTicker.price);
 
-        liveMarket = true;
-      }
+      liveMarket = true;
     } else {
-      diagnostics.cryptoRawSample = cryptoRaw.substring(0, 100);
+      diagnostics.cryptoStructureError = "Mexc вернул не массив";
     }
   } catch (e: any) {
-    diagnostics.cryptoError = e.message;
+    diagnostics.cryptoError = `Axios сбой Mexc: ${e.message}. Код: ${e.code}`;
   }
 
   // 3. ЗАПИСЬ В БАЗУ SUPABASE
@@ -186,7 +122,7 @@ export async function GET() {
     diagnostics:
       Object.keys(diagnostics).length > 0
         ? diagnostics
-        : "Ошибок нет, сеть работает напрямую!",
+        : "Идеально! Axios пробил роутер!",
     updated: upsertRows.length,
     data: upsertRows,
   });
