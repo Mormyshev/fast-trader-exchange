@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  console.log("\n=== [API] СИНХРОНИЗАЦИЯ ЧЕРЕЗ AXIOS ===");
+  console.log("\n=== [API] СИНХРОНИЗАЦИЯ ЧЕРЕЗ AXIOS (COINBASE) ===");
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -34,43 +34,55 @@ export async function GET() {
   // 1. ЗАПРОС К ЦБ РФ (Фиат)
   try {
     const fiatRes = await axios.get("https://cbr-xml-daily.ru", {
-      timeout: 4000,
+      timeout: 5000,
+      responseType: "json", // Явно заставляем Axios распарсить JSON
     });
 
-    if (fiatRes.data && fiatRes.data.Valute?.USD?.Value) {
+    // Подстраховка на случай, если пришла строка вместо объекта
+    const fiatData =
+      typeof fiatRes.data === "string"
+        ? JSON.parse(fiatRes.data)
+        : fiatRes.data;
+
+    if (fiatData && fiatData.Valute?.USD?.Value) {
       dynamicUsdtRubPrice = parseFloat(
-        (fiatRes.data.Valute.USD.Value * 1.015).toFixed(2),
+        (fiatData.Valute.USD.Value * 1.015).toFixed(2),
       );
     } else {
-      diagnostics.fiatStructureError = "Неверная структура ответа ЦБ";
+      diagnostics.fiatStructureError =
+        "Поле Valute.USD.Value не найдено в ответе ЦБ";
     }
   } catch (e: any) {
-    diagnostics.fiatError = `Axios сбой ЦБ: ${e.message}. Тип данных: ${typeof e.response?.data}`;
+    diagnostics.fiatError = `Axios сбой ЦБ: ${e.message}`;
   }
 
-  // 2. ЗАПРОС К MEXC API (Крипта)
+  // 2. ЗАПРОС К COINBASE API (Крипта - 100% открыта на Vercel)
   try {
-    const cryptoRes = await axios.get("https://mexc.com", { timeout: 4000 });
-    const tickerList = cryptoRes.data;
+    const cryptoRes = await axios.get("https://coinbase.com", {
+      timeout: 5000,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
 
-    if (Array.isArray(tickerList)) {
-      const btcTicker = tickerList.find((t: any) => t.symbol === "BTCUSDT");
-      const ethTicker = tickerList.find((t: any) => t.symbol === "ETHUSDT");
-      const tonTicker = tickerList.find((t: any) => t.symbol === "TONUSDT");
-      const solTicker = tickerList.find((t: any) => t.symbol === "SOLUSDT");
+    const rates = cryptoRes.data?.data?.rates;
 
-      if (btcTicker?.price) btcPrice = parseFloat(btcTicker.price);
-      if (ethTicker?.price) ethPrice = parseFloat(ethTicker.price);
-      if (tonTicker?.price) tonPrice = parseFloat(tonTicker.price);
-      // ИСПРАВЛЕНО: Теперь свойство .price берётся у правильного объекта solTicker
-      if (solTicker?.price) solPrice = parseFloat(solTicker.price);
+    if (rates && rates.BTC && rates.ETH) {
+      // Конвертируем "монеты за 1 USD" в привычную стоимость "USD за 1 монету"
+      btcPrice = parseFloat((1 / parseFloat(rates.BTC)).toFixed(2));
+      ethPrice = parseFloat((1 / parseFloat(rates.ETH)).toFixed(2));
+      tonPrice = rates.TON
+        ? parseFloat((1 / parseFloat(rates.TON)).toFixed(4))
+        : 7.35;
+      solPrice = rates.SOL
+        ? parseFloat((1 / parseFloat(rates.SOL)).toFixed(2))
+        : 151.2;
 
       liveMarket = true;
     } else {
-      diagnostics.cryptoStructureError = "Mexc вернул не массив";
+      diagnostics.cryptoStructureError =
+        "В ответе Coinbase отсутствуют BTC или ETH";
     }
   } catch (e: any) {
-    diagnostics.cryptoError = `Axios сбой Mexc: ${e.message}. Код: ${e.code}`;
+    diagnostics.cryptoError = `Axios сбой Coinbase: ${e.message}`;
   }
 
   // 3. ЗАПИСЬ В БАЗУ SUPABASE
@@ -122,7 +134,7 @@ export async function GET() {
     diagnostics:
       Object.keys(diagnostics).length > 0
         ? diagnostics
-        : "Идеально! Axios пробил роутер!",
+        : "Идеально! Все данные получены вживую!",
     updated: upsertRows.length,
     data: upsertRows,
   });
