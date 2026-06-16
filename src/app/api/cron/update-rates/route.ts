@@ -1,12 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET() {
-  console.log("\n=== [API] СИНХРОНИЗАЦИЯ ЧЕРЕЗ AXIOS (COINBASE) ===");
+export async function GET(request: NextRequest) {
+  // Чтение заголовка гарантированно пробивает кэш платформы Vercel на уровне ядра
+  const userAgentHeader = request.headers.get("user-agent");
+  console.log(
+    "\n=== [API] СИНХРОНИЗАЦИЯ ЧЕРЕЗ AXIOS (ЖИВОЙ ЗАПУСК БЕЗ КЭША) ===",
+  );
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -35,10 +39,9 @@ export async function GET() {
   try {
     const fiatRes = await axios.get("https://cbr-xml-daily.ru", {
       timeout: 5000,
-      responseType: "json", // Явно заставляем Axios распарсить JSON
+      responseType: "json",
     });
 
-    // Подстраховка на случай, если пришла строка вместо объекта
     const fiatData =
       typeof fiatRes.data === "string"
         ? JSON.parse(fiatRes.data)
@@ -60,13 +63,15 @@ export async function GET() {
   try {
     const cryptoRes = await axios.get("https://coinbase.com", {
       timeout: 5000,
-      headers: { "User-Agent": "Mozilla/5.0" },
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
     });
 
     const rates = cryptoRes.data?.data?.rates;
 
     if (rates && rates.BTC && rates.ETH) {
-      // Конвертируем "монеты за 1 USD" в привычную стоимость "USD за 1 монету"
       btcPrice = parseFloat((1 / parseFloat(rates.BTC)).toFixed(2));
       ethPrice = parseFloat((1 / parseFloat(rates.ETH)).toFixed(2));
       tonPrice = rates.TON
@@ -134,7 +139,7 @@ export async function GET() {
     diagnostics:
       Object.keys(diagnostics).length > 0
         ? diagnostics
-        : "Идеально! Все данные получены вживую!",
+        : "Идеально! Все данные получены вживую без кэша!",
     updated: upsertRows.length,
     data: upsertRows,
   });
