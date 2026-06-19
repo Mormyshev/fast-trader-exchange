@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSwitchToRegister: () => void; // 1. Добавляем новое свойство в интерфейс
+  onSwitchToRegister: () => void;
 }
 
 export default function AuthModal({
