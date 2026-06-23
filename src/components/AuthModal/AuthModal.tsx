@@ -15,7 +15,7 @@ interface AuthModalProps {
 export default function AuthModal({
   isOpen,
   onClose,
-  onSwitchToRegister, // 2. Принимаем свойство в аргументах компонента
+  onSwitchToRegister,
 }: AuthModalProps) {
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [isAnimated, setIsAnimated] = useState(isOpen);
@@ -75,10 +75,12 @@ export default function AuthModal({
 
     setIsLoading(true);
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: login,
-      password: password,
-    });
+    // Авторизуем пользователя
+    const { data: authData, error: authError } =
+      await supabase.auth.signInWithPassword({
+        email: login,
+        password: password,
+      });
 
     if (authError) {
       setIsLoading(false);
@@ -89,21 +91,42 @@ export default function AuthModal({
       }
       generateCaptcha();
     } else {
-      // 1. Немедленно очищаем поля ввода
+      let targetRoute = "/dashboard"; // Роут по умолчанию
+
+      try {
+        // Запрашиваем роль пользователя напрямую из таблицы profiles
+        if (authData?.user?.id) {
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", authData.user.id)
+            .single();
+
+          if (!profileError && profile) {
+            // Если вошел оператор или админ, перенаправляем на страницу оператора
+            if (profile.role === "operator" || profile.role === "admin") {
+              targetRoute = "/operator";
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Ошибка при определении роли:", err);
+        // В случае ошибки оставляем базовый /dashboard, чтобы не ломать логин
+      }
+
+      // 1. Очищаем поля ввода и снимаем состояние загрузки
       setLogin("");
       setPassword("");
       setIsLoading(false);
 
-      // 2. Мгновенно закрываем модалку, чтобы пользователь видел реакцию интерфейса
+      // 2. Закрываем модалку
       onClose();
 
-      // 3. Даем браузеру микро-паузу в 150 миллисекунд.
-      // Это освободит сетевые потоки Chrome: запрос /token успеет выйти из очереди,
-      // куки Supabase запишутся, и только потом Next.js начнет запрашивать данные сервера.
+      // 3. Выдерживаем микро-паузу для фиксации сессии в куках браузера и редиректим на вычисленный роут
       setTimeout(() => {
         startTransition(() => {
           router.refresh();
-          router.push("/dashboard");
+          router.push(targetRoute);
         });
       }, 150);
     }
