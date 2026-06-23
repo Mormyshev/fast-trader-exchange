@@ -13,7 +13,7 @@ import {
   LogOut,
   User,
 } from "lucide-react";
-import Image from "next/image"; // Замените обратно на "next/image"
+import Image from "next/image";
 import AuthModal from "../AuthModal/AuthModal";
 import RegisterModal from "../RegisterModal/RegisterModal";
 import { useAuth } from "@/src/app/context/AuthContext";
@@ -32,7 +32,6 @@ const navLinks = [
   { label: "Отзывы", href: "/#" },
   { label: "Контакты", href: "/#" },
 ];
-
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -45,6 +44,7 @@ export default function Header() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
   // Методы бесшовного переключения модалок в обе стороны
   const openLoginAndCloseRegister = () => {
     setIsRegisterOpen(false);
@@ -55,7 +55,6 @@ export default function Header() {
     setIsAuthOpen(false);
     setTimeout(() => setIsRegisterOpen(true), 200);
   };
-
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md transition-colors duration-200 dark:border-zinc-900">
@@ -94,6 +93,7 @@ export default function Header() {
                 </NextLink>
               ))}
             </nav>
+
             {/* Правая часть (Десктоп управление) */}
             <div className="hidden md:flex items-center space-x-6">
               <button className="flex items-center space-x-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-zinc-400 dark:hover:text-zinc-50 cursor-pointer">
@@ -120,12 +120,13 @@ export default function Header() {
                 </div>
               ) : (
                 <div className="flex items-center space-x-3">
-                  <NextLink href="/dashboard">
+                  {/* Перенаправляем на страницу профиля / верификации */}
+                  <NextLink href="/profile">
                     <Button
                       variant="ghost"
                       className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer"
                     >
-                      Аккаунт
+                      Кабинет
                     </Button>
                   </NextLink>
                   <Button
@@ -138,6 +139,7 @@ export default function Header() {
                 </div>
               )}
             </div>
+
             {/* Мобильный блок (Тема + Бургер) */}
             <div className="flex items-center space-x-2 md:hidden">
               <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -151,8 +153,6 @@ export default function Header() {
                     <span className="sr-only">Открыть меню</span>
                   </Button>
                 </SheetTrigger>
-
-                {/* Шторка мобильного меню */}
                 <SheetContent
                   side="right"
                   className="w-full sm:max-w-xs border-l border-gray-100 bg-white/95 backdrop-blur-md p-6 flex flex-col justify-between dark:border-zinc-900"
@@ -196,6 +196,7 @@ export default function Header() {
                       </button>
                     </div>
                   </div>
+
                   {/* Нижний ряд кнопок в мобильной шторке в зависимости от авторизации */}
                   <div className="pt-4 border-t border-gray-100 dark:border-zinc-900">
                     {role === "guest" ? (
@@ -224,8 +225,9 @@ export default function Header() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-3">
+                        {/* Изменили маршрут на /profile для перехода к персональным данным */}
                         <NextLink
-                          href="/dashboard"
+                          href="/profile"
                           onClick={() => setIsOpen(false)}
                           className="w-full"
                         >

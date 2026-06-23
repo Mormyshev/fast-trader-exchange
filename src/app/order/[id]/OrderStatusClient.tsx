@@ -128,12 +128,28 @@ export default function OrderStatusClient({
 
   // 4. Функция подтверждения оплаты от пользователя
   const handleConfirmPayment = async () => {
+    // Проверяем, загружен ли чек (либо уже сохранен в базе, либо только что загружен)
     if (!order.receipt_url && !uploadSuccess) {
       alert("Пожалуйста, сначала прикрепите PDF-чек об оплате!");
       return;
     }
-    alert("Уведомление отправлено оператору! Ожидайте проверку зачисления.");
+
+    try {
+      // Меняем статус заявки на 'paid'
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "paid" }) // <-- Переводим в статус "Оплачено"
+        .eq("id", order.id);
+
+      if (error) throw error;
+
+      alert("Заявка отправлена оператору на проверку! Ожидайте подтверждения.");
+    } catch (err: any) {
+      console.error("Ошибка смены статуса:", err);
+      alert(`Не удалось отправить уведомление: ${err.message}`);
+    }
   };
+
   return (
     <div className="p-0 md:p-4 w-full transition-all">
       <div className="bg-white dark:bg-zinc-900 rounded-[32px] border border-zinc-100 dark:border-zinc-800 p-6 md:p-10 space-y-8 shadow-md text-zinc-800 dark:text-zinc-100">
@@ -347,6 +363,18 @@ export default function OrderStatusClient({
             </div>
           )}
         </div>
+        {order.status === "paid" && (
+          <div className="flex flex-col items-center text-center space-y-5 bg-indigo-500/15 dark:bg-indigo-500/10 border border-indigo-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+            <h3 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">
+              Платёж проверяется
+            </h3>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-md">
+              Мы получили ваш чек. Оператор сверяет поступление на баланс.
+              Обычно это занимает от 2 до 10 минут.
+            </p>
+          </div>
+        )}
 
         {/* Параметры обмена для сверки клиентом */}
         <div className="bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 space-y-4 text-sm">

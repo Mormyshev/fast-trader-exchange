@@ -28,11 +28,11 @@ export default function OperatorDashboard() {
       .eq("status", "pending")
       .order("created_at", { ascending: false });
 
-    // 2. Заявки в работе у текущего оператора
+    // 2. Добавляем статус 'paid' в массив .in()
     const { data: processing } = await supabase
       .from("orders")
       .select("*")
-      .in("status", ["processing", "awaiting_payment"])
+      .in("status", ["processing", "awaiting_payment", "paid"]) // <-- Теперь 'paid' тоже прилетит сюда в Realtime
       .eq("operator_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -214,7 +214,11 @@ export default function OperatorDashboard() {
             {myOrders.map((order) => (
               <div
                 key={order.id}
-                className="p-6 bg-white dark:bg-zinc-900 rounded-3xl border-2 border-blue-400/30 shadow-xs grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6 items-center"
+                className={`p-6 bg-white dark:bg-zinc-900 rounded-3xl border-2 shadow-xs grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6 items-center transition-all ${
+                  order.status === "paid"
+                    ? "border-emerald-500/50 bg-emerald-50/10 dark:bg-emerald-950/5"
+                    : "border-blue-400/30"
+                }`}
               >
                 {/* Левая часть: Подробная информация */}
                 <div className="space-y-2">
@@ -222,18 +226,25 @@ export default function OperatorDashboard() {
                     <span className="text-sm font-mono font-bold text-zinc-400">
                       ID: {order.id}
                     </span>
+
+                    {/* ИСПРАВЛЕНО: Теперь каждый статус имеет свой цвет и текст */}
                     <span
                       className={`text-xs font-black uppercase px-2 py-0.5 rounded ${
                         order.status === "processing"
                           ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400"
-                          : "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400"
+                          : order.status === "awaiting_payment"
+                            ? "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400"
+                            : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
                       }`}
                     >
-                      {order.status === "processing"
-                        ? "В обработке"
-                        : "Выданы реквизиты"}
+                      {order.status === "processing" && "В обработке"}
+                      {order.status === "awaiting_payment" &&
+                        "Выданы реквизиты"}
+                      {order.status === "paid" &&
+                        "Клиент оплатил! Проверьте чек"}
                     </span>
                   </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-50 dark:bg-zinc-800/40 p-4 rounded-xl text-sm">
                     <div>
                       <span className="text-zinc-400 block text-xs font-bold">
@@ -253,11 +264,25 @@ export default function OperatorDashboard() {
                       </span>
                     </div>
                   </div>
+
+                  {/* ДОПОЛНИТЕЛЬНО: Выводим прямую ссылку на чек в левую панель для удобства */}
+                  {order.receipt_url && (
+                    <div className="pt-1">
+                      <a
+                        href={order.receipt_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                      >
+                        📎 Прикрепленный документ об оплате (PDF)
+                      </a>
+                    </div>
+                  )}
                 </div>
 
-                {/* Правая часть: Форма отправки реквизитов */}
+                {/* Правая часть: Управление логикой (Ваш проверенный блок) */}
                 <div className="space-y-3">
-                  {order.status === "processing" ? (
+                  {order.status === "processing" && (
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-zinc-500 uppercase">
                         Реквизиты для оплаты клиенту:
@@ -270,8 +295,8 @@ export default function OperatorDashboard() {
                             [order.id]: e.target.value,
                           })
                         }
-                        placeholder="Например: Сбербанк, Карта: 2202 0000 ... Получатель: Иван И."
-                        className="w-full text-xs p-3 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50 dark:bg-zinc-800 focus:outline-hidden focus:border-blue-400 h-20 font-medium text-zinc-900 dark:text-zinc-100"
+                        placeholder="Например: Сбербанк..."
+                        className="w-full text-xs p-3 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50 dark:bg-zinc-800 focus:outline-hidden text-zinc-900 dark:text-zinc-100"
                       />
                       <button
                         onClick={() => handleSendDetails(order.id)}
@@ -280,7 +305,9 @@ export default function OperatorDashboard() {
                         Отправить реквизиты клиенту
                       </button>
                     </div>
-                  ) : (
+                  )}
+
+                  {order.status === "awaiting_payment" && (
                     <div className="p-4 bg-purple-500/10 rounded-2xl border border-purple-400/30 text-center space-y-1">
                       <CheckCircle2 className="w-5 h-5 text-purple-500 mx-auto" />
                       <p className="text-xs font-bold text-purple-700 dark:text-purple-400">
@@ -289,6 +316,67 @@ export default function OperatorDashboard() {
                       <p className="text-[11px] text-zinc-400">
                         Ожидаем подтверждения оплаты от пользователя...
                       </p>
+                    </div>
+                  )}
+
+                  {order.status === "paid" && (
+                    <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-400/30 space-y-3">
+                      <div className="text-center space-y-1">
+                        <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                          Клиент оплатил!
+                        </p>
+                        {order.receipt_url ? (
+                          <a
+                            href={order.receipt_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-1 text-xs font-bold text-blue-500 hover:text-blue-600 underline"
+                          >
+                            📄 Открыть PDF чек в новой вкладке
+                          </a>
+                        ) : (
+                          <p className="text-[11px] text-zinc-400">
+                            Файл чека не найден в базе данных
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          onClick={async () => {
+                            if (
+                              confirm(
+                                "Вы подтверждаете получение и закрываете заявку как Успешную?",
+                              )
+                            ) {
+                              await supabase
+                                .from("orders")
+                                .update({ status: "completed" })
+                                .eq("id", order.id);
+                            }
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs cursor-pointer transition-colors"
+                        >
+                          Успешно
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (
+                              confirm(
+                                "Отклонить заявку? (Деньги не пришли / фейк чек)",
+                              )
+                            ) {
+                              await supabase
+                                .from("orders")
+                                .update({ status: "cancelled" })
+                                .eq("id", order.id);
+                            }
+                          }}
+                          className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded-xl text-xs cursor-pointer transition-colors"
+                        >
+                          Отклонить
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
