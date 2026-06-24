@@ -91,10 +91,9 @@ export default function AuthModal({
       }
       generateCaptcha();
     } else {
-      let targetRoute = "/dashboard"; // Роут по умолчанию
+      let targetRoute = "/user/dashboard"; // Новый базовый путь для клиентов
 
       try {
-        // Запрашиваем роль пользователя напрямую из таблицы profiles
         if (authData?.user?.id) {
           const { data: profile, error: profileError } = await supabase
             .from("profiles")
@@ -103,26 +102,21 @@ export default function AuthModal({
             .single();
 
           if (!profileError && profile) {
-            // Если вошел оператор или админ, перенаправляем на страницу оператора
+            // Если вошел сотрудник — перенаправляем на дашборд оператора
             if (profile.role === "operator" || profile.role === "admin") {
-              targetRoute = "/operator";
+              targetRoute = "/operator/dashboard";
             }
           }
         }
       } catch (err) {
         console.error("Ошибка при определении роли:", err);
-        // В случае ошибки оставляем базовый /dashboard, чтобы не ломать логин
       }
 
-      // 1. Очищаем поля ввода и снимаем состояние загрузки
       setLogin("");
       setPassword("");
       setIsLoading(false);
-
-      // 2. Закрываем модалку
       onClose();
 
-      // 3. Выдерживаем микро-паузу для фиксации сессии в куках браузера и редиректим на вычисленный роут
       setTimeout(() => {
         startTransition(() => {
           router.refresh();

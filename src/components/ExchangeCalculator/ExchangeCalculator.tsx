@@ -379,7 +379,7 @@ export default function ExchangeCalculator() {
         {/* Кнопка действия */}
         <div className="mt-8">
           <Link
-            href={`/exchange?from=${selectedSend.id}&to=${selectedReceive.id}&amount=${sendAmount}`}
+            href={`/user/exchange?from=${selectedSend.id}&to=${selectedReceive.id}&amount=${sendAmount}`}
             className="inline-block text-center w-full bg-[#FFDD2D] text-zinc-900 font-bold text-base py-4 rounded-full hover:bg-[#e6c628] shadow-sm active:scale-[0.99] transition-all"
           >
             Продолжить

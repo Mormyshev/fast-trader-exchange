@@ -15,7 +15,6 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
-import { uploadPassportAction } from "./actions";
 
 type VerificationStatus = "not_started" | "on_check" | "verified";
 

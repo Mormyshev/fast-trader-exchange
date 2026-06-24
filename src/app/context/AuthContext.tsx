@@ -51,18 +51,21 @@ export function AuthProvider({
   };
 
   useEffect(() => {
-    // Подписка остается для отслеживания динамических входов/выходов
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        await fetchUserRole(session.user.id);
-      } else {
+      // Реагируем только на выход из системы или если сессия полностью пропала
+      if (event === "SIGNED_OUT" || !session) {
         setUser(null);
         setRole("guest");
+        setIsLoading(false);
       }
-      setIsLoading(false);
+      // При INITIAL_SESSION или SIGNED_IN полагаемся на серверные данные
+      // и логику редиректа из модалки, чтобы не дублировать запросы
+      else if (session?.user) {
+        setUser(session.user);
+        setIsLoading(false);
+      }
     });
 
     return () => {

@@ -152,7 +152,7 @@ export default function OperatorDashboard() {
         </h2>
 
         {newOrders.length === 0 ? (
-          <div className="p-8 text-center bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl text-zinc-400 text-sm font-medium border border-dashed border-zinc-200 dark:border-zinc-700">
+          <div className="p-8 text-center bg-zinc-50 rounded-[24px] text-zinc-400 text-sm font-medium border border-dashed border-zinc-200">
             Сейчас очередь пуста. Новые обмены появятся здесь мгновенно.
           </div>
         ) : (
@@ -160,36 +160,37 @@ export default function OperatorDashboard() {
             {newOrders.map((order) => (
               <div
                 key={order.id}
-                className="p-6 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-xs flex flex-col justify-between gap-4"
+                className="p-6 bg-white rounded-[32px] border border-zinc-200 shadow-none flex flex-col justify-between gap-4"
               >
                 <div>
                   <div className="flex justify-between items-start">
                     <span className="text-xs font-mono font-bold text-zinc-400">
                       ID: ...{order.id.slice(0, 8)}
                     </span>
-                    <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400 px-2 py-0.5 rounded-md font-bold">
+                    <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full font-bold">
                       Ожидает
                     </span>
                   </div>
-                  <div className="mt-3 space-y-1">
-                    <p className="text-sm font-semibold">
+                  <div className="mt-4 space-y-1.5">
+                    <p className="text-sm font-semibold text-zinc-600">
                       Клиент отдает:{" "}
-                      <span className="font-bold text-base">
-                        {Number(order.amount_from).toLocaleString("ru-RU")}{" "}
-                        {order.currency_from}
+                      <span className="font-bold text-base text-zinc-900">
+                        {Number(order.from_amount || 0).toLocaleString("ru-RU")}{" "}
+                        {order.from_currency}
                       </span>
                     </p>
-                    <p className="text-sm font-semibold text-zinc-500">
+                    <p className="text-sm font-semibold text-zinc-400">
                       Должен получить:{" "}
-                      <span>
-                        {Number(order.amount_to).toFixed(4)} {order.currency_to}
+                      <span className="font-bold text-zinc-800">
+                        {Number(order.to_amount || 0).toFixed(4)}{" "}
+                        {order.to_currency}
                       </span>
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => handleClaimOrder(order.id)}
-                  className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-950 font-bold py-3 rounded-full transition-all text-sm cursor-pointer shadow-xs"
+                  className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-950 font-bold py-3 rounded-full transition-all text-sm cursor-pointer shadow-none"
                 >
                   Взять в работу
                 </button>
@@ -198,14 +199,16 @@ export default function OperatorDashboard() {
           </div>
         )}
       </div>
+
       {/* СЕКЦИЯ 2: ЗАЯВКИ В РАБОТЕ У ТЕКУЩЕГО ОПЕРАТОРА */}
-      <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-        <h2 className="text-xl font-black uppercase tracking-wider text-blue-500">
-          Мои active задачи ({myOrders.length})
+      {/* СЕКЦИЯ 2: ЗАЯВКИ В РАБОТЕ У ТЕКУЩЕГО ОПЕРАТОРА */}
+      <div className="space-y-4 pt-6 border-t border-zinc-100">
+        <h2 className="text-xl font-black uppercase tracking-wider text-blue-500 flex items-center gap-2">
+          Мои активные задачи ({myOrders.length})
         </h2>
 
         {myOrders.length === 0 ? (
-          <div className="p-8 text-center bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl text-zinc-400 text-sm font-medium border border-dashed border-zinc-200 dark:border-zinc-700">
+          <div className="p-8 text-center bg-zinc-50 rounded-[24px] text-zinc-400 text-sm font-medium border border-dashed border-zinc-200">
             У вас нет взятых заявок. Заберите активные обмены из верхней
             очереди!
           </div>
@@ -214,27 +217,26 @@ export default function OperatorDashboard() {
             {myOrders.map((order) => (
               <div
                 key={order.id}
-                className={`p-6 bg-white dark:bg-zinc-900 rounded-3xl border-2 shadow-xs grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6 items-center transition-all ${
+                className={`p-6 bg-white rounded-[32px] border-2 shadow-none grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6 items-center transition-all ${
                   order.status === "paid"
-                    ? "border-emerald-500/50 bg-emerald-50/10 dark:bg-emerald-950/5"
-                    : "border-blue-400/30"
+                    ? "border-emerald-400 bg-emerald-50/20"
+                    : "border-zinc-200 focus-within:border-[#FFDD2D]"
                 }`}
               >
                 {/* Левая часть: Подробная информация */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-mono font-bold text-zinc-400">
                       ID: {order.id}
                     </span>
 
-                    {/* ИСПРАВЛЕНО: Теперь каждый статус имеет свой цвет и текст */}
                     <span
-                      className={`text-xs font-black uppercase px-2 py-0.5 rounded ${
+                      className={`text-xs font-bold px-3 py-1 rounded-full ${
                         order.status === "processing"
-                          ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400"
+                          ? "bg-blue-50 text-blue-700 border border-blue-100"
                           : order.status === "awaiting_payment"
-                            ? "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400"
-                            : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                            ? "bg-purple-50 text-purple-700 border border-purple-100"
+                            : "bg-emerald-50 text-emerald-700 border border-emerald-100"
                       }`}
                     >
                       {order.status === "processing" && "В обработке"}
@@ -245,46 +247,46 @@ export default function OperatorDashboard() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-50 dark:bg-zinc-800/40 p-4 rounded-xl text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-[20px] text-sm">
                     <div>
-                      <span className="text-zinc-400 block text-xs font-bold">
+                      <span className="text-zinc-400 block text-xs font-bold mb-1">
                         КЛИЕНТ ОТДАЕТ:
                       </span>
-                      <span className="font-black text-zinc-900 dark:text-zinc-100 text-base">
-                        {Number(order.amount_from).toLocaleString("ru-RU")}{" "}
-                        {order.currency_from}
+                      <span className="font-black text-zinc-900 text-base">
+                        {Number(order.from_amount || 0).toLocaleString("ru-RU")}{" "}
+                        {order.from_currency}
                       </span>
                     </div>
                     <div>
-                      <span className="text-zinc-400 block text-xs font-bold">
-                        КОШЕЛЕК ПОЛУЧЕНИЯ (КЛИЕНТА):
+                      <span className="text-zinc-400 block text-xs font-bold mb-1">
+                        РЕКВИЗИТЫ ПОЛУЧЕНИЯ КЛИЕНТА:
                       </span>
-                      <span className="font-mono text-xs font-bold block break-all bg-white dark:bg-zinc-800 px-2 py-1 rounded mt-1 border border-zinc-100 dark:border-zinc-700">
-                        {order.wallet_to}
+                      <span className="font-mono text-xs font-bold block break-all bg-white px-3 py-1.5 rounded-xl border border-zinc-200">
+                        {order.payment_details || "Не указаны реквизиты в БД"}
                       </span>
                     </div>
                   </div>
 
-                  {/* ДОПОЛНИТЕЛЬНО: Выводим прямую ссылку на чек в левую панель для удобства */}
+                  {/* Ссылка на документ об оплате */}
                   {order.receipt_url && (
                     <div className="pt-1">
                       <a
                         href={order.receipt_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                        className="inline-flex items-center text-xs font-bold text-emerald-600 hover:underline"
                       >
-                        📎 Прикрепленный документ об оплате (PDF)
+                        📎 Прикрепленный документ об оплате (PDF / Чек)
                       </a>
                     </div>
                   )}
                 </div>
 
-                {/* Правая часть: Управление логикой (Ваш проверенный блок) */}
+                {/* Правая часть: Управление логикой работы оператора */}
                 <div className="space-y-3">
                   {order.status === "processing" && (
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold text-zinc-500 uppercase">
+                      <label className="block text-xs font-bold text-zinc-500 uppercase pl-1">
                         Реквизиты для оплаты клиенту:
                       </label>
                       <textarea
@@ -295,12 +297,12 @@ export default function OperatorDashboard() {
                             [order.id]: e.target.value,
                           })
                         }
-                        placeholder="Например: Сбербанк..."
-                        className="w-full text-xs p-3 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50 dark:bg-zinc-800 focus:outline-hidden text-zinc-900 dark:text-zinc-100"
+                        placeholder="Например: Сбербанк 2202..."
+                        className="w-full h-20 p-3 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-hidden focus:border-[#FFDD2D] text-zinc-900 resize-none"
                       />
                       <button
                         onClick={() => handleSendDetails(order.id)}
-                        className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2.5 rounded-full transition-all text-xs cursor-pointer shadow-xs"
+                        className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-2.5 rounded-full transition-all text-xs cursor-pointer"
                       >
                         Отправить реквизиты клиенту
                       </button>
@@ -308,21 +310,21 @@ export default function OperatorDashboard() {
                   )}
 
                   {order.status === "awaiting_payment" && (
-                    <div className="p-4 bg-purple-500/10 rounded-2xl border border-purple-400/30 text-center space-y-1">
-                      <CheckCircle2 className="w-5 h-5 text-purple-500 mx-auto" />
-                      <p className="text-xs font-bold text-purple-700 dark:text-purple-400">
+                    <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 text-center space-y-1">
+                      <CheckCircle2 className="w-4 h-4 text-purple-600 mx-auto" />
+                      <p className="text-xs font-bold text-purple-700">
                         Реквизиты отправлены
                       </p>
-                      <p className="text-[11px] text-zinc-400">
+                      <p className="text-[11px] text-zinc-400 font-medium">
                         Ожидаем подтверждения оплаты от пользователя...
                       </p>
                     </div>
                   )}
 
                   {order.status === "paid" && (
-                    <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-400/30 space-y-3">
+                    <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-3">
                       <div className="text-center space-y-1">
-                        <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                        <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
                           Клиент оплатил!
                         </p>
                         {order.receipt_url ? (
@@ -330,12 +332,12 @@ export default function OperatorDashboard() {
                             href={order.receipt_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-block mt-1 text-xs font-bold text-blue-500 hover:text-blue-600 underline"
+                            className="inline-block mt-1 text-xs font-bold text-blue-600 hover:underline"
                           >
                             📄 Открыть PDF чек в новой вкладке
                           </a>
                         ) : (
-                          <p className="text-[11px] text-zinc-400">
+                          <p className="text-[11px] text-zinc-400 font-medium">
                             Файл чека не найден в базе данных
                           </p>
                         )}
@@ -355,7 +357,7 @@ export default function OperatorDashboard() {
                                 .eq("id", order.id);
                             }
                           }}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs cursor-pointer transition-colors"
+                          className="bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-950 font-bold py-2 rounded-xl text-xs cursor-pointer transition-colors"
                         >
                           Успешно
                         </button>
