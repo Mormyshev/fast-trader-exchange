@@ -59,7 +59,7 @@ export default async function RootLayout({
   return (
     <html lang="ru" className="h-full antialiased">
       <body
-        className={`${roboto.variable} font-sans min-h-full flex flex-col bg-white text-zinc-900`}
+        className={`${roboto.className} font-sans min-h-full flex flex-col bg-white text-zinc-900`}
       >
         <Providers
           initialUser={session?.user || null}
