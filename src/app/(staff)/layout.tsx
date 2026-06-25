@@ -79,6 +79,14 @@ export default function StaffLayout({
   const isAdmin = profile?.role === "admin";
   // Получаем название текущего раздела или ставим дефолтное
   const currentTitle = pageTitles[pathname] || "Панель управления";
+
+  const handleNavClick = () => {
+    // Закрываем меню, если ширина экрана меньше десктопной (768px)
+    if (window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-zinc-50/50 text-zinc-900 font-sans antialiased overflow-x-hidden">
       {/* НОВОЕ КРАСИВОЕ БОКОВОЕ МЕНЮ (SIDEBAR) */}
@@ -102,6 +110,7 @@ export default function StaffLayout({
                   ? "bg-[#FFDD2D] text-zinc-900"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
               }`}
+              onClick={handleNavClick}
             >
               <LayoutDashboard className="w-4 h-4" />
               Дашборд статистики
@@ -114,6 +123,7 @@ export default function StaffLayout({
                   ? "bg-[#FFDD2D] text-zinc-900"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
               }`}
+              onClick={handleNavClick}
             >
               <ClipboardList className="w-4 h-4" />
               Активные ордера
@@ -126,6 +136,7 @@ export default function StaffLayout({
                   ? "bg-[#FFDD2D] text-zinc-900"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
               }`}
+              onClick={handleNavClick}
             >
               <UserCheck className="w-4 h-4" />
               Проверка анкет
