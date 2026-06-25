@@ -1,90 +1,228 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import Link from "next/link";
+"use client";
 
-export default async function StaffLayout({
+import { useEffect, useState } from "react";
+import { createClient } from "@/src/utils/supabase/client";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import {
+  LayoutDashboard,
+  ClipboardList,
+  UserCheck,
+  Settings,
+  Users,
+  User,
+  Loader2,
+  Menu,
+  LogOut,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/src/app/context/AuthContext";
+
+// Словарь для динамического вывода названия раздела в левой части шапки
+const pageTitles: { [key: string]: string } = {
+  "/operator/dashboard": "Дашборд статистики",
+  "/operator/orders": "Активные ордера",
+  "/operator/verification": "Проверка анкет",
+  "/admin/manage-operators": "Управление персоналом",
+  "/admin/settings": "Настройки системы",
+};
+export default function StaffLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-      },
-    },
-  );
+  const [profile, setProfile] = useState<{ role: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/");
+  const supabase = createClient();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const { logoutUser } = useAuth();
 
-  const isOperator = profile?.role === "operator";
-  const isAdmin = profile?.role === "admin";
+  useEffect(() => {
+    async function checkAuth() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/");
+        return;
+      }
 
-  if (!isOperator && !isAdmin) {
-    redirect("/user/dashboard");
+      const { data } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (data?.role !== "operator" && data?.role !== "admin") {
+        router.push("/user/dashboard");
+        return;
+      }
+
+      setProfile(data);
+      setLoading(false);
+    }
+    checkAuth();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50">
+        <Loader2 className="w-8 h-8 animate-spin text-[#FFDD2D]" />
+      </div>
+    );
   }
 
+  const isAdmin = profile?.role === "admin";
+  // Получаем название текущего раздела или ставим дефолтное
+  const currentTitle = pageTitles[pathname] || "Панель управления";
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50">
-      <aside className="w-64 bg-zinc-900 text-white p-6 flex flex-col justify-between border-r border-zinc-800">
+    <div className="flex min-h-screen bg-zinc-50/50 text-zinc-900 font-sans antialiased overflow-x-hidden">
+      {/* НОВОЕ КРАСИВОЕ БОКОВОЕ МЕНЮ (SIDEBAR) */}
+      <aside
+        className={`fixed top-0 left-0 bottom-0 z-40 w-64 bg-white border-r border-zinc-200 transition-transform duration-300 ease-in-out px-4 py-6 flex flex-col justify-between ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <div className="space-y-6">
-          <div className="font-bold text-lg border-b border-zinc-800 pb-3">
-            Панель {isAdmin ? "Администратора" : "Оператора"}
+          <div className="flex items-center justify-between px-2">
+            <span className="text-lg font-black tracking-tight text-zinc-900 select-none">
+              FAST TRADER<span className="text-[#e6c628] font-medium">.EX</span>
+            </span>
           </div>
 
-          <nav className="flex flex-col space-y-2">
+          <nav className="space-y-1 pt-4">
             <Link
               href="/operator/dashboard"
-              className="hover:bg-zinc-800 p-2.5 rounded-xl block text-sm transition-colors"
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                pathname === "/operator/dashboard"
+                  ? "bg-[#FFDD2D] text-zinc-900"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+              }`}
             >
+              <LayoutDashboard className="w-4 h-4" />
               Дашборд статистики
             </Link>
+
+            <Link
+              href="/operator/orders"
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                pathname === "/operator/orders"
+                  ? "bg-[#FFDD2D] text-zinc-900"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+              }`}
+            >
+              <ClipboardList className="w-4 h-4" />
+              Активные ордера
+            </Link>
+
             <Link
               href="/operator/verification"
-              className="hover:bg-zinc-800 p-2.5 rounded-xl block text-sm transition-colors"
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                pathname === "/operator/verification"
+                  ? "bg-[#FFDD2D] text-zinc-900"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+              }`}
             >
+              <UserCheck className="w-4 h-4" />
               Проверка анкет
             </Link>
 
+            {/* АДМИНСКИЙ БЛОК */}
             {isAdmin && (
-              <div className="pt-4 mt-4 border-t border-zinc-800 space-y-2">
-                <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider block pl-2 mb-1">
+              <div className="pt-4 mt-4 border-t border-zinc-100 space-y-1">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block pl-3 mb-1">
                   Администрирование
                 </span>
                 <Link
                   href="/admin/manage-operators"
-                  className="hover:bg-zinc-800 p-2.5 rounded-xl block text-sm text-amber-400 transition-colors"
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                    pathname === "/admin/manage-operators"
+                      ? "bg-[#FFDD2D] text-zinc-900"
+                      : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+                  }`}
                 >
+                  <Users className="w-4 h-4" />
                   Управление персоналом
                 </Link>
                 <Link
                   href="/admin/settings"
-                  className="hover:bg-zinc-800 p-2.5 rounded-xl block text-sm text-amber-400 transition-colors"
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                    pathname === "/admin/settings"
+                      ? "bg-[#FFDD2D] text-zinc-900"
+                      : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+                  }`}
                 >
+                  <Settings className="w-4 h-4" />
                   Настройки системы
                 </Link>
               </div>
             )}
           </nav>
         </div>
+
+        {/* ИСПРАВЛЕНО: Вместо "Рабочая область" добавлена аккуратная кнопка выхода в стиле сайта */}
+        <div className="border-t border-zinc-100 pt-4 px-1">
+          <button
+            onClick={logoutUser}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            Выйти из системы
+          </button>
+        </div>
       </aside>
 
-      <main className="flex-1 p-8 overflow-y-auto">{children}</main>
+      {/* ОСНОВНОЙ КОНТЕНТ СТРАНИЦ */}
+      <div
+        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
+          isSidebarOpen ? "md:pl-64" : "pl-0"
+        }`}
+      >
+        {/* НОВАЯ ФУНКЦИОНАЛЬНАЯ ШАПКА */}
+        <header className="h-20 bg-white border-b border-zinc-200 px-6 md:px-10 flex items-center justify-between sticky top-0 z-30">
+          {/* Левая часть: Динамическое название раздела */}
+          <div className="flex items-center">
+            <h2 className="text-lg md:text-xl font-bold text-zinc-800 tracking-tight select-none">
+              {currentTitle}
+            </h2>
+          </div>
+
+          {/* Правая часть: Управление меню и Профиль оператора */}
+          <div className="flex items-center gap-6">
+            {/* Информация по оператору с аватаркой */}
+            <div className="flex items-center gap-3 border-r border-zinc-200 pr-6 hidden sm:flex">
+              <div className="text-right">
+                <p className="text-sm font-bold text-zinc-800 leading-none">
+                  {isAdmin ? "Администратор" : "Оператор #01"}
+                </p>
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mt-1 block">
+                  Онлайн
+                </span>
+              </div>
+              <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 shrink-0 select-none">
+                <User className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* Кнопка бургер перенесена сюда в крайнее правое положение */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="rounded-full border-zinc-200 h-10 w-10 shrink-0 bg-white hover:bg-zinc-50 cursor-pointer shadow-none"
+            >
+              <Menu className="w-5 h-5 text-[#2A2A2A]" />
+            </Button>
+          </div>
+        </header>
+
+        {/* ОСНОВНАЯ ЗОНА СТРАНИЦЫ */}
+        <main className="flex-1 p-6 md:p-10">{children}</main>
+      </div>
     </div>
   );
 }

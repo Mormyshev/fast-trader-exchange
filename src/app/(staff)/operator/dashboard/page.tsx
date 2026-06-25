@@ -5,8 +5,6 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  ArrowUpRight,
-  ArrowDownLeft,
   Search,
   User,
   ArrowRightLeft,
@@ -20,10 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 
 const mockOrders = [
   {
@@ -51,6 +48,7 @@ const mockOrders = [
     date: "13:40",
   },
 ];
+
 export default function OperatorDashboard() {
   const [activeTab, setActiveTab] = useState<
     "all" | "pending" | "processing" | "completed"
@@ -66,9 +64,9 @@ export default function OperatorDashboard() {
   });
 
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8 text-zinc-900 font-sans">
+    <div className="max-w-7xl mx-auto space-y-8 text-zinc-900 font-sans">
       {/* Верхняя панель */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pl-14 md:pl-0">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
             Панель оператора
@@ -85,7 +83,8 @@ export default function OperatorDashboard() {
           </span>
         </div>
       </div>
-      {/* Карточки статистики в стиле промо-блоков сайта */}
+
+      {/* Карточки статистики */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="rounded-[32px] border-none bg-[#FFDD2D] p-6 shadow-none flex flex-col justify-between h-36">
           <div className="flex items-center justify-between">
@@ -117,9 +116,9 @@ export default function OperatorDashboard() {
           <div className="text-4xl font-bold text-zinc-900">24</div>
         </Card>
       </div>
-      {/* Главный блок с таблицей */}
+
+      {/* Блок с таблицей */}
       <Card className="rounded-[32px] border border-[#FFDD2D] bg-white shadow-none p-4 md:p-6">
-        {/* Фильтры и поиск */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-zinc-100">
           <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl self-start">
             {[
@@ -133,7 +132,7 @@ export default function OperatorDashboard() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`text-xs font-bold rounded-xl h-8 px-4 transition-all ${
+                className={`text-xs font-bold rounded-xl h-8 px-4 transition-all cursor-pointer ${
                   activeTab === tab.id
                     ? "bg-white text-zinc-900 shadow-xs hover:bg-white"
                     : "text-zinc-400 hover:text-zinc-600"
@@ -156,7 +155,6 @@ export default function OperatorDashboard() {
           </div>
         </div>
 
-        {/* Сама таблица Shadcn */}
         <div className="overflow-hidden pt-4">
           <Table>
             <TableHeader>
@@ -197,7 +195,7 @@ export default function OperatorDashboard() {
                         <div className="w-6 h-6 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-400 shrink-0">
                           <User className="w-3 h-3" />
                         </div>
-                        <span className="font-semibold text-zinc-800 truncate max-w-[120px]">
+                        <span className="font-semibold text-zinc-800 truncate max-w-[140px]">
                           {order.user}
                         </span>
                       </div>
@@ -240,7 +238,7 @@ export default function OperatorDashboard() {
                     <TableCell className="py-4 px-4 text-right">
                       <Button
                         size="sm"
-                        className="rounded-full h-9 px-5 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors"
+                        className="rounded-full h-9 px-5 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
                       >
                         Обработать
                       </Button>
@@ -253,12 +251,11 @@ export default function OperatorDashboard() {
                     colSpan={5}
                     className="h-32 text-center text-zinc-400 font-semibold"
                   >
-                    Нет active заявок
+                    Нет активных заявок
                   </TableCell>
                 </TableRow>
               )}
-            </TableBody>{" "}
-            {/* <-- Здесь теперь исправлено с </Body> на </TableBody> */}
+            </TableBody>
           </Table>
         </div>
       </Card>
