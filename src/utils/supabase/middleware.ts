@@ -13,15 +13,10 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          // 1. Сначала синхронно обновляем куки в объекте запроса
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-
-          // 2. Создаем ОДИН новый объект ответа (а не внутри цикла!)
-          supabaseResponse = NextResponse.next({ request });
-
-          // 3. Записываем все куки в итоговый ответ сервера
+          supabaseResponse = NextResponse.next({ request }); // Важно для синхронизации
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
@@ -30,7 +25,7 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // Важно: этот вызов обновляет просроченный токен (раз в час)
+  // Это безопасно обновляет сессию, если токен истек
   await supabase.auth.getUser();
 
   return supabaseResponse;

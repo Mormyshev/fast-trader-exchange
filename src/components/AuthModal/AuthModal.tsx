@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, startTransition } from "react";
+import { useState, useEffect } from "react";
 import { X, RefreshCw } from "lucide-react";
 import { useLenis } from "lenis/react";
-import { createClient } from "@/src/utils/supabase/client";
-import { useRouter } from "next/navigation";
+import { loginAndGetRoute } from "@/src/app/actions/auth";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -31,8 +30,6 @@ export default function AuthModal({
   const [num2, setNum2] = useState(6);
 
   const lenis = useLenis();
-  const router = useRouter();
-  const supabase = createClient();
 
   const generateCaptcha = () => {
     setNum1(Math.floor(Math.random() * 10) + 1);
@@ -75,54 +72,21 @@ export default function AuthModal({
 
     setIsLoading(true);
 
-    // Авторизуем пользователя
-    const { data: authData, error: authError } =
-      await supabase.auth.signInWithPassword({
-        email: login,
-        password: password,
-      });
+    // Вызываем серверное действие (Server Action)
+    const result = await loginAndGetRoute(login, password);
 
-    if (authError) {
+    if (result.error) {
       setIsLoading(false);
-      if (authError.message.includes("Invalid login credentials")) {
-        setError("Неверный логин или пароль");
-      } else {
-        setError(authError.message);
-      }
+      setError(result.error);
       generateCaptcha();
-    } else {
-      let targetRoute = "/user/dashboard"; // Новый базовый путь для клиентов
-
-      try {
-        if (authData?.user?.id) {
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", authData.user.id)
-            .single();
-
-          if (!profileError && profile) {
-            // Если вошел сотрудник — перенаправляем на дашборд оператора
-            if (profile.role === "operator" || profile.role === "admin") {
-              targetRoute = "/operator/dashboard";
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Ошибка при определении роли:", err);
-      }
-
+    } else if (result.route) {
       setLogin("");
       setPassword("");
       setIsLoading(false);
       onClose();
 
-      setTimeout(() => {
-        startTransition(() => {
-          router.refresh();
-          router.push(targetRoute);
-        });
-      }, 150);
+      // Жесткий редирект для очистки сетевых очередей браузера
+      window.location.href = result.route;
     }
   };
 

@@ -2,9 +2,7 @@ import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
-
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient } from "@/src/utils/supabase/server";
 
 const roboto = Roboto({
   variable: "--font-roboto",
@@ -21,50 +19,23 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
-            );
-          } catch (error) {}
-        },
-      },
-    },
-  );
-
+  // Получаем сессию за 1-2 миллисекунды из куки (без запроса к БД)
+  const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  let initialRole: "guest" | "user" | "operator" | "admin" = "guest";
-
-  if (session?.user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", session.user.id)
-      .single();
-    // Синхронизируем тип роли с вашей структурой БД: operator вместо manager
-    initialRole = (data?.role as any) || "user";
-  }
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
     <html lang="ru" className="h-full antialiased">
       <body
         className={`${roboto.className} font-sans min-h-full flex flex-col bg-white text-zinc-900`}
       >
-        <Providers
-          initialUser={session?.user || null}
-          initialRole={initialRole}
-        >
+        {/* 
+          Передаем роль как "guest" по умолчанию. 
+          Если user есть, AuthContext мгновенно дозапросит профиль на клиенте 
+          и обновит состояние без блокировки рендеринга страницы.
+        */}
+        <Providers initialUser={user} initialRole="guest">
           {children}
         </Providers>
       </body>

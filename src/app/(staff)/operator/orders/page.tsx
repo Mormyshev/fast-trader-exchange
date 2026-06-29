@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/src/utils/supabase/client";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
@@ -23,55 +23,62 @@ interface Order {
   receipt_url: string | null;
   created_at: string;
 }
+
 export default function OperatorOrdersPage() {
   const supabase = createClient();
-  const { user, role, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   const [newOrders, setNewOrders] = useState<Order[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Состояния для ввода реквизитов (ключ — id заявки)
   const [detailsInput, setDetailsInput] = useState<{ [key: string]: string }>(
     {},
   );
 
-  // Загрузка заявок из базы
-  const loadOrders = async () => {
-    if (!user) return;
+  // Обернули в useCallback, чтобы функция не пересоздавалась при рендерах
+  const loadOrders = useCallback(async () => {
+    if (!user?.id) return;
 
-    // 1. Новые заявки (свободные)
-    const { data: pending } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
+    try {
+      // Выполняем запросы параллельно через Promise.all, чтобы сэкономить время
+      const [pendingResponse, processingResponse] = await Promise.all([
+        supabase
+          .from("orders")
+          .select("*")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("orders")
+          .select("*")
+          .in("status", ["processing", "awaiting_payment", "paid"])
+          .eq("operator_id", user.id)
+          .order("created_at", { ascending: false }),
+      ]);
 
-    // 2. Текущие задачи оператора
-    const { data: processing } = await supabase
-      .from("orders")
-      .select("*")
-      .in("status", ["processing", "awaiting_payment", "paid"])
-      .eq("operator_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (pending) setNewOrders(pending as Order[]);
-    if (processing) setMyOrders(processing as Order[]);
-    setLoading(false);
-  };
+      if (pendingResponse.data) setNewOrders(pendingResponse.data as Order[]);
+      if (processingResponse.data)
+        setMyOrders(processingResponse.data as Order[]);
+    } catch (err) {
+      console.error("Ошибка загрузки ордеров:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, supabase]);
 
   useEffect(() => {
     if (isAuthLoading) return;
-    if (!user) {
+    if (!user?.id) {
       setLoading(false);
       return;
     }
 
     loadOrders();
 
-    // Легковесная подписка на изменения без перезапроса всей БД
+    // Генерируем уникальное имя канала, чтобы избежать мертвых петель в веб-сокетах
+    const uniqueChannelName = `operator-orders-${user.id}-${Math.random().toString(36).substring(2, 9)}`;
+
     const channel = supabase
-      .channel("operator-orders-live")
+      .channel(uniqueChannelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
@@ -84,11 +91,9 @@ export default function OperatorOrdersPage() {
           } else if (payload.eventType === "UPDATE") {
             const updated = payload.new as Order;
 
-            // Локально убираем старую запись отовсюду
             setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
             setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
 
-            // Помещаем в нужный список
             if (updated.status === "pending") {
               setNewOrders((prev) => [updated, ...prev]);
             } else if (
@@ -110,11 +115,13 @@ export default function OperatorOrdersPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, isAuthLoading]);
+  }, [user?.id, isAuthLoading, loadOrders]); // Зависимость строго по id
+
   const handleClaimOrder = async (orderId: string) => {
-    if (!user) return;
+    if (!user?.id) return;
     try {
-      const { data, error } = await supabase
+      // Исполняем чистый апдейт. Realtime сам добавит ордер в список myOrders
+      const { error, data } = await supabase
         .from("orders")
         .update({
           operator_id: user.id,
@@ -122,17 +129,17 @@ export default function OperatorOrdersPage() {
         })
         .eq("id", orderId)
         .is("operator_id", null)
-        .select();
+        .select("id"); // Запрашиваем только ID для проверки успешности
 
       if (error) {
         alert("Ошибка при взятии заявки: " + error.message);
         return;
       }
+
       if (!data || data.length === 0) {
         alert("Эту заявку уже забрал другой оператор!");
         return;
       }
-      console.log("Заявка успешно перехвачена оператором:", user.id);
     } catch (err) {
       console.error(err);
       alert("Произошла системная ошибка.");
@@ -161,8 +168,7 @@ export default function OperatorOrdersPage() {
     }
   };
 
-  // Валидация прав ролей и экраны загрузки
-  if (isAuthLoading) {
+  if (isAuthLoading || loading) {
     return (
       <div className="flex justify-center p-20">
         <Loader2 className="w-8 h-8 animate-spin text-[#FFDD2D]" />
@@ -170,25 +176,6 @@ export default function OperatorOrdersPage() {
     );
   }
 
-  if (role === "guest" || (role !== "operator" && role !== "admin")) {
-    return (
-      <div className="flex flex-col items-center justify-center p-20 text-zinc-500">
-        <AlertCircle className="w-12 h-12 text-rose-500 mb-2" />
-        <h2 className="text-xl font-bold text-[#2A2A2A]">Доступ запрещен</h2>
-        <p className="text-sm font-medium text-zinc-400 mt-1">
-          Эта страница предназначена только для операторов и администраторов.
-        </p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex justify-center p-20">
-        <Loader2 className="w-8 h-8 animate-spin text-[#FFDD2D]" />
-      </div>
-    );
-  }
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-12 text-zinc-900 font-sans antialiased">
       {/* СЕКЦИЯ 1: СВОБОДНЫЕ ЗАЯВКИ (ОЖИДАЮТ ОПЕРАТОРА) */}
