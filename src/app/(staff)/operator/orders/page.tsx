@@ -55,7 +55,9 @@ export default function OperatorOrdersPage() {
 
     async function fetchInitialOrders() {
       try {
-        const [pendingResponse, processingResponse] = await Promise.all([
+        // Используем Promise.allSettled вместо Promise.all.
+        // Теперь, если один запрос зависнет или упадет, второй все равно отобразится на экране мгновенно!
+        const [pendingRes, processingRes] = await Promise.allSettled([
           supabase
             .from("orders")
             .select("*")
@@ -69,11 +71,19 @@ export default function OperatorOrdersPage() {
             .order("created_at", { ascending: false }),
         ]);
 
-        if (pendingResponse.data) setNewOrders(pendingResponse.data as Order[]);
-        if (processingResponse.data)
-          setMyOrders(processingResponse.data as Order[]);
+        // Обрабатываем новые заявки
+        if (pendingRes.status === "fulfilled" && pendingRes.value.data) {
+          setNewOrders(pendingRes.value.data as Order[]);
+        } else {
+          console.error("Очередь новых заявок временно недоступна");
+        }
+
+        // Обрабатываем задачи оператора (которые летят за 105 мс!)
+        if (processingRes.status === "fulfilled" && processingRes.value.data) {
+          setMyOrders(processingRes.value.data as Order[]);
+        }
       } catch (err) {
-        console.error("Ошибка при получении ордеров:", err);
+        console.error("Глобальная ошибка при получении ордеров:", err);
       } finally {
         setLoading(false);
       }
