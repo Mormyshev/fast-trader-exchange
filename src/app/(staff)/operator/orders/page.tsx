@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/src/utils/supabase/client";
 import { useAuth } from "@/src/app/context/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 
 interface Order {
   id: string;
