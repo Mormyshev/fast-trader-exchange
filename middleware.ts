@@ -1,24 +1,30 @@
-import { type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/src/utils/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // 1. ЖЕСТКАЯ ФИЛЬТРАЦИЯ (Senior-паттерн):
+  // Если запрос идет за данными (Fetch / XHR / API / Next.js Data / Realtime)
+  // или за статикой, мы СРАЗУ пропускаем его за 0 миллисекунд, минуя тяжелый getUser() в middleware.
+  if (
+    request.headers.get("x-nextjs-data") ||
+    request.headers.get("accept")?.includes("application/json") ||
+    pathname.startsWith("/api") ||
+    pathname.includes("_next")
+  ) {
+    return NextResponse.next();
+  }
+
+  // 2. Вызываем проверку сессии ТОЛЬКО при реальной перезагрузке или переходе на страницу в браузере
   return await updateSession(request);
 }
 
 export const config = {
   matcher: [
     /*
-     * Перехватываем все маршруты, КРОМЕ:
-     * - _next/static (статические файлы)
-     * - _next/image (оптимизированные изображения)
-     * - favicon.ico, sitemap.xml, robots.txt
-     * - изображений (svg, png, jpg, jpeg, gif, webp)
-     * - Любых запросов к API и базе данных (исключаем из middleware, чтобы избежать deadlock)
+     * Перехватываем только страницы. Полностью исключаем файлы, картинки и статику.
      */
     "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
-// export async function middleware(request: NextRequest) {
-//   // Временно отключаем проверку сессии для теста
-//   return NextResponse.next();
-// }

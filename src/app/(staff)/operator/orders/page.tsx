@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/src/utils/supabase/client";
 import { useAuth } from "@/src/app/context/AuthContext";
-import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 
+// ИСПРАВЛЕНО: Интерфейс полностью соответствует схеме вашей таблицы в PostgreSQL
 interface Order {
   id: string;
-  from_amount: number;
-  from_currency: string;
-  to_amount: number;
-  to_currency: string;
+  created_at: string;
   status:
     | "pending"
     | "processing"
@@ -18,10 +16,17 @@ interface Order {
     | "paid"
     | "completed"
     | "cancelled";
+  user_id: string | null;
   operator_id: string | null;
+  currency_from: string; // Было: from_currency
+  currency_to: string; // Было: to_currency
+  amount_from: number; // Было: from_amount
+  amount_to: number; // Было: to_amount
+  wallet_from: string | null;
+  wallet_to: string;
+  tx_hash: string | null;
   payment_details: string | null;
   receipt_url: string | null;
-  created_at: string;
 }
 
 export default function OperatorOrdersPage() {
@@ -35,36 +40,12 @@ export default function OperatorOrdersPage() {
     {},
   );
 
-  // Обернули в useCallback, чтобы функция не пересоздавалась при рендерах
-  const loadOrders = useCallback(async () => {
-    if (!user?.id) return;
+  const userIdRef = useRef<string | null>(null);
+  if (user?.id) {
+    userIdRef.current = user.id;
+  }
 
-    try {
-      // Выполняем запросы параллельно через Promise.all, чтобы сэкономить время
-      const [pendingResponse, processingResponse] = await Promise.all([
-        supabase
-          .from("orders")
-          .select("*")
-          .eq("status", "pending")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("orders")
-          .select("*")
-          .in("status", ["processing", "awaiting_payment", "paid"])
-          .eq("operator_id", user.id)
-          .order("created_at", { ascending: false }),
-      ]);
-
-      if (pendingResponse.data) setNewOrders(pendingResponse.data as Order[]);
-      if (processingResponse.data)
-        setMyOrders(processingResponse.data as Order[]);
-    } catch (err) {
-      console.error("Ошибка загрузки ордеров:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id, supabase]);
-
+  // Первоначальный разовый запрос данных из базы
   useEffect(() => {
     if (isAuthLoading) return;
     if (!user?.id) {
@@ -72,21 +53,57 @@ export default function OperatorOrdersPage() {
       return;
     }
 
-    loadOrders();
+    async function fetchInitialOrders() {
+      try {
+        const [pendingResponse, processingResponse] = await Promise.all([
+          supabase
+            .from("orders")
+            .select("*")
+            .eq("status", "pending")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("orders")
+            .select("*")
+            .in("status", ["processing", "awaiting_payment", "paid"])
+            .eq("operator_id", user.id)
+            .order("created_at", { ascending: false }),
+        ]);
 
-    // Генерируем уникальное имя канала, чтобы избежать мертвых петель в веб-сокетах
-    const uniqueChannelName = `operator-orders-${user.id}-${Math.random().toString(36).substring(2, 9)}`;
+        if (pendingResponse.data) setNewOrders(pendingResponse.data as Order[]);
+        if (processingResponse.data)
+          setMyOrders(processingResponse.data as Order[]);
+      } catch (err) {
+        console.error("Ошибка при получении ордеров:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchInitialOrders();
+  }, [user?.id, isAuthLoading, supabase]);
+
+  // Изолированная Realtime-подписка
+  useEffect(() => {
+    if (isAuthLoading || !user?.id) return;
+
+    const channelId = `live-orders-${Math.random().toString(36).substring(2, 9)}`;
 
     const channel = supabase
-      .channel(uniqueChannelName)
+      .channel(channelId)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
         (payload) => {
+          const currentUserId = userIdRef.current;
+          if (!currentUserId) return;
+
           if (payload.eventType === "INSERT") {
             const inserted = payload.new as Order;
             if (inserted.status === "pending") {
-              setNewOrders((prev) => [inserted, ...prev]);
+              setNewOrders((prev) => {
+                if (prev.some((o) => o.id === inserted.id)) return prev;
+                return [inserted, ...prev];
+              });
             }
           } else if (payload.eventType === "UPDATE") {
             const updated = payload.new as Order;
@@ -100,7 +117,7 @@ export default function OperatorOrdersPage() {
               ["processing", "awaiting_payment", "paid"].includes(
                 updated.status,
               ) &&
-              updated.operator_id === user.id
+              updated.operator_id === currentUserId
             ) {
               setMyOrders((prev) => [updated, ...prev]);
             }
@@ -115,13 +132,12 @@ export default function OperatorOrdersPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, isAuthLoading, loadOrders]); // Зависимость строго по id
+  }, [isAuthLoading, user?.id, supabase]);
 
   const handleClaimOrder = async (orderId: string) => {
     if (!user?.id) return;
     try {
-      // Исполняем чистый апдейт. Realtime сам добавит ордер в список myOrders
-      const { error, data } = await supabase
+      const { data, error } = await supabase
         .from("orders")
         .update({
           operator_id: user.id,
@@ -129,16 +145,14 @@ export default function OperatorOrdersPage() {
         })
         .eq("id", orderId)
         .is("operator_id", null)
-        .select("id"); // Запрашиваем только ID для проверки успешности
+        .select("id");
 
       if (error) {
         alert("Ошибка при взятии заявки: " + error.message);
         return;
       }
-
       if (!data || data.length === 0) {
         alert("Эту заявку уже забрал другой оператор!");
-        return;
       }
     } catch (err) {
       console.error(err);
@@ -175,7 +189,6 @@ export default function OperatorOrdersPage() {
       </div>
     );
   }
-
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-12 text-zinc-900 font-sans antialiased">
       {/* СЕКЦИЯ 1: СВОБОДНЫЕ ЗАЯВКИ (ОЖИДАЮТ ОПЕРАТОРА) */}
@@ -209,15 +222,15 @@ export default function OperatorOrdersPage() {
                     <p className="text-sm font-semibold text-zinc-600">
                       Клиент отдает:{" "}
                       <span className="font-bold text-base text-zinc-900">
-                        {Number(order.from_amount || 0).toLocaleString("ru-RU")}{" "}
-                        {order.from_currency}
+                        {Number(order.amount_from || 0).toLocaleString("ru-RU")}{" "}
+                        {order.currency_from}
                       </span>
                     </p>
                     <p className="text-sm font-semibold text-zinc-400">
                       Должен получить:{" "}
                       <span className="font-bold text-zinc-800">
-                        {Number(order.to_amount || 0).toFixed(4)}{" "}
-                        {order.to_currency}
+                        {Number(order.amount_to || 0).toFixed(4)}{" "}
+                        {order.currency_to}
                       </span>
                     </p>
                   </div>
@@ -285,8 +298,8 @@ export default function OperatorOrdersPage() {
                         КЛИЕНТ ОТДАЕТ:
                       </span>
                       <span className="font-black text-zinc-900 text-base">
-                        {Number(order.from_amount || 0).toLocaleString("ru-RU")}{" "}
-                        {order.from_currency}
+                        {Number(order.amount_from || 0).toLocaleString("ru-RU")}{" "}
+                        {order.currency_from}
                       </span>
                     </div>
                     <div>
