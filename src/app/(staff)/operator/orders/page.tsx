@@ -3,9 +3,8 @@
 import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/src/utils/supabase/client";
 import { useAuth } from "@/src/app/context/AuthContext";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-// ИСПРАВЛЕНО: Интерфейс полностью соответствует схеме вашей таблицы в PostgreSQL
 interface Order {
   id: string;
   created_at: string;
@@ -18,10 +17,10 @@ interface Order {
     | "cancelled";
   user_id: string | null;
   operator_id: string | null;
-  currency_from: string; // Было: from_currency
-  currency_to: string; // Было: to_currency
-  amount_from: number; // Было: from_amount
-  amount_to: number; // Было: to_amount
+  currency_from: string;
+  currency_to: string;
+  amount_from: number;
+  amount_to: number;
   wallet_from: string | null;
   wallet_to: string;
   tx_hash: string | null;
@@ -48,6 +47,9 @@ export default function OperatorOrdersPage() {
   // Первоначальный разовый запрос данных из базы
   useEffect(() => {
     if (isAuthLoading) return;
+
+    // СУПЕР-ЗАЩИТА: Если пользователя нет (сборка на Vercel),
+    // эффект сразу завершается, не допуская краша Node.js
     if (!user?.id) {
       setLoading(false);
       return;
@@ -55,8 +57,6 @@ export default function OperatorOrdersPage() {
 
     async function fetchInitialOrders() {
       try {
-        // Используем Promise.allSettled вместо Promise.all.
-        // Теперь, если один запрос зависнет или упадет, второй все равно отобразится на экране мгновенно!
         const [pendingRes, processingRes] = await Promise.allSettled([
           supabase
             .from("orders")
@@ -67,23 +67,18 @@ export default function OperatorOrdersPage() {
             .from("orders")
             .select("*")
             .in("status", ["processing", "awaiting_payment", "paid"])
-            .eq("operator_id", user.id)
+            .eq("operator_id", user.id!) // Восклицательный знак сообщает TS, что user гарантированно есть
             .order("created_at", { ascending: false }),
         ]);
 
-        // Обрабатываем новые заявки
         if (pendingRes.status === "fulfilled" && pendingRes.value.data) {
           setNewOrders(pendingRes.value.data as Order[]);
-        } else {
-          console.error("Очередь новых заявок временно недоступна");
         }
-
-        // Обрабатываем задачи оператора (которые летят за 105 мс!)
         if (processingRes.status === "fulfilled" && processingRes.value.data) {
           setMyOrders(processingRes.value.data as Order[]);
         }
       } catch (err) {
-        console.error("Глобальная ошибка при получении ордеров:", err);
+        console.error("Ошибка:", err);
       } finally {
         setLoading(false);
       }
@@ -199,6 +194,7 @@ export default function OperatorOrdersPage() {
       </div>
     );
   }
+
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-12 text-zinc-900 font-sans antialiased">
       {/* СЕКЦИЯ 1: СВОБОДНЫЕ ЗАЯВКИ (ОЖИДАЮТ ОПЕРАТОРА) */}
