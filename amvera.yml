@@ -6,7 +6,8 @@ meta:
 build:
   skip: false
   # Вставьте скопированный новый пароль вместо НОВЫЙ_ПАРОЛЬ_ИЗ_ПАНЕЛИ
-  additionalCommands: npm install --include=dev && NEXT_FONT_GOOGLE_MOCKED=true DATABASE_URL="postgresql://adminftt:НОВЫЙ_ПАРОЛЬ_ИЗ_ПАНЕЛИ@amvera-mormyshevoleg-cnpg-fast-trader-db-rw:5432/fastdb" npm run build
+  additionalCommands: npm install --include=dev && NEXT_FONT_GOOGLE_MOCKED=true DATABASE_URL="postgresql://postgres:SuperMegaAdmin73552812@amvera-mormyshevoleg-cnpg-fast-trader-db-rw:5432/fastdb" npm run build
+
 run:
   scriptName: null
   scriptArguments: null
