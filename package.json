@@ -4,9 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "NEXT_FONT_GOOGLE_MOCKED=true next build",
-    "start": "next start",
-    "lint": "eslint"
+    "build": "next build",
+    "start": "next start"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

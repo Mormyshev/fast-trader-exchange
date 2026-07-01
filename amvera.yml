@@ -4,9 +4,13 @@ meta:
     name: npm
     version: "20"
 build:
-  # Используем стандартное поле command вместо additionalCommands
-  command: npm install --include=dev && npm run build
+  skip: false
+  # Переносим флаг изоляции шрифтов прямо в команду сборки
+  additionalCommands: npm install --include=dev && NEXT_FONT_GOOGLE_MOCKED=true npm run build
 run:
+  scriptName: null
+  scriptArguments: null
+  nodeArguments: null
   command: npm run start
   persistenceMount: /data
   containerPort: "3000"
