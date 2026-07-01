@@ -4,8 +4,6 @@ meta:
     name: npm
     version: "20"
 build:
-  env:
-    NEXT_FONT_GOOGLE_MOCKED: "true"
   skip: false
   additionalCommands: npm install --include=dev && npm run build
   artifacts:
