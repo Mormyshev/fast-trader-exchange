@@ -1,0 +1,76 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+enum OrderStatus {
+  pending
+  processing
+  completed
+  cancelled
+  failed
+}
+
+enum UserRole {
+  user
+  admin
+  operator
+}
+
+enum VerificationStatus {
+  not_started
+  pending
+  verified
+  rejected
+}
+
+model Profiles {
+  id           String             @id @db.Uuid
+  email        String
+  role         UserRole?          @default(user)
+  verification VerificationStatus? @default(not_started)
+  updated_at   DateTime           @default(now()) @db.Timestamptz
+  username     String?
+  last_name    String?
+  first_name   String?
+  middle_name  String?
+  phone        String?
+  telegram     String?
+  passport_url String?
+
+  orders_as_user     Orders[]     @relation("UserOrders")
+  orders_as_operator Orders[]     @relation("OperatorOrders")
+
+  @@index([id, role], name: "idx_profiles_id_role")
+  @@map("profiles")
+}
+
+model Orders {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at      DateTime    @default(now()) @db.Timestamptz
+  status          OrderStatus @default(pending)
+  user_id         String?     @db.Uuid
+  operator_id     String?     @db.Uuid
+  currency_from   String
+  currency_to     String
+  amount_from     Decimal     @db.Decimal(20, 8)
+  amount_to       Decimal     @db.Decimal(20, 8)
+  wallet_from     String?
+  wallet_to       String
+  tx_hash         String?
+  payment_details String?
+  receipt_url     String?
+
+  user            Profiles?   @relation("UserOrders", fields: [user_id], references: [id], onDelete: SetNull)
+  operator        Profiles?   @relation("OperatorOrders", fields: [operator_id], references: [id], onDelete: SetNull)
+
+  @@index([created_at(sort: Desc)], name: "idx_orders_created_at")
+  @@index([operator_id], name: "idx_orders_operator_id")
+  @@index([operator_id, status], name: "idx_orders_operator_status_composite")
+  @@index([status, created_at(sort: Desc)], name: "idx_orders_status_pending_final")
+  @@map("orders")
+}
