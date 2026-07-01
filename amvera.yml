@@ -5,8 +5,8 @@ meta:
     version: "20"
 build:
   skip: false
-  # Переносим флаг изоляции шрифтов прямо в команду сборки
-  additionalCommands: npm install --include=dev && NEXT_FONT_GOOGLE_MOCKED=true npm run build
+  # Внедряем строку подключения к БД прямо в процесс сборки Amvera
+  additionalCommands: npm install --include=dev && NEXT_FONT_GOOGLE_MOCKED=true DATABASE_URL="postgresql://adminftt:Karakum8125@amvera-mormyshevoleg-cnpg-fast-trader-db-rw:5432/fastdb" npm run build
 run:
   scriptName: null
   scriptArguments: null
