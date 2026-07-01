@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import url("https://googleapis.com");
+
+:root {
+  --font-roboto: "Roboto", sans-serif;
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -56,7 +61,8 @@ body[style*="overflow: hidden"] {
   padding-right: var(--removed-body-scroll-width, 16px);
 }
 
-html.lenis, html.lenis body {
+html.lenis,
+html.lenis body {
   height: auto;
 }
 

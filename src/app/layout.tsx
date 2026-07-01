@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 import { createClient } from "@/src/utils/supabase/server";
 
-const roboto = Roboto({
+const roboto = {
+  className: "font-sans",
   variable: "--font-roboto",
-  subsets: ["latin", "cyrillic"],
-  display: "swap",
-  weight: ["400", "500", "700"],
-});
+};
 
 export const metadata: Metadata = {
   title: "Fast Trader Exchange",
