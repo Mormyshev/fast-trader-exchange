@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
+import { Roboto } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 import { createClient } from "@/src/utils/supabase/server";
 
-const roboto = {
-  className: "font-sans",
+const roboto = Roboto({
   variable: "--font-roboto",
-};
+  subsets: ["latin", "cyrillic"],
+  display: "swap",
+  weight: ["400", "500", "700"],
+});
 
 export const metadata: Metadata = {
   title: "Fast Trader Exchange",
@@ -23,7 +26,7 @@ export default async function RootLayout({
   } = await supabase.auth.getUser();
 
   return (
-    <html lang="ru" className="h-full antialiased">
+    <html lang="ru" className={`${roboto.variable} h-full antialiased`}>
       <body
         className={`${roboto.className} font-sans min-h-full flex flex-col bg-white text-zinc-900`}
       >
