@@ -1,32 +1,35 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
+import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
 async function getActor() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    const user = await getUserFast(supabase);
 
-  if (!user) return null;
+    if (!user) return null;
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
 
-  return {
-    user,
-    admin,
-    role: profile?.role || "user",
-    isStaff: profile?.role === "operator" || profile?.role === "admin",
-  };
+    return {
+      user,
+      admin,
+      role: profile?.role || "user",
+      isStaff: profile?.role === "operator" || profile?.role === "admin",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(_request: Request, context: RouteContext) {

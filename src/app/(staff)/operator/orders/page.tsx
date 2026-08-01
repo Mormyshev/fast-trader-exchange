@@ -155,6 +155,23 @@ export default function OperatorOrdersPage() {
     };
   }, [user?.id, supabase]);
 
+  const applyOrderUpdate = (updated: Order) => {
+    setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
+    setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
+
+    if (updated.status === "pending") {
+      setNewOrders((prev) => [updated, ...prev]);
+      return;
+    }
+
+    if (
+      ["processing", "awaiting_payment", "paid"].includes(updated.status) &&
+      updated.operator_id === user?.id
+    ) {
+      setMyOrders((prev) => [updated, ...prev]);
+    }
+  };
+
   const handleClaimOrder = async (orderId: string) => {
     if (!user?.id) return;
     try {
@@ -169,11 +186,14 @@ export default function OperatorOrdersPage() {
       const json = await res.json();
       if (res.status === 409) {
         alert("Эту заявку уже забрал другой оператор!");
+        setNewOrders((prev) => prev.filter((o) => o.id !== orderId));
         return;
       }
       if (!res.ok) {
         alert("Ошибка при взятии заявки: " + (json.error || res.status));
+        return;
       }
+      if (json.order) applyOrderUpdate(json.order as Order);
     } catch (err) {
       console.error(err);
       alert("Произошла системная ошибка.");
@@ -201,7 +221,39 @@ export default function OperatorOrdersPage() {
         alert("Не удалось отправить реквизиты: " + (json.error || res.status));
         return;
       }
+      if (json.order) applyOrderUpdate(json.order as Order);
       setDetailsInput((prev) => ({ ...prev, [orderId]: "" }));
+    } catch (err) {
+      console.error(err);
+      alert("Произошла системная ошибка.");
+    }
+  };
+
+  const handleCloseOrder = async (
+    orderId: string,
+    status: "completed" | "cancelled",
+  ) => {
+    const ok = confirm(
+      status === "completed"
+        ? "Вы подтверждаете получение и закрываете заявку как Успешную?"
+        : "Отклонить заявку? (Деньги не пришли / фейк чек)",
+    );
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert("Не удалось обновить заявку: " + (json.error || res.status));
+        return;
+      }
+      // completed/cancelled больше не в рабочих списках
+      setNewOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setMyOrders((prev) => prev.filter((o) => o.id !== orderId));
     } catch (err) {
       console.error(err);
       alert("Произошла системная ошибка.");
@@ -417,41 +469,13 @@ export default function OperatorOrdersPage() {
 
                       <div className="grid grid-cols-2 gap-2 pt-1">
                         <button
-                          onClick={async () => {
-                            if (
-                              confirm(
-                                "Вы подтверждаете получение и закрываете заявку как Успешную?",
-                              )
-                            ) {
-                              await fetch(`/api/orders/${order.id}`, {
-                                method: "PATCH",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({ status: "completed" }),
-                              });
-                            }
-                          }}
+                          onClick={() => handleCloseOrder(order.id, "completed")}
                           className="bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-950 font-bold py-2 rounded-xl text-xs cursor-pointer transition-colors"
                         >
                           Успешно
                         </button>
                         <button
-                          onClick={async () => {
-                            if (
-                              confirm(
-                                "Отклонить заявку? (Деньги не пришли / фейк чек)",
-                              )
-                            ) {
-                              await fetch(`/api/orders/${order.id}`, {
-                                method: "PATCH",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({ status: "cancelled" }),
-                              });
-                            }
-                          }}
+                          onClick={() => handleCloseOrder(order.id, "cancelled")}
                           className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded-xl text-xs cursor-pointer transition-colors"
                         >
                           Отклонить
