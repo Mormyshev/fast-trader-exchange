@@ -3,7 +3,6 @@
 import { useState } from "react";
 import NextLink from "next/link";
 import { Menu, Globe, UserPlus, LogIn, LogOut, User } from "lucide-react";
-import Image from "next/image";
 import AuthModal from "../AuthModal/AuthModal";
 import RegisterModal from "../RegisterModal/RegisterModal";
 import { useAuth } from "@/src/app/context/AuthContext";
@@ -50,22 +49,22 @@ export default function Header() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-20 items-center justify-between">
             <NextLink href="/" className="flex items-center space-x-3 group">
-              <div className="relative h-10 w-10 flex items-center justify-center font-bold text-xl text-black">
-                <Image
-                  src="/logo.png"
-                  alt="Logo"
+              <div className="relative h-10 w-10 flex items-center justify-center shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo.svg"
+                  alt="Aurum Swap"
                   width={40}
                   height={40}
-                  className="h-auto w-auto"
-                  priority
+                  className="h-10 w-10"
                 />
               </div>
               <div className="flex flex-col">
                 <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-zinc-50 leading-none">
-                  FAST TRADER
+                  AURUM SWAP
                 </span>
                 <span className="mt-1 text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                  Exchange
+                  Demo Exchange
                 </span>
               </div>
             </NextLink>

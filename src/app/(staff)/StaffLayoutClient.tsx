@@ -69,7 +69,7 @@ export default function StaffLayoutClient({
               className="text-lg font-black tracking-tight text-zinc-900 select-none hover:opacity-80 transition-opacity"
               title="На главную сайта"
             >
-              FAST TRADER<span className="text-[#e6c628] font-medium">.EX</span>
+              AURUM SWAP<span className="text-[#e6c628] font-medium">.DEMO</span>
             </Link>
           </div>
 

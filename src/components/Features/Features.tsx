@@ -25,7 +25,7 @@ export default function Features() {
     },
     {
       title: "Подписывайся на наш телеграм",
-      description: "@FastTraderTeam — все актуальные новости о нашем сервисе",
+      description: "@AurumSwapNews — новости и обновления демо-сервиса",
       icon: (
         <Send className="w-6 h-6 text-zinc-950 stroke-[1.5] transition-transform duration-500 group-hover:translate-x-1 group-hover:-translate-y-1" />
       ),

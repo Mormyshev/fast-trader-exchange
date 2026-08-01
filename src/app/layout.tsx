@@ -12,8 +12,8 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Fast Trader Exchange",
-  description: "Надежный обмен валют",
+  title: "Aurum Swap — Demo Exchange",
+  description: "Демо-площадка обмена валют",
 };
 
 type AppRole = "guest" | "user" | "operator" | "admin";

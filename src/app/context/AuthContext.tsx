@@ -96,16 +96,22 @@ export function AuthProvider({
   const logoutUser = async () => {
     setIsLoading(true);
     try {
+      // Сначала сервер — чистит httpOnly cookies (иначе после reload снова «вошли»)
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch {
+      // ignore
+    }
+    try {
       await supabase.auth.signOut({ scope: "local" });
     } catch {
-      // ignore network failures
+      // ignore
     }
     setUser(null);
     setRole("guest");
     setIsLoading(false);
 
     if (typeof window !== "undefined") {
-      window.location.href = window.location.origin;
+      window.location.replace("/");
     } else {
       router.push("/");
     }

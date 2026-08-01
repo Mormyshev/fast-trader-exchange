@@ -21,8 +21,8 @@ export default function OrderForm() {
   const [fio, setFio] = useState<string>("");
   const [wallet, setWallet] = useState<string>("T");
   const [city, setCity] = useState<string>("Москва");
-  const [email, setEmail] = useState<string>("mormyshevoleg@gmail.com");
-  const [telegram, setTelegram] = useState<string>("@");
+  const [email, setEmail] = useState<string>("demo.user@example.com");
+  const [telegram, setTelegram] = useState<string>("@demo_user");
   const [coupon, setCoupon] = useState<string>("");
 
   // Чекбоксы

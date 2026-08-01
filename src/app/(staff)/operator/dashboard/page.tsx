@@ -307,7 +307,7 @@ export default function OperatorDashboard() {
             Панель оператора
           </h1>
           <p className="text-sm font-medium text-zinc-400 mt-1">
-            Мониторинг заявок Fast Trader Exchange
+            Мониторинг заявок Aurum Swap Demo
           </p>
         </div>
 

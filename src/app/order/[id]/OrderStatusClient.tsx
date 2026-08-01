@@ -410,7 +410,7 @@ export default function OrderStatusClient({
                 </h3>
                 <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 max-w-lg leading-relaxed">
                   Средства были успешно отправлены на указанные вами реквизиты.
-                  Спасибо, что выбрали Fast Trader Exchange!
+                  Спасибо, что выбрали Aurum Swap!
                 </p>
               </div>
             </div>

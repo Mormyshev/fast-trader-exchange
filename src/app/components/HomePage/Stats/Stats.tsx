@@ -64,7 +64,7 @@ export default function Stats() {
             <div className="w-full px-4 sm:px-8">
                 {/* Заголовок секции */}
                 <h2 className="text-[32px] md:text-[42px] font-bold text-center text-[#2A2A2A] dark:text-zinc-100 mb-16 md:mb-24 tracking-tight">
-                    FastTrader <span className="text-[36px]">в цифрах</span>
+                    Aurum Swap <span className="text-[36px]">в цифрах</span>
                 </h2>
 
                 {/* 
