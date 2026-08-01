@@ -40,74 +40,54 @@ export default function ProfilePage() {
   // Состояния для работы с файлом паспорта
   const [passportFile, setPassportFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  // Получаем текущие данные профиля при открытии страницы
+  // BFF: загрузка профиля (+ poll, т.к. Realtime нестабилен)
   useEffect(() => {
+    if (!user?.id) return;
+
+    let cancelled = false;
+
     async function fetchProfile() {
-      if (!user?.id) return;
-
       try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select(
-            "last_name, first_name, middle_name, phone, telegram, verification, passport_url",
-          )
-          .eq("id", user.id)
-          .maybeSingle(); // Используем maybeSingle, чтобы не падать в ошибку, если строки нет
-
-        if (error) throw error;
-
-        // Если профиля еще нет в БД, автоматически создаем пустую строку для юзера
+        const res = await fetch("/api/profile", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
+        const data = json.profile;
+        if (cancelled) return;
         if (!data) {
-          const { error: insertError } = await supabase
-            .from("profiles")
-            .insert({
-              id: user.id,
-              email: user.email,
-              verification: "not_started",
-              role: "user",
-            });
-
-          if (insertError) throw insertError;
           setVerificationStatus("not_started");
-        } else {
-          // Если профиль найден, заполняем инпуты сохраненными значениями
-          setLastName(data.last_name || "");
-          setFirstName(data.first_name || "");
-          setMiddleName(data.middle_name || "");
-          setPhone(data.phone || "");
-          setTelegram(data.telegram || "");
-          setVerificationStatus(
-            (data.verification as VerificationStatus) || "not_started",
-          );
-
-          if (data.passport_url) {
-            setPreviewUrl(data.passport_url);
-          }
+          return;
         }
+        setLastName(data.last_name || "");
+        setFirstName(data.first_name || "");
+        setMiddleName(data.middle_name || "");
+        setPhone(data.phone || "");
+        setTelegram(data.telegram || "");
+        setVerificationStatus(
+          (data.verification as VerificationStatus) || "not_started",
+        );
+        if (data.passport_url) setPreviewUrl(data.passport_url);
       } catch (err) {
         console.error("Ошибка загрузки профиля:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
-    fetchProfile();
-    if (!user?.id) return;
+    void fetchProfile();
 
     const profileSubscription = supabase
       .channel(`profile-changes-${user.id}`)
       .on(
         "postgres_changes",
         {
-          event: "UPDATE", // Слушаем только обновления строки
+          event: "UPDATE",
           schema: "public",
           table: "profiles",
-          filter: `id=eq.${user.id}`, // Слушаем строго строку текущего юзера
+          filter: `id=eq.${user.id}`,
         },
         (payload) => {
-          // Когда оператор обновит строку, мы берем актуальный статус и обновляем стейт
-          const updatedProfile = payload.new;
-          if (updatedProfile && updatedProfile.verification) {
+          const updatedProfile = payload.new as any;
+          if (updatedProfile?.verification) {
             setVerificationStatus(
               updatedProfile.verification as VerificationStatus,
             );
@@ -116,8 +96,11 @@ export default function ProfilePage() {
       )
       .subscribe();
 
-    // Важно: отписываемся от веб-сокета при уходе со страницы, чтобы не было утечек памяти
+    const poll = setInterval(() => void fetchProfile(), 10000);
+
     return () => {
+      cancelled = true;
+      clearInterval(poll);
       supabase.removeChannel(profileSubscription);
     };
   }, [user?.id]);
@@ -152,7 +135,6 @@ export default function ProfilePage() {
     }
   };
 
-  // 2. Замените функцию handleSubmit внутри компонента:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return alert("Пользователь не авторизован");
@@ -162,50 +144,41 @@ export default function ProfilePage() {
       return alert("Пожалуйста, загрузите фото паспорта");
 
     setIsSubmitting(true);
-    let uploadedPassportUrl = previewUrl;
 
     try {
-      // Шаг 1: Если выбран новый файл, загружаем его НАПРЯМУЮ с клиента под сессией юзера
+      const form = new FormData();
+      form.append("last_name", lastName);
+      form.append("first_name", firstName);
+      form.append("middle_name", middleName);
+      form.append("phone", phone);
+      form.append("telegram", telegram);
+      if (previewUrl && !passportFile) {
+        form.append("passport_url", previewUrl);
+      }
       if (passportFile) {
-        const fileExt = passportFile.name.split(".").pop();
-        const fileName = `passport-${user.id}-${Date.now()}.${fileExt}`;
-
-        // Загружаем бинарный файл напрямую (минуя Base64 и Server Actions)
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("verifications")
-          .upload(fileName, passportFile, {
-            cacheControl: "3600",
-            upsert: true,
-          });
-
-        if (uploadError) throw uploadError;
-
-        // Сразу получаем его публичную ссылку
-        const { data: urlData } = supabase.storage
-          .from("verifications")
-          .getPublicUrl(fileName);
-
-        uploadedPassportUrl = urlData.publicUrl;
+        form.append("passport", passportFile);
       }
 
-      // Шаг 2: Обновляем текстовые поля в базе данных напрямую с клиента
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          last_name: lastName,
-          first_name: firstName,
-          middle_name: middleName,
-          phone: phone,
-          telegram: telegram,
-          passport_url: uploadedPassportUrl,
-          verification: "on_check",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      if (updateError) throw updateError;
-
+      // мгновенный UI
       setVerificationStatus("on_check");
+
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setVerificationStatus("not_started");
+        throw new Error(json.error || "Не удалось сохранить");
+      }
+
+      if (json.profile?.passport_url) {
+        setPreviewUrl(json.profile.passport_url);
+      }
+      setPassportFile(null);
+      setVerificationStatus(
+        (json.profile?.verification as VerificationStatus) || "on_check",
+      );
       alert("Данные успешно сохранены и отправлены на проверку!");
     } catch (err: any) {
       console.error("Ошибка при отправке анкеты:", err);

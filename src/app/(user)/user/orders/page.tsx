@@ -136,14 +136,14 @@ export default function UserOrdersPage() {
     }
 
     const fallback = bindRealtimeFallback(() => {}, () => void loadOrders());
+    // Realtime часто падает — гарантируем обновление списка
+    const listPoll = setInterval(() => void loadOrders(), 8000);
 
     setLoading(true);
     void (async () => {
       await loadOrders();
       if (cancelled) return;
 
-      // Без filter по user_id: фильтр требует REPLICA IDENTITY FULL;
-      // RLS и так отдаёт только свои строки
       channel = supabase
         .channel(`user-orders-${user.id}`)
         .on(
@@ -183,6 +183,7 @@ export default function UserOrdersPage() {
     return () => {
       cancelled = true;
       fallback.clear();
+      clearInterval(listPoll);
       if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id, isAuthLoading, activeTab]);

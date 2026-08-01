@@ -21,16 +21,20 @@ interface OrderStatusClientProps {
   initialOrder: any;
 }
 
+const WAITING_STATUSES = new Set(["pending", "processing", "paid"]);
+
 export default function OrderStatusClient({
   initialOrder,
 }: OrderStatusClientProps) {
   const [order, setOrder] = useState<any>(initialOrder);
   const [timeLeft, setTimeLeft] = useState<string>("15:00");
-  const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
-  const supabase = createClient();
+  const [isUploading, setIsUploading] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(
+    Boolean(initialOrder?.receipt_url),
+  );
 
-  // BFF: разовая подгрузка + Realtime (+ редкий poll, если WS не поднялся)
+  // BFF + Realtime
   useEffect(() => {
     let cancelled = false;
     const client = createClient();
@@ -43,7 +47,10 @@ export default function OrderStatusClient({
         });
         if (!res.ok) return;
         const json = await res.json();
-        if (!cancelled && json.order) setOrder(json.order);
+        if (!cancelled && json.order) {
+          setOrder(json.order);
+          if (json.order.receipt_url) setUploadSuccess(true);
+        }
       } catch {
         // ignore
       }
@@ -67,6 +74,7 @@ export default function OrderStatusClient({
           },
           (payload) => {
             setOrder(payload.new);
+            if ((payload.new as any)?.receipt_url) setUploadSuccess(true);
           },
         );
 
@@ -80,13 +88,40 @@ export default function OrderStatusClient({
     };
   }, [order.id]);
 
-  // 2. Логика таймера на 15 минут от времени создания заявки
+  // Пока ждём оператора — polling, не только Realtime
+  useEffect(() => {
+    if (!WAITING_STATUSES.has(order.status)) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/orders/${order.id}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && json.order) {
+          setOrder(json.order);
+          if (json.order.receipt_url) setUploadSuccess(true);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const timer = setInterval(() => void tick(), 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [order.id, order.status]);
+
   useEffect(() => {
     if (order.status !== "awaiting_payment") return;
 
     const calculateTimeLeft = () => {
       const createdAt = new Date(order.created_at).getTime();
-      const expiresAt = createdAt + 15 * 60 * 1000; // +15 минут
+      const expiresAt = createdAt + 15 * 60 * 1000;
       const now = new Date().getTime();
       const difference = expiresAt - now;
 
@@ -97,19 +132,16 @@ export default function OrderStatusClient({
 
       const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-      const strMinutes = minutes < 10 ? `0${minutes}` : minutes;
-      const strSeconds = seconds < 10 ? `0${seconds}` : seconds;
-
+      const strMinutes = minutes < 10 ? `0${minutes}` : String(minutes);
+      const strSeconds = seconds < 10 ? `0${seconds}` : String(seconds);
       setTimeLeft(`${strMinutes}:${strSeconds}`);
     };
 
     calculateTimeLeft();
     const timer = setInterval(calculateTimeLeft, 1000);
-
     return () => clearInterval(timer);
   }, [order.status, order.created_at]);
-  // 3. Функция загрузки PDF чека в Supabase Storage
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -123,50 +155,43 @@ export default function OrderStatusClient({
     setUploadSuccess(false);
 
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${order.id}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const form = new FormData();
+      form.append("file", file);
 
-      // Загружаем файл в созданный бакет 'receipts'
-      const { error: uploadError } = await supabase.storage
-        .from("receipts")
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Получаем публичную ссылку на загруженный файл
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("receipts").getPublicUrl(filePath);
-
-      const res = await fetch(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receipt_url: publicUrl }),
+      const res = await fetch(`/api/orders/${order.id}/receipt`, {
+        method: "POST",
+        body: form,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Не удалось сохранить чек");
 
-      if (json.order) setOrder(json.order);
+      if (json.order) {
+        setOrder(json.order);
+      } else {
+        setOrder((prev: any) => ({
+          ...prev,
+          receipt_url: json.order?.receipt_url || prev.receipt_url,
+        }));
+      }
       setUploadSuccess(true);
     } catch (err: any) {
-      console.error("Полная ошибка Supabase Storage:", err);
-
-      // Выводим максимум информации в alert для диагностики
-      const errorMessage = err.message || err.error || JSON.stringify(err);
-      alert(`Ошибка Supabase Storage: ${errorMessage}`);
+      console.error("Ошибка загрузки чека:", err);
+      alert(`Ошибка загрузки чека: ${err.message || "попробуйте позже"}`);
     } finally {
       setIsUploading(false);
+      e.target.value = "";
     }
   };
 
-  // 4. Функция подтверждения оплаты от пользователя
   const handleConfirmPayment = async () => {
-    // Проверяем, загружен ли чек (либо уже сохранен в базе, либо только что загружен)
     if (!order.receipt_url && !uploadSuccess) {
       alert("Пожалуйста, сначала прикрепите PDF-чек об оплате!");
       return;
     }
+
+    setIsConfirming(true);
+    // мгновенный UI, не ждём Realtime
+    setOrder((prev: any) => ({ ...prev, status: "paid" }));
 
     try {
       const res = await fetch(`/api/orders/${order.id}`, {
@@ -175,13 +200,18 @@ export default function OrderStatusClient({
         body: JSON.stringify({ status: "paid" }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Не удалось обновить статус");
+      if (!res.ok) {
+        setOrder((prev: any) => ({ ...prev, status: "awaiting_payment" }));
+        throw new Error(json.error || "Не удалось обновить статус");
+      }
 
       if (json.order) setOrder(json.order);
       alert("Заявка отправлена оператору на проверку! Ожидайте подтверждения.");
     } catch (err: any) {
       console.error("Ошибка смены статуса:", err);
       alert(`Не удалось отправить уведомление: ${err.message}`);
+    } finally {
+      setIsConfirming(false);
     }
   };
 
@@ -192,12 +222,11 @@ export default function OrderStatusClient({
           href="/user/orders"
           className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" />
-          К моим заявкам
+          <ArrowLeft className="w-4 h-4" />К моим заявкам
         </Link>
       </div>
-      <div className="bg-white dark:bg-zinc-900 rounded-[32px] border border-zinc-100 dark:border-zinc-800 p-6 md:p-10 space-y-8 shadow-md text-zinc-800 dark:text-zinc-100">
-        {/* Шапка статуса */}
+
+      <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-5 md:p-8 space-y-6 shadow-xs border border-zinc-100 dark:border-zinc-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-6">
           <div>
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -237,9 +266,7 @@ export default function OrderStatusClient({
           </div>
         </div>
 
-        {/* ДИНАМИЧЕСКИЙ БЛОК КОНТЕНТА */}
         <div className="py-2">
-          {/* СТАТУС: PENDING */}
           {order.status === "pending" && (
             <div className="flex flex-col items-center text-center space-y-5 bg-amber-400/25 dark:bg-amber-500/15 border border-amber-400/60 p-8 md:p-12 rounded-[24px] shadow-sm">
               <div className="w-14 h-14 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full flex items-center justify-center shadow-sm animate-pulse border border-amber-300">
@@ -250,9 +277,8 @@ export default function OrderStatusClient({
                   Ожидаем реквизиты от мерчанта
                 </h3>
                 <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 max-w-lg leading-relaxed">
-                  Ваша заявка успешно создана и передана в систему
-                  распределения. Первый освободившийся оператор отправит
-                  реквизиты для оплаты.
+                  Ваша заявка успешно создана и передана в систему распределения.
+                  Первый освободившийся оператор отправит реквизиты для оплаты.
                 </p>
               </div>
               <div className="flex items-center space-x-2.5 text-sm font-bold text-zinc-800 dark:text-zinc-200 bg-white/80 dark:bg-zinc-800/80 px-4 py-2 rounded-full border border-amber-300 shadow-xs">
@@ -262,7 +288,6 @@ export default function OrderStatusClient({
             </div>
           )}
 
-          {/* СТАТУС: PROCESSING */}
           {order.status === "processing" && (
             <div className="flex flex-col items-center text-center space-y-5 bg-blue-500/15 dark:bg-blue-500/10 border border-blue-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
               <div className="w-14 h-14 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full flex items-center justify-center shadow-sm border border-blue-300">
@@ -279,7 +304,7 @@ export default function OrderStatusClient({
               </div>
             </div>
           )}
-          {/* СТАТУС: AWAITING_PAYMENT */}
+
           {order.status === "awaiting_payment" && (
             <div className="flex flex-col space-y-6 bg-purple-500/15 dark:bg-purple-500/10 border border-purple-400/40 p-6 md:p-10 rounded-[24px] shadow-sm animate-fade-in text-left">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-purple-300/30 pb-4">
@@ -325,7 +350,7 @@ export default function OrderStatusClient({
                     type="file"
                     accept="application/pdf"
                     onChange={handleFileUpload}
-                    disabled={isUploading}
+                    disabled={isUploading || isConfirming}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                   />
 
@@ -343,9 +368,6 @@ export default function OrderStatusClient({
                       </div>
                       <p className="text-xs font-black uppercase tracking-wider">
                         Чек успешно прикреплен!
-                      </p>
-                      <p className="text-[11px] text-zinc-400 font-mono max-w-xs truncate mx-auto">
-                        PDF успешно загружен в хранилище
                       </p>
                     </div>
                   ) : (
@@ -365,15 +387,18 @@ export default function OrderStatusClient({
               <div className="pt-2">
                 <button
                   onClick={handleConfirmPayment}
-                  disabled={isUploading}
-                  className="w-full sm:max-w-xs bg-purple-500 hover:bg-purple-600 disabled:bg-zinc-200 text-white font-bold py-4 rounded-full shadow-md transition-all text-sm cursor-pointer tracking-wide uppercase text-center"
+                  disabled={isUploading || isConfirming}
+                  className="w-full sm:max-w-xs bg-purple-500 hover:bg-purple-600 disabled:bg-zinc-200 text-white font-bold py-4 rounded-full shadow-md transition-all text-sm cursor-pointer tracking-wide uppercase text-center inline-flex items-center justify-center gap-2"
                 >
+                  {isConfirming && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
                   Я оплатил, проверить транзакцию
                 </button>
               </div>
             </div>
           )}
-          {/* СТАТУС: COMPLETED */}
+
           {order.status === "completed" && (
             <div className="flex flex-col items-center text-center space-y-5 bg-emerald-500/15 dark:bg-emerald-500/10 border border-emerald-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
               <div className="w-14 h-14 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full flex items-center justify-center shadow-sm border border-emerald-300">
@@ -391,7 +416,6 @@ export default function OrderStatusClient({
             </div>
           )}
 
-          {/* СТАТУС: CANCELLED */}
           {order.status === "cancelled" && (
             <div className="flex flex-col items-center text-center space-y-5 bg-rose-500/15 dark:bg-rose-500/10 border border-rose-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
               <div className="w-14 h-14 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full flex items-center justify-center shadow-sm border border-rose-300">
@@ -410,6 +434,7 @@ export default function OrderStatusClient({
             </div>
           )}
         </div>
+
         {order.status === "paid" && (
           <div className="flex flex-col items-center text-center space-y-5 bg-indigo-500/15 dark:bg-indigo-500/10 border border-indigo-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
             <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
@@ -417,44 +442,10 @@ export default function OrderStatusClient({
               Платёж проверяется
             </h3>
             <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-md">
-              Мы получили ваш чек. Оператор сверяет поступление на баланс.
-              Обычно это занимает от 2 до 10 минут.
+              Оператор проверяет ваш чек. Статус обновится автоматически.
             </p>
           </div>
         )}
-
-        {/* Параметры обмена для сверки клиентом */}
-        <div className="bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 space-y-4 text-sm">
-          <h4 className="font-extrabold text-zinc-900 dark:text-zinc-50 pb-2 border-b border-zinc-200 dark:border-zinc-700 uppercase tracking-wider text-xs">
-            Детали вашего обмена
-          </h4>
-          <div className="flex justify-between items-center py-0.5">
-            <span className="font-bold text-zinc-400 uppercase text-xs">
-              Вы отдаете:
-            </span>
-            <span className="font-black text-base text-zinc-900 dark:text-zinc-100 bg-zinc-200/50 dark:bg-zinc-800 px-3 py-1 rounded-lg">
-              {Number(order.amount_from).toLocaleString("ru-RU")}{" "}
-              {order.currency_from}
-            </span>
-          </div>
-          <div className="flex justify-between items-center py-0.5">
-            <span className="font-bold text-zinc-400 uppercase text-xs">
-              Вы получаете:
-            </span>
-            <span className="font-black text-base text-zinc-900 dark:text-zinc-100 bg-zinc-200/50 dark:bg-zinc-800 px-3 py-1 rounded-lg">
-              {Number(order.amount_to).toFixed(4)}{" "}
-              {order.currency_to.replace("_", " ")}
-            </span>
-          </div>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-700/60">
-            <span className="font-bold text-zinc-400 uppercase text-xs shrink-0">
-              Адрес зачисления (Ваш кошелек):
-            </span>
-            <span className="font-mono font-black text-xs bg-amber-400/10 text-zinc-900 dark:text-amber-400 border border-amber-400/40 px-3 py-1.5 rounded-xl break-all">
-              {order.wallet_to}
-            </span>
-          </div>
-        </div>
       </div>
     </div>
   );

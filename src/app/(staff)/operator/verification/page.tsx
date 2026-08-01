@@ -82,42 +82,38 @@ export default function VerificationPage() {
     checkAccess();
   }, [user?.id, authLoading, router, supabase]);
 
-  // Функция получения заявок "on_check"
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(
-          "id, email, last_name, first_name, middle_name, phone, telegram, passport_url, verification",
-        )
-        .eq("verification", "on_check");
-
-      if (error) throw error;
-      setRequests(data || []);
+      const res = await fetch("/api/verifications", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
+      setRequests(json.requests || []);
     } catch (err) {
       console.error("Ошибка получения заявок:", err);
     } finally {
       setLoading(false);
     }
   };
+
   const handleVerdict = async (
     id: string,
     status: "verified" | "not_started",
   ) => {
     setProcessingId(id);
+    // мгновенный UI
+    setRequests((prev) => prev.filter((req) => req.id !== id));
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          verification: status,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id);
-
-      if (error) throw error;
-
-      setRequests((prev) => prev.filter((req) => req.id !== id));
+      const res = await fetch("/api/verifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        await fetchRequests();
+        throw new Error(json.error || "Ошибка обновления");
+      }
       alert(
         status === "verified"
           ? "Анкета успешно подтверждена!"

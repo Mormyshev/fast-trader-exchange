@@ -99,6 +99,7 @@ export default function OperatorOrdersPage() {
       () => {},
       () => void refreshFromBff(),
     );
+    const listPoll = setInterval(() => void refreshFromBff(), 8000);
 
     void (async () => {
       channel = supabase
@@ -151,6 +152,7 @@ export default function OperatorOrdersPage() {
     return () => {
       cancelled = true;
       fallback.clear();
+      clearInterval(listPoll);
       if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id, supabase]);
