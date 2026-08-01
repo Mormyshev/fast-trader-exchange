@@ -4,9 +4,11 @@ import { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { createClient } from "@/src/utils/supabase/client";
 import { useRouter } from "next/navigation";
 
+type AppRole = "guest" | "user" | "operator" | "admin";
+
 interface AuthContextType {
   user: any | null;
-  role: "guest" | "user" | "operator" | "admin";
+  role: AppRole;
   isLoading: boolean;
   logoutUser: () => Promise<void>;
 }
@@ -18,6 +20,11 @@ const AuthContext = createContext<AuthContextType>({
   logoutUser: async () => {},
 });
 
+function normalizeRole(role: string | null | undefined): AppRole {
+  if (role === "operator" || role === "admin" || role === "user") return role;
+  return "user";
+}
+
 export function AuthProvider({
   children,
   initialUser,
@@ -25,16 +32,20 @@ export function AuthProvider({
 }: {
   children: React.ReactNode;
   initialUser: any;
-  initialRole: any;
+  initialRole: AppRole;
 }) {
   const [user, setUser] = useState<any | null>(initialUser);
-  const [role, setRole] = useState<"guest" | "user" | "operator" | "admin">(
-    initialRole,
-  );
+  const [role, setRole] = useState<AppRole>(initialRole);
   const [isLoading, setIsLoading] = useState(!initialUser);
 
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    setUser(initialUser);
+    setRole(initialRole);
+    setIsLoading(false);
+  }, [initialUser, initialRole]);
 
   useEffect(() => {
     const {
@@ -44,12 +55,24 @@ export function AuthProvider({
         setUser(null);
         setRole("guest");
         setIsLoading(false);
-      } else if (session?.user) {
-        setUser(session.user);
-        // Не делаем никаких запросов к профилям на клиенте.
-        // Защита страниц теперь полностью лежит на сервере.
-        setIsLoading(false);
+        return;
       }
+
+      if (!session.user) return;
+
+      setUser(session.user);
+      setIsLoading(true);
+
+      void (async () => {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+
+        setRole(normalizeRole(profile?.role));
+        setIsLoading(false);
+      })();
     });
 
     return () => {

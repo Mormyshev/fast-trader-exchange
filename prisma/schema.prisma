@@ -10,6 +10,8 @@ generator client {
 enum OrderStatus {
   pending
   processing
+  awaiting_payment
+  paid
   completed
   cancelled
   failed

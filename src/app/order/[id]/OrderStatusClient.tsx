@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/src/utils/supabase/client";
 import {
   Loader2,
@@ -9,6 +10,7 @@ import {
   Clock,
   Upload,
   Check,
+  ArrowLeft,
 } from "lucide-react";
 
 interface OrderStatusClientProps {
@@ -22,11 +24,29 @@ export default function OrderStatusClient({
   const [timeLeft, setTimeLeft] = useState<string>("15:00");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
-
   const supabase = createClient();
-  // 1. Подписка на Realtime-изменения заявки
+
+  // Обновление заявки: polling (обход RLS) + Realtime если политика это позволяет
   useEffect(() => {
-    const channel = supabase
+    let cancelled = false;
+    const client = createClient();
+
+    const refreshOrder = async () => {
+      try {
+        const res = await fetch(`/api/orders/${order.id}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && json.order) {
+          setOrder(json.order);
+        }
+      } catch {
+        // ignore transient network errors
+      }
+    };
+
+    const interval = setInterval(refreshOrder, 3000);
+
+    const channel = client
       .channel(`order-status-${order.id}`)
       .on(
         "postgres_changes",
@@ -43,7 +63,9 @@ export default function OrderStatusClient({
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      clearInterval(interval);
+      client.removeChannel(channel);
     };
   }, [order.id]);
 
@@ -106,14 +128,15 @@ export default function OrderStatusClient({
         data: { publicUrl },
       } = supabase.storage.from("receipts").getPublicUrl(filePath);
 
-      // Обновляем заявку в БД: сохраняем ссылку на чек
-      const { error: updateError } = await supabase
-        .from("orders")
-        .update({ receipt_url: publicUrl })
-        .eq("id", order.id);
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipt_url: publicUrl }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось сохранить чек");
 
-      if (updateError) throw updateError;
-
+      if (json.order) setOrder(json.order);
       setUploadSuccess(true);
     } catch (err: any) {
       console.error("Полная ошибка Supabase Storage:", err);
@@ -135,14 +158,15 @@ export default function OrderStatusClient({
     }
 
     try {
-      // Меняем статус заявки на 'paid'
-      const { error } = await supabase
-        .from("orders")
-        .update({ status: "paid" }) // <-- Переводим в статус "Оплачено"
-        .eq("id", order.id);
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "paid" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось обновить статус");
 
-      if (error) throw error;
-
+      if (json.order) setOrder(json.order);
       alert("Заявка отправлена оператору на проверку! Ожидайте подтверждения.");
     } catch (err: any) {
       console.error("Ошибка смены статуса:", err);
@@ -152,6 +176,15 @@ export default function OrderStatusClient({
 
   return (
     <div className="p-0 md:p-4 w-full transition-all">
+      <div className="mb-4">
+        <Link
+          href="/user/orders"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          К моим заявкам
+        </Link>
+      </div>
       <div className="bg-white dark:bg-zinc-900 rounded-[32px] border border-zinc-100 dark:border-zinc-800 p-6 md:p-10 space-y-8 shadow-md text-zinc-800 dark:text-zinc-100">
         {/* Шапка статуса */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-6">
@@ -176,14 +209,17 @@ export default function OrderStatusClient({
                     ? "bg-blue-500 text-white border-blue-600"
                     : order.status === "awaiting_payment"
                       ? "bg-purple-500 text-white border-purple-600"
-                      : order.status === "completed"
-                        ? "bg-emerald-500 text-white border-emerald-600"
-                        : "bg-rose-500 text-white border-rose-600"
+                      : order.status === "paid"
+                        ? "bg-indigo-500 text-white border-indigo-600"
+                        : order.status === "completed"
+                          ? "bg-emerald-500 text-white border-emerald-600"
+                          : "bg-rose-500 text-white border-rose-600"
               }`}
             >
               {order.status === "pending" && "В ожидании"}
               {order.status === "processing" && "В обработке"}
               {order.status === "awaiting_payment" && "На оплате"}
+              {order.status === "paid" && "Проверка оплаты"}
               {order.status === "completed" && "Выполнена"}
               {order.status === "cancelled" && "Отменена"}
             </span>

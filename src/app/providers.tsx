@@ -4,12 +4,12 @@ import SmoothScroll from "../components/SmoothScroll";
 
 export function Providers({
   children,
-  initialUser,
-  initialRole,
+  initialUser = null,
+  initialRole = "guest",
 }: {
   children: React.ReactNode;
   initialUser?: any;
-  initialRole?: any;
+  initialRole?: "guest" | "user" | "operator" | "admin";
 }) {
   return (
     <AuthProvider initialUser={initialUser} initialRole={initialRole}>

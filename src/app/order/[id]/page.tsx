@@ -1,6 +1,8 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { notFound } from "next/navigation";
+import { createClient } from "@/src/utils/supabase/server";
+import { createAdminClient } from "@/src/utils/supabase/admin";
+import { notFound, redirect } from "next/navigation";
+import Header from "@/src/components/Header/Header";
+import Footer from "@/src/components/Footer/Footer";
 import OrderStatusClient from "./OrderStatusClient";
 
 interface OrderPageProps {
@@ -8,43 +10,45 @@ interface OrderPageProps {
 }
 
 export default async function OrderPage({ params }: OrderPageProps) {
-  // Получаем id из параметров URL
   const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
-          );
-        },
-      },
-    },
-  );
+  if (!user) {
+    redirect("/");
+  }
 
-  // Делаем первичный запрос заявки на сервере
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const admin = createAdminClient();
+  const [{ data: order }, { data: profile }] = await Promise.all([
+    admin.from("orders").select("*").eq("id", id).maybeSingle(),
+    admin.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+  ]);
 
-  // Если заявка не найдена или произошла ошибка, отдаем 404 страницу
-  if (error || !order) {
+  if (!order) {
+    notFound();
+  }
+
+  const isStaff =
+    profile?.role === "operator" || profile?.role === "admin";
+
+  // Операторский интерфейс — отдельная страница, не клиентский /order/[id]
+  if (isStaff) {
+    redirect(`/operator/orders/${id}`);
+  }
+
+  if (order.user_id !== user.id) {
     notFound();
   }
 
   return (
-    <main className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 mb-32 mt-8 antialiased">
-      {/* Передаем полученную заявку в клиентский Realtime-компонент */}
-      <OrderStatusClient initialOrder={order} />
-    </main>
+    <div className="flex flex-col min-h-screen bg-white dark:bg-zinc-950">
+      <Header />
+      <main className="flex-grow w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 mb-16 mt-8 antialiased">
+        <OrderStatusClient initialOrder={order} />
+      </main>
+      <Footer />
+    </div>
   );
 }

@@ -1,45 +1,66 @@
 import { createClient } from "@/src/utils/supabase/server";
+import { createAdminClient } from "@/src/utils/supabase/admin";
 import { redirect } from "next/navigation";
 
-// Импортируем созданные варианты панелей
 import ClientDashboard from "./components/ClientDashboard";
-import OperatorDashboard from "./components/OperatorDashboard";
-import AdminDashboard from "./components/AdminDashboard";
+
+const ACTIVE_STATUSES = [
+  "pending",
+  "processing",
+  "awaiting_payment",
+  "paid",
+] as const;
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  // Получаем сессию на сервере (это быстро и безопасно)
   const {
     data: { user },
     error,
   } = await supabase.auth.getUser();
 
-  // Если сессии нет — жесткий редирект на главную
   if (error || !user) {
     redirect("/?auth=required");
   }
 
-  // Запрашиваем роль из таблицы 'profiles'
-  const { data: profile } = await supabase
+  const admin = createAdminClient();
+
+  const { data: profile } = await admin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .single();
 
-  const currentRole = profile?.role || "user"; // Если роли нет, по умолчанию 'user' (клиент)
+  const currentRole = profile?.role || "user";
+
+  if (currentRole === "operator" || currentRole === "admin") {
+    redirect("/operator/dashboard");
+  }
+
+  const [activeRes, completedRes] = await Promise.all([
+    admin
+      .from("orders")
+      .select(
+        "id, created_at, status, currency_from, currency_to, amount_from, amount_to",
+      )
+      .eq("user_id", user.id)
+      .in("status", [...ACTIVE_STATUSES])
+      .order("created_at", { ascending: false }),
+    admin
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("status", "completed"),
+  ]);
 
   return (
     <div className="min-h-screen bg-zinc-50/50">
       <div className="mx-auto max-w-7xl p-6 lg:p-8">
-        {/* Рендеринг интерфейса на основе роли из базы данных Supabase */}
-        {currentRole === "admin" && <AdminDashboard />}
-
-        {currentRole === "operator" && <OperatorDashboard />}
-
-        {currentRole === "user" && (
-          <ClientDashboard userEmail={user.email || "Пользователь"} />
-        )}
+        <ClientDashboard
+          userEmail={user.email || "Пользователь"}
+          activeOrders={activeRes.data || []}
+          completedCount={completedRes.count || 0}
+        />
       </div>
     </div>
   );

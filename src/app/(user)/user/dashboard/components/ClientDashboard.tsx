@@ -1,29 +1,70 @@
 import React from "react";
-import { ArrowLeftRight, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeftRight, Clock, CheckCircle2 } from "lucide-react";
 import ExchangeCalculator from "@/src/components/ExchangeCalculator/ExchangeCalculator";
+import { Button } from "@/components/ui/button";
 
-export default function ClientDashboard({ userEmail }: { userEmail: string }) {
+type ActiveOrder = {
+  id: string;
+  created_at: string;
+  status: string;
+  currency_from: string;
+  currency_to: string;
+  amount_from: number;
+  amount_to: number;
+};
+
+function statusLabel(status: string) {
+  switch (status) {
+    case "pending":
+      return "Ожидает оператора";
+    case "processing":
+      return "В обработке";
+    case "awaiting_payment":
+      return "Ожидает оплаты";
+    case "paid":
+      return "Платёж проверяется";
+    default:
+      return status;
+  }
+}
+
+export default function ClientDashboard({
+  userEmail,
+  activeOrders,
+  completedCount,
+}: {
+  userEmail: string;
+  activeOrders: ActiveOrder[];
+  completedCount: number;
+}) {
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Быстрая статистика заявок клиента */}
       <ExchangeCalculator />
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 flex items-center gap-4">
+        <Link
+          href="/user/orders"
+          className="rounded-xl border border-zinc-200 bg-white p-5 flex items-center gap-4 hover:border-[#FFDD2D] transition-colors"
+        >
           <div className="p-3 rounded-lg bg-amber-50 text-amber-600">
             <Clock className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs text-zinc-500 font-medium">В обработке</p>
-            <p className="text-xl font-bold text-zinc-900">1 заявка</p>
+            <p className="text-xs text-zinc-500 font-medium">Мои заявки</p>
+            <p className="text-xl font-bold text-zinc-900">
+              {activeOrders.length}
+            </p>
           </div>
-        </div>
+        </Link>
         <div className="rounded-xl border border-zinc-200 bg-white p-5 flex items-center gap-4">
           <div className="p-3 rounded-lg bg-emerald-50 text-emerald-600">
             <CheckCircle2 className="h-5 w-5" />
           </div>
           <div>
             <p className="text-xs text-zinc-500 font-medium">Успешные обмены</p>
-            <p className="text-xl font-bold text-zinc-900">12 операций</p>
+            <p className="text-xl font-bold text-zinc-900">
+              {completedCount}
+            </p>
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-5 flex items-center gap-4">
@@ -39,17 +80,61 @@ export default function ClientDashboard({ userEmail }: { userEmail: string }) {
         </div>
       </div>
 
-      {/* Блок со списком последних ордеров клиента */}
       <div className="rounded-2xl border border-zinc-200 bg-white p-6">
-        <h2 className="text-lg font-bold text-zinc-900 mb-4">
-          Ваши последние заявки на обмен
-        </h2>
-        <div className="text-center py-8 text-sm text-zinc-500 border border-dashed border-zinc-200 rounded-xl">
-          У вас пока нет активных заявок.{" "}
-          <span className="text-blue-600 font-medium cursor-pointer hover:underline">
-            Создать обмен?
-          </span>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="text-lg font-bold text-zinc-900">Активные заявки</h2>
+          <Link
+            href="/user/orders"
+            className="text-sm font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
+          >
+            Мои заявки
+          </Link>
         </div>
+
+        {activeOrders.length === 0 ? (
+          <div className="text-center py-8 text-sm text-zinc-500 border border-dashed border-zinc-200 rounded-xl">
+            У вас пока нет активных заявок.{" "}
+            <Link
+              href="/user/exchange"
+              className="text-blue-600 font-medium hover:underline"
+            >
+              Создать обмен?
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {activeOrders.slice(0, 3).map((order) => (
+              <div
+                key={order.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-zinc-100 bg-zinc-50/60 p-4"
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-400">
+                    <span className="font-mono text-zinc-600">
+                      #{order.id.slice(0, 8)}
+                    </span>
+                    <span>{statusLabel(order.status)}</span>
+                  </div>
+                  <p className="text-sm font-bold text-zinc-900 truncate">
+                    {Number(order.amount_from || 0).toLocaleString("ru-RU")}{" "}
+                    {order.currency_from} →{" "}
+                    {Number(order.amount_to || 0).toLocaleString("ru-RU", {
+                      maximumFractionDigits: 8,
+                    })}{" "}
+                    {order.currency_to.replace(/_/g, " ")}
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  size="sm"
+                  className="rounded-full h-9 px-5 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none shrink-0"
+                >
+                  <Link href={`/order/${order.id}`}>Открыть</Link>
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -16,26 +16,38 @@ export const metadata: Metadata = {
   description: "Надежный обмен валют",
 };
 
+type AppRole = "guest" | "user" | "operator" | "admin";
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  // Получаем сессию за 1-2 миллисекунды из куки (без запроса к БД)
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  let initialRole: AppRole = "guest";
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const role = profile?.role;
+    initialRole =
+      role === "operator" || role === "admin" || role === "user"
+        ? role
+        : "user";
+  }
 
   return (
     <html lang="ru" className={`${roboto.variable} h-full antialiased`}>
       <body
         className={`${roboto.className} font-sans min-h-full flex flex-col bg-white text-zinc-900`}
       >
-        {/* 
-          Передаем роль как "guest" по умолчанию. 
-          Если user есть, AuthContext мгновенно дозапросит профиль на клиенте 
-          и обновит состояние без блокировки рендеринга страницы.
-        */}
-        <Providers initialUser={user} initialRole="guest">
+        <Providers initialUser={user} initialRole={initialRole}>
           {children}
         </Providers>
       </body>

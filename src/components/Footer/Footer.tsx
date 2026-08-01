@@ -11,14 +11,14 @@ export default function Footer() {
     <footer className="w-full bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-900 pt-12 pb-10 md:pt-16 md:pb-12 transition-colors duration-200 relative">
       {/* Кнопка чата (зафиксирована на экране) */}
       <div className="fixed bottom-6 right-6 z-50">
-        <button
-          type="button"
+        <a
+          href="mailto:support@fasttrader.io"
           className="w-14 h-14 bg-[#FFDD2D] hover:bg-[#e6c628] rounded-full flex items-center justify-center text-zinc-900 shadow-xl hover:scale-110 active:scale-95 transition-all duration-200 relative group"
-          aria-label="Открыть онлайн чат"
+          aria-label="Написать в поддержку"
         >
           <span className="absolute inset-0 rounded-full bg-[#FFDD2D]/40 animate-ping pointer-events-none group-hover:opacity-0 transition-opacity" />
           <MessageCircle className="w-6 h-6 fill-zinc-900 stroke-none relative z-10" />
-        </button>
+        </a>
       </div>
 
       <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
@@ -55,42 +55,18 @@ export default function Footer() {
 
           {/* Обертка для двух колонок ссылок меню */}
           <div className="grid grid-cols-2 gap-x-6 gap-y-6 w-full md:flex md:flex-row md:justify-start md:gap-12 lg:gap-20">
-            {/* Навигация (Колонка 1) */}
+            {/* Юридические пункты — страницы ещё не заведены */}
             <div className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400">
-              <Link
-                href="/#"
-                className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
-              >
-                Пользовательское соглашение
-              </Link>
-              <Link
-                href="/#"
-                className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
-              >
-                Проверить адрес перед обменом
-              </Link>
-              <Link
-                href="/#"
-                className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
-              >
-                AML/KYC
-              </Link>
+              <span>Пользовательское соглашение</span>
+              <span>Проверить адрес перед обменом</span>
+              <span>AML/KYC</span>
             </div>
 
-            {/* Навигация (Колонка 2) */}
             <div className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400">
-              <Link
-                href="/#"
-                className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
-              >
-                Сообщество в телеграм
-              </Link>
-              <Link
-                href="/#"
-                className="hover:text-gray-900 dark:hover:text-zinc-100 transition-colors leading-normal"
-              >
+              <span>Сообщество в телеграм</span>
+              <span className="leading-normal">
                 Пользовательское соглашение по обработке персональных данных
-              </Link>
+              </span>
             </div>
           </div>
 

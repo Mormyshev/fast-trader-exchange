@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { X, RefreshCw } from "lucide-react";
-import Link from "next/link";
 import { useLenis } from "lenis/react";
 import { createClient } from "@/src/utils/supabase/client";
 import { useRouter } from "next/navigation";
@@ -271,10 +270,8 @@ export default function RegisterModal({
               className="text-[11px] font-medium text-zinc-500 leading-normal cursor-pointer select-none"
             >
               Я согласен с{" "}
-              <Link href="/#" className="text-amber-400 hover:underline">
-                правилами сервиса
-              </Link>{" "}
-              и обработкой персональных данных
+              <span className="text-amber-400">правилами сервиса</span> и
+              обработкой персональных данных
             </label>
           </div>
 

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Clock,
   CheckCircle2,
   AlertCircle,
   Search,
-  User,
   ArrowRightLeft,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -21,70 +22,304 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { createClient } from "@/src/utils/supabase/client";
+import { useAuth } from "@/src/app/context/AuthContext";
 
-const mockOrders = [
-  {
-    id: "TRX-9481",
-    user: "Иван Иванов",
-    from: { currency: "СБП RUB", amount: 100000 },
-    to: { currency: "Tether TRC20 USDT", amount: 1069.51 },
-    status: "pending",
-    date: "14:32",
-  },
-  {
-    id: "TRX-9480",
-    user: "Алексей Смирнов",
-    from: { currency: "Bitcoin BTC", amount: 0.05 },
-    to: { currency: "Тинькофф RUB", amount: 310000 },
-    status: "processing",
-    date: "14:15",
-  },
-  {
-    id: "TRX-9479",
-    user: "Мария Сидорова",
-    from: { currency: "Наличные USD", amount: 500 },
-    to: { currency: "Tether ERC20 USDT", amount: 495 },
-    status: "completed",
-    date: "13:40",
-  },
+type OrderStatus =
+  | "pending"
+  | "processing"
+  | "awaiting_payment"
+  | "paid"
+  | "completed"
+  | "cancelled";
+
+interface Order {
+  id: string;
+  created_at: string;
+  status: OrderStatus;
+  user_id: string | null;
+  operator_id: string | null;
+  currency_from: string;
+  currency_to: string;
+  amount_from: number;
+  amount_to: number;
+}
+
+type TabId = "all" | "pending" | "in_progress" | "completed";
+
+const IN_PROGRESS_STATUSES: OrderStatus[] = [
+  "processing",
+  "awaiting_payment",
+  "paid",
 ];
 
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatAmount(value: number, currency: string) {
+  const num = Number(value || 0);
+  const formatted = Number.isInteger(num)
+    ? num.toLocaleString("ru-RU")
+    : num.toLocaleString("ru-RU", { maximumFractionDigits: 8 });
+  return { amount: formatted, currency };
+}
+
+function statusLabel(status: OrderStatus) {
+  switch (status) {
+    case "pending":
+      return "Новая";
+    case "processing":
+      return "В обработке";
+    case "awaiting_payment":
+      return "Ожидает оплаты";
+    case "paid":
+      return "Оплачена";
+    case "completed":
+      return "Выполнена";
+    case "cancelled":
+      return "Отменена";
+  }
+}
+
+function statusClass(status: OrderStatus) {
+  switch (status) {
+    case "pending":
+      return "bg-amber-100 text-amber-800";
+    case "processing":
+      return "bg-blue-100 text-blue-800";
+    case "awaiting_payment":
+      return "bg-purple-100 text-purple-800";
+    case "paid":
+      return "bg-emerald-100 text-emerald-800";
+    case "completed":
+      return "bg-zinc-100 text-zinc-700";
+    case "cancelled":
+      return "bg-red-100 text-red-700";
+  }
+}
+
+function shortId(id: string) {
+  return id.slice(0, 8);
+}
+
 export default function OperatorDashboard() {
-  const [activeTab, setActiveTab] = useState<
-    "all" | "pending" | "processing" | "completed"
-  >("all");
+  const supabase = createClient();
+  const { user, isLoading: isAuthLoading } = useAuth();
+
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [myOrders, setMyOrders] = useState<Order[]>([]);
+  const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabId>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredOrders = mockOrders.filter((order) => {
-    const matchesTab = activeTab === "all" || order.status === activeTab;
-    const matchesSearch =
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.user.toLowerCase().includes(searchQuery.toLowerCase());
+  const userIdRef = useRef<string | null>(null);
+  if (user?.id) {
+    userIdRef.current = user.id;
+  }
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    async function fetchOrders() {
+      try {
+        const [pendingRes, myRes, completedRes, completedCountRes] =
+          await Promise.allSettled([
+            supabase
+              .from("orders")
+              .select(
+                "id, created_at, status, user_id, operator_id, currency_from, currency_to, amount_from, amount_to",
+              )
+              .eq("status", "pending")
+              .order("created_at", { ascending: false }),
+            supabase
+              .from("orders")
+              .select(
+                "id, created_at, status, user_id, operator_id, currency_from, currency_to, amount_from, amount_to",
+              )
+              .in("status", IN_PROGRESS_STATUSES)
+              .eq("operator_id", user!.id)
+              .order("created_at", { ascending: false }),
+            supabase
+              .from("orders")
+              .select(
+                "id, created_at, status, user_id, operator_id, currency_from, currency_to, amount_from, amount_to",
+              )
+              .eq("status", "completed")
+              .eq("operator_id", user!.id)
+              .order("created_at", { ascending: false })
+              .limit(50),
+            supabase
+              .from("orders")
+              .select("id", { count: "exact", head: true })
+              .eq("status", "completed")
+              .eq("operator_id", user!.id),
+          ]);
+
+        if (pendingRes.status === "fulfilled" && pendingRes.value.data) {
+          setPendingOrders(pendingRes.value.data as Order[]);
+        }
+        if (myRes.status === "fulfilled" && myRes.value.data) {
+          setMyOrders(myRes.value.data as Order[]);
+        }
+        if (completedRes.status === "fulfilled" && completedRes.value.data) {
+          setCompletedOrders(completedRes.value.data as Order[]);
+        }
+        if (
+          completedCountRes.status === "fulfilled" &&
+          typeof completedCountRes.value.count === "number"
+        ) {
+          setCompletedCount(completedCountRes.value.count);
+        }
+      } catch (err) {
+        console.error("Ошибка загрузки дашборда:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchOrders();
+  }, [user?.id, isAuthLoading, supabase]);
+
+  useEffect(() => {
+    if (isAuthLoading || !user?.id) return;
+
+    const channelId = `dashboard-orders-${Math.random().toString(36).slice(2, 9)}`;
+
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        (payload) => {
+          const currentUserId = userIdRef.current;
+          if (!currentUserId) return;
+
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const order = payload.new as Order;
+            const prevStatus =
+              payload.eventType === "UPDATE"
+                ? ((payload.old as Partial<Order>).status as
+                    | OrderStatus
+                    | undefined)
+                : undefined;
+
+            setPendingOrders((prev) => {
+              const without = prev.filter((o) => o.id !== order.id);
+              return order.status === "pending" ? [order, ...without] : without;
+            });
+
+            setMyOrders((prev) => {
+              const without = prev.filter((o) => o.id !== order.id);
+              const mine =
+                IN_PROGRESS_STATUSES.includes(order.status) &&
+                order.operator_id === currentUserId;
+              return mine ? [order, ...without] : without;
+            });
+
+            setCompletedOrders((prev) => {
+              const without = prev.filter((o) => o.id !== order.id);
+              const mineCompleted =
+                order.status === "completed" &&
+                order.operator_id === currentUserId;
+              return mineCompleted ? [order, ...without].slice(0, 50) : without;
+            });
+
+            if (
+              order.status === "completed" &&
+              order.operator_id === currentUserId &&
+              prevStatus !== "completed"
+            ) {
+              setCompletedCount((c) => c + 1);
+            } else if (
+              prevStatus === "completed" &&
+              (order.status !== "completed" ||
+                order.operator_id !== currentUserId)
+            ) {
+              setCompletedCount((c) => Math.max(0, c - 1));
+            }
+          } else if (payload.eventType === "DELETE") {
+            const id = payload.old.id as string;
+            const wasCompleted =
+              (payload.old as Partial<Order>).status === "completed" &&
+              (payload.old as Partial<Order>).operator_id === currentUserId;
+
+            setPendingOrders((prev) => prev.filter((o) => o.id !== id));
+            setMyOrders((prev) => prev.filter((o) => o.id !== id));
+            setCompletedOrders((prev) => prev.filter((o) => o.id !== id));
+            if (wasCompleted) {
+              setCompletedCount((c) => Math.max(0, c - 1));
+            }
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthLoading, user?.id, supabase]);
+
+  const orderMap = new Map<string, Order>();
+  for (const order of [...pendingOrders, ...myOrders, ...completedOrders]) {
+    orderMap.set(order.id, order);
+  }
+  const allOrders = Array.from(orderMap.values()).sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+
+  const q = searchQuery.trim().toLowerCase();
+  const filteredOrders = allOrders.filter((order) => {
+    const matchesTab =
+      activeTab === "all" ||
+      (activeTab === "pending" && order.status === "pending") ||
+      (activeTab === "in_progress" &&
+        IN_PROGRESS_STATUSES.includes(order.status)) ||
+      (activeTab === "completed" && order.status === "completed");
+
+    const matchesSearch = !q || order.id.toLowerCase().includes(q);
     return matchesTab && matchesSearch;
   });
 
+  if (isAuthLoading || loading) {
+    return (
+      <div className="flex justify-center p-20">
+        <Loader2 className="w-8 h-8 animate-spin text-[#FFDD2D]" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-8 text-zinc-900 font-sans">
-      {/* Верхняя панель */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pl-14 md:pl-0">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
             Панель оператора
           </h1>
           <p className="text-sm font-medium text-zinc-400 mt-1">
-            Мониторинг транзакций Fast Trader Exchange
+            Мониторинг заявок Fast Trader Exchange
           </p>
         </div>
 
         <div className="flex items-center space-x-2.5 bg-emerald-50 border border-emerald-100 px-4 py-1.5 rounded-full self-start md:self-auto">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-xs font-bold text-emerald-700">
-            Обработка заявок активна
+            Очередь обновляется в реальном времени
           </span>
         </div>
       </div>
 
-      {/* Карточки статистики */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="rounded-[32px] border-none bg-[#FFDD2D] p-6 shadow-none flex flex-col justify-between h-36">
           <div className="flex items-center justify-between">
@@ -93,7 +328,9 @@ export default function OperatorDashboard() {
             </span>
             <Clock className="w-5 h-5 text-zinc-800" />
           </div>
-          <div className="text-4xl font-bold text-zinc-900">1</div>
+          <div className="text-4xl font-bold text-zinc-900">
+            {pendingOrders.length}
+          </div>
         </Card>
 
         <Card className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-none flex flex-col justify-between h-36">
@@ -103,34 +340,40 @@ export default function OperatorDashboard() {
             </span>
             <AlertCircle className="w-5 h-5 text-zinc-400" />
           </div>
-          <div className="text-4xl font-bold text-zinc-900">1</div>
+          <div className="text-4xl font-bold text-zinc-900">
+            {myOrders.length}
+          </div>
         </Card>
 
         <Card className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-none flex flex-col justify-between h-36 sm:col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-zinc-400 uppercase tracking-wide">
-              Выполнено сегодня
+              Выполнено мной
             </span>
             <CheckCircle2 className="w-5 h-5 text-zinc-400" />
           </div>
-          <div className="text-4xl font-bold text-zinc-900">24</div>
+          <div className="text-4xl font-bold text-zinc-900">
+            {completedCount}
+          </div>
         </Card>
       </div>
-      {/* Блок с таблицей */}
+
       <Card className="rounded-[32px] border border-[#FFDD2D] bg-white shadow-none p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-zinc-100">
           <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl self-start">
-            {[
-              { id: "all", label: "Все" },
-              { id: "pending", label: "Новые" },
-              { id: "processing", label: "В работе" },
-              { id: "completed", label: "Выполненные" },
-            ].map((tab) => (
+            {(
+              [
+                { id: "all", label: "Все" },
+                { id: "pending", label: "Новые" },
+                { id: "in_progress", label: "В работе" },
+                { id: "completed", label: "Выполненные" },
+              ] as const
+            ).map((tab) => (
               <Button
                 key={tab.id}
                 variant="ghost"
                 size="sm"
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`text-xs font-bold rounded-xl h-8 px-4 transition-all cursor-pointer ${
                   activeTab === tab.id
                     ? "bg-white text-zinc-900 shadow-xs hover:bg-white"
@@ -146,7 +389,7 @@ export default function OperatorDashboard() {
             <Search className="absolute left-4 top-3 w-4 h-4 text-zinc-400" />
             <Input
               type="text"
-              placeholder="Поиск по ID транзакции..."
+              placeholder="Поиск по ID заявки..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-11 h-10 rounded-full bg-zinc-50 border-zinc-200 focus-visible:ring-[#FFDD2D] text-sm font-medium"
@@ -155,16 +398,12 @@ export default function OperatorDashboard() {
         </div>
 
         <div className="pt-4">
-          {/* СЦЕНАРИЙ 1: ДЕСКТОПНАЯ ВЕРСИЯ (КЛАССИЧЕСКАЯ ТАБЛИЦА) */}
           <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent border-none">
                   <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
                     ID / Время
-                  </TableHead>
-                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
-                    Клиент
                   </TableHead>
                   <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
                     Направление обмена
@@ -179,170 +418,167 @@ export default function OperatorDashboard() {
               </TableHeader>
               <TableBody className="text-sm font-medium">
                 {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order) => (
-                    <TableRow
-                      key={order.id}
-                      className="hover:bg-zinc-50/50 border-zinc-100"
-                    >
-                      <TableCell className="py-4 px-4">
-                        <div className="font-bold text-zinc-900">
-                          {order.id}
-                        </div>
-                        <div className="text-xs text-zinc-400 font-semibold mt-0.5">
-                          {order.date}
-                        </div>
-                      </TableCell>
+                  filteredOrders.map((order) => {
+                    const from = formatAmount(
+                      order.amount_from,
+                      order.currency_from,
+                    );
+                    const to = formatAmount(order.amount_to, order.currency_to);
 
-                      <TableCell className="py-4 px-4">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-6 h-6 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-400 shrink-0">
-                            <User className="w-3 h-3" />
+                    return (
+                      <TableRow
+                        key={order.id}
+                        className="hover:bg-zinc-50/50 border-zinc-100"
+                      >
+                        <TableCell className="py-4 px-4">
+                          <div className="font-mono font-bold text-zinc-900">
+                            {shortId(order.id)}
                           </div>
-                          <span className="font-semibold text-zinc-800 truncate max-w-[140px]">
-                            {order.user}
-                          </span>
-                        </div>
-                      </TableCell>
+                          <div className="text-xs text-zinc-400 font-semibold mt-0.5">
+                            {formatTime(order.created_at)}
+                          </div>
+                        </TableCell>
 
-                      <TableCell className="py-4 px-4">
-                        <div className="flex items-center space-x-2 text-zinc-900 font-bold">
-                          <span>
-                            {order.from.amount}{" "}
-                            <span className="text-xs text-zinc-400 font-semibold">
-                              {order.from.currency}
+                        <TableCell className="py-4 px-4">
+                          <div className="flex items-center space-x-2 text-zinc-900 font-bold">
+                            <span>
+                              {from.amount}{" "}
+                              <span className="text-xs text-zinc-400 font-semibold">
+                                {from.currency}
+                              </span>
                             </span>
-                          </span>
-                          <ArrowRightLeft className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
-                          <span>
-                            {order.to.amount}{" "}
-                            <span className="text-xs text-zinc-400 font-semibold">
-                              {order.to.currency}
+                            <ArrowRightLeft className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
+                            <span>
+                              {to.amount}{" "}
+                              <span className="text-xs text-zinc-400 font-semibold">
+                                {to.currency}
+                              </span>
                             </span>
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="py-4 px-4">
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${statusClass(order.status)}`}
+                          >
+                            {statusLabel(order.status)}
                           </span>
-                        </div>
-                      </TableCell>
+                        </TableCell>
 
-                      <TableCell className="py-4 px-4">
-                        <span
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                            order.status === "pending"
-                              ? "bg-amber-100 text-amber-800"
-                              : order.status === "processing"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-emerald-100 text-emerald-800"
-                          }`}
-                        >
-                          {order.status === "pending" && "Новая"}
-                          {order.status === "processing" && "В работе"}
-                          {order.status === "completed" && "Выполнена"}
-                        </span>
-                      </TableCell>
-
-                      <TableCell className="py-4 px-4 text-right">
-                        <Button
-                          size="sm"
-                          className="rounded-full h-9 px-5 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
-                        >
-                          Обработать
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        <TableCell className="py-4 px-4 text-right">
+                          <Button
+                            asChild
+                            size="sm"
+                            className="rounded-full h-9 px-5 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
+                          >
+                            <Link
+                              href={
+                                order.status === "pending"
+                                  ? "/operator/orders"
+                                  : `/operator/orders/${order.id}`
+                              }
+                            >
+                              {order.status === "pending"
+                                ? "Взять в работу"
+                                : "Открыть"}
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={4}
                       className="h-32 text-center text-zinc-400 font-semibold"
                     >
-                      Нет активных заявок
+                      Нет заявок
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
-          {/* СЦЕНАРИЙ 2: МОБИЛЬНАЯ ВЕРСИЯ (СПИСОК КАРТОЧЕК) */}
+
           <div className="block md:hidden space-y-4">
             {filteredOrders.length > 0 ? (
-              filteredOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="p-5 bg-zinc-50/50 rounded-2xl border border-zinc-100 flex flex-col gap-4"
-                >
-                  {/* Верх карточки: ID, время и статус */}
-                  <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-                    <div>
-                      <div className="font-bold text-sm text-zinc-900">
-                        {order.id}
-                      </div>
-                      <div className="text-xs text-zinc-400 font-semibold mt-0.5">
-                        {order.date}
-                      </div>
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                        order.status === "pending"
-                          ? "bg-amber-100 text-amber-800"
-                          : order.status === "processing"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-emerald-100 text-emerald-800"
-                      }`}
-                    >
-                      {order.status === "pending" && "Новая"}
-                      {order.status === "processing" && "В работе"}
-                      {order.status === "completed" && "Выполнена"}
-                    </span>
-                  </div>
+              filteredOrders.map((order) => {
+                const from = formatAmount(
+                  order.amount_from,
+                  order.currency_from,
+                );
+                const to = formatAmount(order.amount_to, order.currency_to);
 
-                  {/* Инфо о клиенте */}
-                  <div className="flex items-center space-x-2 text-xs font-semibold text-zinc-600">
-                    <div className="w-5 h-5 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-400 shrink-0">
-                      <User className="w-2.5 h-2.5" />
-                    </div>
-                    <span>Клиент:</span>
-                    <span className="text-zinc-800 font-bold truncate">
-                      {order.user}
-                    </span>
-                  </div>
-
-                  {/* Направление обмена */}
-                  <div className="bg-white p-3 rounded-xl border border-zinc-100 text-xs font-bold text-zinc-800 space-y-2">
-                    <div className="flex items-center justify-between text-red-600">
-                      <span className="text-zinc-400 font-medium text-[11px]">
-                        Отдает:
-                      </span>
-                      <span>
-                        {order.from.amount}{" "}
-                        <span className="text-[10px] font-semibold text-zinc-400">
-                          {order.from.currency}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-emerald-600 border-t border-zinc-50 pt-2">
-                      <span className="text-zinc-400 font-medium text-[11px]">
-                        Получает:
-                      </span>
-                      <span>
-                        {order.to.amount}{" "}
-                        <span className="text-[10px] font-semibold text-zinc-400">
-                          {order.to.currency}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Кнопка действия во всю ширину */}
-                  <Button
-                    size="sm"
-                    className="w-full rounded-xl h-10 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
+                return (
+                  <div
+                    key={order.id}
+                    className="p-5 bg-zinc-50/50 rounded-2xl border border-zinc-100 flex flex-col gap-4"
                   >
-                    Обработать заявку
-                  </Button>
-                </div>
-              ))
+                    <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                      <div>
+                        <div className="font-mono font-bold text-sm text-zinc-900">
+                          {shortId(order.id)}
+                        </div>
+                        <div className="text-xs text-zinc-400 font-semibold mt-0.5">
+                          {formatTime(order.created_at)}
+                        </div>
+                      </div>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${statusClass(order.status)}`}
+                      >
+                        {statusLabel(order.status)}
+                      </span>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border border-zinc-100 text-xs font-bold text-zinc-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400 font-medium text-[11px]">
+                          Отдает:
+                        </span>
+                        <span>
+                          {from.amount}{" "}
+                          <span className="text-[10px] font-semibold text-zinc-400">
+                            {from.currency}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-zinc-50 pt-2">
+                        <span className="text-zinc-400 font-medium text-[11px]">
+                          Получает:
+                        </span>
+                        <span>
+                          {to.amount}{" "}
+                          <span className="text-[10px] font-semibold text-zinc-400">
+                            {to.currency}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button
+                      asChild
+                      size="sm"
+                      className="w-full rounded-xl h-10 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
+                    >
+                      <Link
+                        href={
+                          order.status === "pending"
+                            ? "/operator/orders"
+                            : `/operator/orders/${order.id}`
+                        }
+                      >
+                        {order.status === "pending"
+                          ? "Взять в работу"
+                          : "Открыть заявку"}
+                      </Link>
+                    </Button>
+                  </div>
+                );
+              })
             ) : (
               <div className="py-12 text-center text-zinc-400 text-xs font-semibold">
-                Нет активных заявок
+                Нет заявок
               </div>
             )}
           </div>

@@ -12,6 +12,7 @@ import {
   User,
   Menu,
   LogOut,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/src/app/context/AuthContext";
@@ -23,6 +24,13 @@ const pageTitles: { [key: string]: string } = {
   "/admin/manage-operators": "Управление персоналом",
   "/admin/settings": "Настройки системы",
 };
+
+function getPageTitle(pathname: string) {
+  if (pathname.startsWith("/operator/orders/") && pathname !== "/operator/orders") {
+    return "Карточка заявки";
+  }
+  return pageTitles[pathname] || "Панель управления";
+}
 
 interface StaffLayoutClientProps {
   children: React.ReactNode;
@@ -38,7 +46,7 @@ export default function StaffLayoutClient({
   const { logoutUser } = useAuth(); // Оставляем только для функции выхода
 
   const isAdmin = role === "admin";
-  const currentTitle = pageTitles[pathname] || "Панель управления";
+  const currentTitle = getPageTitle(pathname);
 
   const handleNavClick = () => {
     if (window.innerWidth < 768) {
@@ -56,9 +64,13 @@ export default function StaffLayoutClient({
       >
         <div className="space-y-6">
           <div className="flex items-center justify-between px-2">
-            <span className="text-lg font-black tracking-tight text-zinc-900 select-none">
+            <Link
+              href="/"
+              className="text-lg font-black tracking-tight text-zinc-900 select-none hover:opacity-80 transition-opacity"
+              title="На главную сайта"
+            >
               FAST TRADER<span className="text-[#e6c628] font-medium">.EX</span>
-            </span>
+            </Link>
           </div>
 
           <nav className="space-y-1 pt-4">
@@ -136,8 +148,15 @@ export default function StaffLayoutClient({
           </nav>
         </div>
 
-        {/* Кнопка выхода */}
-        <div className="border-t border-zinc-100 pt-4 px-1">
+        <div className="border-t border-zinc-100 pt-4 px-1 space-y-1">
+          <Link
+            href="/"
+            onClick={handleNavClick}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
+          >
+            <ExternalLink className="w-4 h-4" />
+            На сайт
+          </Link>
           <button
             onClick={logoutUser}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
