@@ -64,14 +64,15 @@ export function AuthProvider({
       setIsLoading(true);
 
       void (async () => {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", session.user.id)
-          .single();
-
-        setRole(normalizeRole(profile?.role));
-        setIsLoading(false);
+        try {
+          const res = await fetch("/api/me");
+          const json = await res.json();
+          setRole(normalizeRole(json.role));
+        } catch {
+          setRole("user");
+        } finally {
+          setIsLoading(false);
+        }
       })();
     });
 

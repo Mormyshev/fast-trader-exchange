@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
-import { createClient } from "@/src/utils/supabase/client";
 import { useRouter } from "next/navigation";
 
 export default function OrderForm() {
-  const supabase = createClient();
   const router = useRouter();
 
   // Константы математики обмена
@@ -99,52 +97,37 @@ export default function OrderForm() {
     setIsSubmitting(true);
 
     try {
-      // 1. Проверяем текущую сессию пользователя
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currency_from: "RUB",
+          currency_to: "USDT_TRC20",
+          amount_from: finalRub,
+          amount_to: finalUsdt,
+          wallet_to: wallet,
+        }),
+      });
+      const json = await res.json();
 
-      if (sessionError || !session?.user) {
+      if (res.status === 401) {
         alert("Для создания заявки необходимо авторизоваться на сайте!");
-        setIsSubmitting(false);
         return;
       }
-
-      // 2. Добавляем запись в таблицу orders
-      const { data, error } = await supabase
-        .from("orders")
-        .insert([
-          {
-            user_id: session.user.id, // ID создателя заявки
-            status: "pending", // Первичный статус (ожидает оператора)
-            operator_id: null, // Никакой оператор её еще не взял
-            currency_from: "RUB",
-            currency_to: "USDT_TRC20",
-            amount_from: finalRub, // Отправляем как число (Numeric)
-            amount_to: finalUsdt, // Отправляем как число (Numeric)
-            wallet_from: null, // Т.к. отдают наличные
-            wallet_to: wallet, // Адрес кошелька клиента получения
-            tx_hash: null,
-          },
-        ])
-        .select(); // Обязательно возвращаем созданный ID
-
-      if (error) {
-        throw new Error(error.message);
+      if (!res.ok) {
+        throw new Error(json.error || "Не удалось создать заявку");
+      }
+      if (!json.order?.id) {
+        throw new Error("Сервер не вернул ID заявки");
       }
 
-      if (data && data.length > 0) {
-        // Очищаем форму, если выбран чекбокс "Не запоминать"
-        if (dontRemember) {
-          setFio("");
-          setWallet("T");
-          setTelegram("@");
-        }
-
-        // 3. Перенаправляем пользователя на динамический роут заявки
-        router.push(`/order/${data[0].id}`);
+      if (dontRemember) {
+        setFio("");
+        setWallet("T");
+        setTelegram("@");
       }
+
+      router.push(`/order/${json.order.id}`);
     } catch (err: any) {
       console.error("Order creation error:", err);
       alert(

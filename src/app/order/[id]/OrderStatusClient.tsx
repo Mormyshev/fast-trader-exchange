@@ -26,25 +26,21 @@ export default function OrderStatusClient({
   const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
   const supabase = createClient();
 
-  // Обновление заявки: polling (обход RLS) + Realtime если политика это позволяет
+  // BFF: разовая подгрузка + Realtime (без polling)
   useEffect(() => {
     let cancelled = false;
     const client = createClient();
 
-    const refreshOrder = async () => {
+    void (async () => {
       try {
-        const res = await fetch(`/api/orders/${order.id}`, { cache: "no-store" });
+        const res = await fetch(`/api/orders/${order.id}`);
         if (!res.ok) return;
         const json = await res.json();
-        if (!cancelled && json.order) {
-          setOrder(json.order);
-        }
+        if (!cancelled && json.order) setOrder(json.order);
       } catch {
-        // ignore transient network errors
+        // ignore
       }
-    };
-
-    const interval = setInterval(refreshOrder, 3000);
+    })();
 
     const channel = client
       .channel(`order-status-${order.id}`)
@@ -64,7 +60,6 @@ export default function OrderStatusClient({
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
       client.removeChannel(channel);
     };
   }, [order.id]);

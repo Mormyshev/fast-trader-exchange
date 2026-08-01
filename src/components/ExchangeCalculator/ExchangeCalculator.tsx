@@ -117,24 +117,28 @@ export default function ExchangeCalculator() {
   const CURRENT_RATE = getLiveRate();
   const RESERVE = 50000000;
 
-  // ИСПРАВЛЕННЫЙ ХУК: Полностью удалены любые браузерные fetch-запросы к Bybit и интервалы
+  // BFF: первичная загрузка через /api (сервер → Supabase), обновления — Realtime
   useEffect(() => {
     const fetchRates = async () => {
-      const { data, error } = await supabase
-        .from("crypto_rates")
-        .select("symbol, exchange_price");
-
-      if (error) {
-        console.error("Ошибка чтения Supabase:", error.message);
-        return;
-      }
-
-      if (data) {
-        const formatted = data.reduce(
-          (acc, item) => ({ ...acc, [item.symbol]: item.exchange_price }),
-          {} as Record<string, number>,
-        );
-        setRates(formatted);
+      try {
+        const res = await fetch("/api/crypto-rates");
+        const data = await res.json();
+        if (!res.ok) {
+          console.error("Ошибка чтения курсов:", data?.error || res.status);
+          return;
+        }
+        if (Array.isArray(data)) {
+          const formatted = data.reduce(
+            (acc: Record<string, number>, item: RateRow) => ({
+              ...acc,
+              [item.symbol]: item.exchange_price,
+            }),
+            {} as Record<string, number>,
+          );
+          setRates(formatted);
+        }
+      } catch (err) {
+        console.error("Ошибка чтения курсов:", err);
       }
     };
 
@@ -158,7 +162,7 @@ export default function ExchangeCalculator() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     if (isSendActive) {

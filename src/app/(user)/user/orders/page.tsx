@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/src/app/context/AuthContext";
+import { createClient } from "@/src/utils/supabase/client";
 
 type OrderStatus =
   | "pending"
@@ -95,6 +96,13 @@ export default function UserOrdersPage() {
     }
 
     let cancelled = false;
+    const supabase = createClient();
+    const activeStatuses = new Set([
+      "pending",
+      "processing",
+      "awaiting_payment",
+      "paid",
+    ]);
 
     async function loadOrders() {
       try {
@@ -118,13 +126,52 @@ export default function UserOrdersPage() {
       }
     }
 
+    function matchesTab(order: Order) {
+      if (activeTab === "all") return true;
+      return activeStatuses.has(order.status);
+    }
+
     setLoading(true);
-    loadOrders();
-    const interval = setInterval(loadOrders, 5000);
+    void loadOrders();
+
+    const channel = supabase
+      .channel(`user-orders-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as { id?: string })?.id;
+            if (oldId) {
+              setOrders((prev) => prev.filter((o) => o.id !== oldId));
+            }
+            return;
+          }
+
+          const next = payload.new as Order;
+          if (!next?.id) return;
+
+          setOrders((prev) => {
+            const without = prev.filter((o) => o.id !== next.id);
+            if (!matchesTab(next)) return without;
+            return [next, ...without].sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime(),
+            );
+          });
+        },
+      )
+      .subscribe();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      supabase.removeChannel(channel);
     };
   }, [user?.id, isAuthLoading, activeTab]);
 
