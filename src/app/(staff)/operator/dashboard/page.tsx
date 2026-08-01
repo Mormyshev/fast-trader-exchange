@@ -133,54 +133,15 @@ export default function OperatorDashboard() {
 
     async function fetchOrders() {
       try {
-        const [pendingRes, myRes, completedRes, completedCountRes] =
-          await Promise.allSettled([
-            supabase
-              .from("orders")
-              .select(
-                "id, created_at, status, user_id, operator_id, currency_from, currency_to, amount_from, amount_to",
-              )
-              .eq("status", "pending")
-              .order("created_at", { ascending: false }),
-            supabase
-              .from("orders")
-              .select(
-                "id, created_at, status, user_id, operator_id, currency_from, currency_to, amount_from, amount_to",
-              )
-              .in("status", IN_PROGRESS_STATUSES)
-              .eq("operator_id", user!.id)
-              .order("created_at", { ascending: false }),
-            supabase
-              .from("orders")
-              .select(
-                "id, created_at, status, user_id, operator_id, currency_from, currency_to, amount_from, amount_to",
-              )
-              .eq("status", "completed")
-              .eq("operator_id", user!.id)
-              .order("created_at", { ascending: false })
-              .limit(50),
-            supabase
-              .from("orders")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "completed")
-              .eq("operator_id", user!.id),
-          ]);
-
-        if (pendingRes.status === "fulfilled" && pendingRes.value.data) {
-          setPendingOrders(pendingRes.value.data as Order[]);
-        }
-        if (myRes.status === "fulfilled" && myRes.value.data) {
-          setMyOrders(myRes.value.data as Order[]);
-        }
-        if (completedRes.status === "fulfilled" && completedRes.value.data) {
-          setCompletedOrders(completedRes.value.data as Order[]);
-        }
-        if (
-          completedCountRes.status === "fulfilled" &&
-          typeof completedCountRes.value.count === "number"
-        ) {
-          setCompletedCount(completedCountRes.value.count);
-        }
+        const res = await fetch("/api/orders/staff", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
+        setPendingOrders((json.pending || []) as Order[]);
+        setMyOrders((json.mine || []) as Order[]);
+        setCompletedOrders((json.completed || []) as Order[]);
+        setCompletedCount(
+          typeof json.completedCount === "number" ? json.completedCount : 0,
+        );
       } catch (err) {
         console.error("Ошибка загрузки дашборда:", err);
       } finally {
@@ -188,8 +149,8 @@ export default function OperatorDashboard() {
       }
     }
 
-    fetchOrders();
-  }, [user?.id, isAuthLoading, supabase]);
+    void fetchOrders();
+  }, [user?.id, isAuthLoading]);
 
   useEffect(() => {
     if (isAuthLoading || !user?.id) return;

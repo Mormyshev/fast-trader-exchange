@@ -57,26 +57,11 @@ export default function OperatorOrdersPage() {
 
     async function fetchInitialOrders() {
       try {
-        const [pendingRes, processingRes] = await Promise.allSettled([
-          supabase
-            .from("orders")
-            .select("*")
-            .eq("status", "pending")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("orders")
-            .select("*")
-            .in("status", ["processing", "awaiting_payment", "paid"])
-            .eq("operator_id", user.id!) // Восклицательный знак сообщает TS, что user гарантированно есть
-            .order("created_at", { ascending: false }),
-        ]);
-
-        if (pendingRes.status === "fulfilled" && pendingRes.value.data) {
-          setNewOrders(pendingRes.value.data as Order[]);
-        }
-        if (processingRes.status === "fulfilled" && processingRes.value.data) {
-          setMyOrders(processingRes.value.data as Order[]);
-        }
+        const res = await fetch("/api/orders/staff", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
+        setNewOrders((json.pending || []) as Order[]);
+        setMyOrders((json.mine || []) as Order[]);
       } catch (err) {
         console.error("Ошибка:", err);
       } finally {
@@ -84,8 +69,8 @@ export default function OperatorOrdersPage() {
       }
     }
 
-    fetchInitialOrders();
-  }, [user?.id, isAuthLoading, supabase]);
+    void fetchInitialOrders();
+  }, [user?.id, isAuthLoading]);
 
   // Изолированная Realtime-подписка
   useEffect(() => {
@@ -142,22 +127,21 @@ export default function OperatorOrdersPage() {
   const handleClaimOrder = async (orderId: string) => {
     if (!user?.id) return;
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .update({
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           operator_id: user.id,
           status: "processing",
-        })
-        .eq("id", orderId)
-        .is("operator_id", null)
-        .select("id");
-
-      if (error) {
-        alert("Ошибка при взятии заявки: " + error.message);
+        }),
+      });
+      const json = await res.json();
+      if (res.status === 409) {
+        alert("Эту заявку уже забрал другой оператор!");
         return;
       }
-      if (!data || data.length === 0) {
-        alert("Эту заявку уже забрал другой оператор!");
+      if (!res.ok) {
+        alert("Ошибка при взятии заявки: " + (json.error || res.status));
       }
     } catch (err) {
       console.error(err);
@@ -172,18 +156,24 @@ export default function OperatorOrdersPage() {
       return;
     }
 
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        payment_details: details,
-        status: "awaiting_payment",
-      })
-      .eq("id", orderId);
-
-    if (error) {
-      alert("Не удалось отправить реквизиты: " + error.message);
-    } else {
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payment_details: details,
+          status: "awaiting_payment",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert("Не удалось отправить реквизиты: " + (json.error || res.status));
+        return;
+      }
       setDetailsInput((prev) => ({ ...prev, [orderId]: "" }));
+    } catch (err) {
+      console.error(err);
+      alert("Произошла системная ошибка.");
     }
   };
 
@@ -402,10 +392,13 @@ export default function OperatorOrdersPage() {
                                 "Вы подтверждаете получение и закрываете заявку как Успешную?",
                               )
                             ) {
-                              await supabase
-                                .from("orders")
-                                .update({ status: "completed" })
-                                .eq("id", order.id);
+                              await fetch(`/api/orders/${order.id}`, {
+                                method: "PATCH",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({ status: "completed" }),
+                              });
                             }
                           }}
                           className="bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-950 font-bold py-2 rounded-xl text-xs cursor-pointer transition-colors"
@@ -419,10 +412,13 @@ export default function OperatorOrdersPage() {
                                 "Отклонить заявку? (Деньги не пришли / фейк чек)",
                               )
                             ) {
-                              await supabase
-                                .from("orders")
-                                .update({ status: "cancelled" })
-                                .eq("id", order.id);
+                              await fetch(`/api/orders/${order.id}`, {
+                                method: "PATCH",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({ status: "cancelled" }),
+                              });
                             }
                           }}
                           className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded-xl text-xs cursor-pointer transition-colors"

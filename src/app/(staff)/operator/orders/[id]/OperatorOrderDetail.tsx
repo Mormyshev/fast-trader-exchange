@@ -112,34 +112,50 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       }
     }
 
-    load();
-    const interval = setInterval(load, 4000);
+    void load();
+
+    const channel = supabase
+      .channel(`operator-order-${orderId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "orders",
+          filter: `id=eq.${orderId}`,
+        },
+        (payload) => {
+          setOrder(payload.new as Order);
+        },
+      )
+      .subscribe();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      supabase.removeChannel(channel);
     };
-  }, [orderId, user?.id, isAuthLoading]);
+  }, [orderId, user?.id, isAuthLoading, supabase]);
 
   const handleClaim = async () => {
     if (!user?.id || !order) return;
     setSaving(true);
     try {
-      const { data, error: claimError } = await supabase
-        .from("orders")
-        .update({ operator_id: user.id, status: "processing" })
-        .eq("id", order.id)
-        .is("operator_id", null)
-        .select("*")
-        .maybeSingle();
-
-      if (claimError) throw claimError;
-      if (!data) {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operator_id: user.id,
+          status: "processing",
+        }),
+      });
+      const json = await res.json();
+      if (res.status === 409) {
         alert("Эту заявку уже забрал другой оператор!");
         router.push("/operator/orders");
         return;
       }
-      setOrder(data as Order);
+      if (!res.ok) throw new Error(json.error || "Не удалось взять заявку");
+      setOrder(json.order as Order);
     } catch (err: any) {
       alert(err.message || "Не удалось взять заявку");
     } finally {

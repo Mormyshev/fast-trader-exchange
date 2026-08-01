@@ -101,6 +101,17 @@ export async function PATCH(request: Request, context: RouteContext) {
       patch.status = body.status;
     }
     if (typeof body.operator_id === "string" || body.operator_id === null) {
+      // claim: не перезаписываем, если заявку уже взял другой оператор
+      if (
+        typeof body.operator_id === "string" &&
+        order.operator_id &&
+        order.operator_id !== body.operator_id
+      ) {
+        return NextResponse.json(
+          { error: "Эту заявку уже забрал другой оператор" },
+          { status: 409 },
+        );
+      }
       patch.operator_id = body.operator_id;
     }
   }
