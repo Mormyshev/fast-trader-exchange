@@ -2,13 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/src/utils/supabase/client";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/src/app/context/AuthContext";
 import {
   ShieldAlert,
   Check,
   X,
-  ExternalLink,
   Phone,
   Send,
   Eye,
@@ -31,77 +28,78 @@ interface ProfileRequest {
 
 export default function VerificationPage() {
   const supabase = createClient();
-  const router = useRouter();
-  const { user, role: contextRole, isLoading: authLoading } = useAuth();
 
   const [requests, setRequests] = useState<ProfileRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCheckingAccess, setIsCheckingAccess] = useState(true); // Новый стейт для защиты от ложного редиректа
+  const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
-  // Строгая проверка роли напрямую из базы данных для исключения лагов контекста
-  useEffect(() => {
-    async function checkAccess() {
-      // 1. Ждем, пока контекст завершит первичную загрузку сессии
-      if (authLoading) return;
-
-      // 2. Если сессии вообще нет — выкидываем на главную
-      if (!user?.id) {
-        router.replace("/");
-        return;
-      }
-
-      try {
-        // 3. Делаем прямой запрос в таблицу profiles, чтобы узнать точную роль прямо сейчас
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-
-        if (error || !data) {
-          router.replace("/");
-          return;
-        }
-
-        // 4. Если роль не оператор и не админ — закрываем доступ
-        if (data.role !== "operator" && data.role !== "admin") {
-          router.replace("/");
-        } else {
-          // Доступ разрешен, снимаем флаг проверки прав и запускаем загрузку анкет
-          setIsCheckingAccess(false);
-          fetchRequests();
-        }
-      } catch (err) {
-        console.error("Ошибка проверки прав:", err);
-        router.replace("/");
-      }
-    }
-
-    checkAccess();
-  }, [user?.id, authLoading, router, supabase]);
-
   const fetchRequests = async () => {
     try {
-      setLoading(true);
       const res = await fetch("/api/verifications", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
       setRequests(json.requests || []);
+      setError(null);
     } catch (err) {
       console.error("Ошибка получения заявок:", err);
+      setError(err instanceof Error ? err.message : "Ошибка загрузки");
     } finally {
       setLoading(false);
     }
   };
+
+  // Доступ уже проверен в (staff)/layout — здесь только BFF + Realtime
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setLoading(true);
+      await fetchRequests();
+      if (cancelled) return;
+    })();
+
+    const poll = setInterval(() => void fetchRequests(), 5000);
+
+    const channel = supabase
+      .channel("operator-verifications-channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "profiles",
+        },
+        (payload) => {
+          const updatedRow = payload.new as ProfileRequest;
+          if (!updatedRow?.id) return;
+
+          if (updatedRow.verification === "on_check") {
+            setRequests((prev) => {
+              if (prev.some((req) => req.id === updatedRow.id)) return prev;
+              return [updatedRow, ...prev];
+            });
+            return;
+          }
+
+          setRequests((prev) => prev.filter((req) => req.id !== updatedRow.id));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
 
   const handleVerdict = async (
     id: string,
     status: "verified" | "not_started",
   ) => {
     setProcessingId(id);
-    // мгновенный UI
     setRequests((prev) => prev.filter((req) => req.id !== id));
     try {
       const res = await fetch("/api/verifications", {
@@ -126,57 +124,14 @@ export default function VerificationPage() {
       setProcessingId(null);
     }
   };
-  // Включаем Realtime-слушатель для мгновенного добавления новых заявок на экран оператора
-  useEffect(() => {
-    // Не запускаем подписку, пока оператор не пройдет верификацию роли
-    if (isCheckingAccess) return;
 
-    const operatorSubscription = supabase
-      .channel("operator-verifications-channel")
-      .on(
-        "postgres_changes",
-        {
-          event: "*", // Слушаем любые события (INSERT и UPDATE)
-          schema: "public",
-          table: "profiles",
-        },
-        async (payload) => {
-          const updatedRow = payload.new as ProfileRequest;
-
-          // Сценарий 1: Пользователь отправил анкету на проверку (INSERT или UPDATE в статус 'on_check')
-          if (updatedRow && updatedRow.verification === "on_check") {
-            setRequests((prev) => {
-              // Защита от дубликатов: если заявка уже есть в стейте, не добавляем её заново
-              if (prev.some((req) => req.id === updatedRow.id)) return prev;
-              return [updatedRow, ...prev]; // Добавляем новую заявку в начало списка
-            });
-          }
-
-          // Сценарий 2: Если пользователь отменил заявку или другой оператор уже взял её в работу
-          if (updatedRow && updatedRow.verification !== "on_check") {
-            setRequests((prev) =>
-              prev.filter((req) => req.id !== updatedRow.id),
-            );
-          }
-        },
-      )
-      .subscribe();
-
-    // Важно: отписываемся от канала при размонтировании компонента
-    return () => {
-      supabase.removeChannel(operatorSubscription);
-    };
-  }, [isCheckingAccess, supabase]);
-
-  // Важно: Пока идет проверка авторизации ИЛИ прямая проверка роли из базы данных,
-  // мы никуда не редиректим, а просто показываем красивый лоадер.
-  if (authLoading || isCheckingAccess) {
+  if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50/50 dark:bg-zinc-950">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
           <Loader2 className="h-10 w-10 animate-spin text-[#FFDD2D]" />
           <p className="text-xs font-medium text-gray-400">
-            Проверка прав оператора...
+            Загрузка анкет...
           </p>
         </div>
       </div>
@@ -200,11 +155,24 @@ export default function VerificationPage() {
           </div>
         </div>
 
-        {loading ? (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-[#FFDD2D]" />
+        {error && (
+          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+            {error}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-3 h-7 text-rose-700"
+              onClick={() => {
+                setLoading(true);
+                void fetchRequests();
+              }}
+            >
+              Повторить
+            </Button>
           </div>
-        ) : requests.length === 0 ? (
+        )}
+
+        {requests.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
             <p className="text-gray-500 dark:text-zinc-400">
               Новых заявок на верификацию нет
@@ -254,34 +222,41 @@ export default function VerificationPage() {
                       <td className="px-6 py-4">
                         {req.passport_url ? (
                           <button
+                            type="button"
                             onClick={() => setSelectedPhoto(req.passport_url)}
-                            className="flex items-center space-x-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline cursor-pointer"
                           >
                             <Eye className="h-3.5 w-3.5" />
-                            <span>Смотреть фото</span>
+                            Открыть
                           </button>
                         ) : (
-                          <span className="text-xs text-red-500">Нет фото</span>
+                          <span className="text-xs text-zinc-400">Нет файла</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
                           <Button
                             size="sm"
-                            disabled={processingId !== null}
+                            disabled={processingId === req.id}
                             onClick={() => handleVerdict(req.id, "verified")}
-                            className="bg-emerald-600 text-white hover:bg-emerald-700 h-9 px-3 rounded-xl shadow-none"
+                            className="rounded-full bg-emerald-500 hover:bg-emerald-600 text-white h-8 px-3 text-xs font-bold"
                           >
-                            <Check className="h-4 w-4 mr-1" /> Подтвердить
+                            {processingId === req.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
+                            Одобрить
                           </Button>
                           <Button
                             size="sm"
                             variant="destructive"
-                            disabled={processingId !== null}
+                            disabled={processingId === req.id}
                             onClick={() => handleVerdict(req.id, "not_started")}
-                            className="h-9 px-3 rounded-xl shadow-none"
+                            className="rounded-full h-8 px-3 text-xs font-bold"
                           >
-                            <X className="h-4 w-4 mr-1" /> Отклонить
+                            <X className="h-3.5 w-3.5" />
+                            Отклонить
                           </Button>
                         </div>
                       </td>
@@ -293,36 +268,31 @@ export default function VerificationPage() {
           </div>
         )}
       </div>
-      {/* Модалка полноэкранного фото */}
+
       {selectedPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="relative max-w-4xl w-full max-h-[85vh] bg-zinc-900 rounded-2xl overflow-hidden p-2">
-            <button
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-3xl overflow-hidden rounded-2xl bg-white p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Image
+              src={selectedPhoto}
+              alt="Документ"
+              width={900}
+              height={1200}
+              className="max-h-[85vh] w-auto object-contain"
+              unoptimized
+            />
+            <Button
+              variant="secondary"
+              className="absolute top-3 right-3 rounded-full"
               onClick={() => setSelectedPhoto(null)}
-              className="absolute right-4 top-4 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 transition-colors"
             >
-              <X className="h-5 w-5" />
-            </button>
-            <div className="relative w-full h-[75vh]">
-              <Image
-                src={selectedPhoto}
-                alt="Паспорт крупным планом"
-                fill
-                className="object-contain"
-                unoptimized
-              />
-            </div>
-            <div className="p-3 text-center text-xs text-zinc-400">
-              <a
-                href={selectedPhoto}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center hover:underline text-[#FFDD2D]"
-              >
-                Открыть оригинал в новой вкладке{" "}
-                <ExternalLink className="ml-1 h-3 w-3" />
-              </a>
-            </div>
+              Закрыть
+            </Button>
           </div>
         </div>
       )}

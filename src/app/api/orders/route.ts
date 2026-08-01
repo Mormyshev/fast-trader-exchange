@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
+import {
+  broadcastOrderEvent,
+  ORDER_CREATED_EVENT,
+} from "@/src/utils/supabase/broadcast";
 
 export async function POST(request: Request) {
   try {
@@ -51,7 +55,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ order: data?.[0] ?? null });
+    const order = data?.[0] ?? null;
+    if (order) {
+      // не блокируем ответ клиенту на broadcast
+      void broadcastOrderEvent(ORDER_CREATED_EVENT, order);
+    }
+
+    return NextResponse.json({ order });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

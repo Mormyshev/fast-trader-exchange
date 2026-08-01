@@ -27,6 +27,7 @@ import {
   bindRealtimeFallback,
   subscribeWithAuth,
 } from "@/src/utils/supabase/realtime";
+import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import { useAuth } from "@/src/app/context/AuthContext";
 
 type OrderStatus =
@@ -178,10 +179,41 @@ export default function OperatorDashboard() {
       }
     }
 
+    const applyLiveOrder = (order: Order) => {
+      const currentUserId = userIdRef.current;
+      if (!currentUserId) return;
+
+      setPendingOrders((prev) => {
+        const without = prev.filter((o) => o.id !== order.id);
+        return order.status === "pending" ? [order, ...without] : without;
+      });
+
+      setMyOrders((prev) => {
+        const without = prev.filter((o) => o.id !== order.id);
+        const mine =
+          IN_PROGRESS_STATUSES.includes(order.status) &&
+          order.operator_id === currentUserId;
+        return mine ? [order, ...without] : without;
+      });
+
+      setCompletedOrders((prev) => {
+        const without = prev.filter((o) => o.id !== order.id);
+        const mineCompleted =
+          order.status === "completed" && order.operator_id === currentUserId;
+        return mineCompleted ? [order, ...without].slice(0, 50) : without;
+      });
+    };
+
     const fallback = bindRealtimeFallback(
       () => {},
       () => void refreshFromBff(),
+      2000,
     );
+    const listPoll = setInterval(() => void refreshFromBff(), 2500);
+
+    const inboxChannel = subscribeOrdersInbox(supabase, (order) => {
+      applyLiveOrder(order as Order);
+    });
 
     void (async () => {
       channel = supabase
@@ -197,64 +229,12 @@ export default function OperatorDashboard() {
               payload.eventType === "INSERT" ||
               payload.eventType === "UPDATE"
             ) {
-              const order = payload.new as Order;
-              const prevStatus =
-                payload.eventType === "UPDATE"
-                  ? ((payload.old as Partial<Order>).status as
-                      | OrderStatus
-                      | undefined)
-                  : undefined;
-
-              setPendingOrders((prev) => {
-                const without = prev.filter((o) => o.id !== order.id);
-                return order.status === "pending"
-                  ? [order, ...without]
-                  : without;
-              });
-
-              setMyOrders((prev) => {
-                const without = prev.filter((o) => o.id !== order.id);
-                const mine =
-                  IN_PROGRESS_STATUSES.includes(order.status) &&
-                  order.operator_id === currentUserId;
-                return mine ? [order, ...without] : without;
-              });
-
-              setCompletedOrders((prev) => {
-                const without = prev.filter((o) => o.id !== order.id);
-                const mineCompleted =
-                  order.status === "completed" &&
-                  order.operator_id === currentUserId;
-                return mineCompleted
-                  ? [order, ...without].slice(0, 50)
-                  : without;
-              });
-
-              if (
-                order.status === "completed" &&
-                order.operator_id === currentUserId &&
-                prevStatus !== "completed"
-              ) {
-                setCompletedCount((c) => c + 1);
-              } else if (
-                prevStatus === "completed" &&
-                (order.status !== "completed" ||
-                  order.operator_id !== currentUserId)
-              ) {
-                setCompletedCount((c) => Math.max(0, c - 1));
-              }
+              applyLiveOrder(payload.new as Order);
             } else if (payload.eventType === "DELETE") {
               const id = payload.old.id as string;
-              const wasCompleted =
-                (payload.old as Partial<Order>).status === "completed" &&
-                (payload.old as Partial<Order>).operator_id === currentUserId;
-
               setPendingOrders((prev) => prev.filter((o) => o.id !== id));
               setMyOrders((prev) => prev.filter((o) => o.id !== id));
               setCompletedOrders((prev) => prev.filter((o) => o.id !== id));
-              if (wasCompleted) {
-                setCompletedCount((c) => Math.max(0, c - 1));
-              }
             }
           },
         );
@@ -265,6 +245,8 @@ export default function OperatorDashboard() {
     return () => {
       cancelled = true;
       fallback.clear();
+      clearInterval(listPoll);
+      supabase.removeChannel(inboxChannel);
       if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id, supabase]);

@@ -6,6 +6,7 @@ import {
   bindRealtimeFallback,
   subscribeWithAuth,
 } from "@/src/utils/supabase/realtime";
+import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
@@ -76,12 +77,29 @@ export default function OperatorOrdersPage() {
     void fetchInitialOrders();
   }, [user?.id, isAuthLoading]);
 
-  // Realtime (+ редкий BFF-poll, если WS не подписался)
+  const applyOrderUpdate = (updated: Order) => {
+    setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
+    setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
+
+    if (updated.status === "pending") {
+      setNewOrders((prev) => [updated, ...prev]);
+      return;
+    }
+
+    if (
+      ["processing", "awaiting_payment", "paid"].includes(updated.status) &&
+      updated.operator_id === user?.id
+    ) {
+      setMyOrders((prev) => [updated, ...prev]);
+    }
+  };
+
+  // Broadcast (мгновенно) + postgres_changes + быстрый BFF-poll
   useEffect(() => {
     if (!user?.id) return;
 
     let cancelled = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pgChannel: ReturnType<typeof supabase.channel> | null = null;
 
     async function refreshFromBff() {
       try {
@@ -98,11 +116,23 @@ export default function OperatorOrdersPage() {
     const fallback = bindRealtimeFallback(
       () => {},
       () => void refreshFromBff(),
+      2000,
     );
-    const listPoll = setInterval(() => void refreshFromBff(), 8000);
+    const listPoll = setInterval(() => void refreshFromBff(), 2500);
+
+    const inboxChannel = subscribeOrdersInbox(supabase, (order, event) => {
+      if (event === "created" && order.status === "pending") {
+        setNewOrders((prev) => {
+          if (prev.some((o) => o.id === order.id)) return prev;
+          return [order as Order, ...prev];
+        });
+        return;
+      }
+      applyOrderUpdate(order as Order);
+    });
 
     void (async () => {
-      channel = supabase
+      pgChannel = supabase
         .channel(`live-orders-${user.id}`)
         .on(
           "postgres_changes",
@@ -120,21 +150,7 @@ export default function OperatorOrdersPage() {
                 });
               }
             } else if (payload.eventType === "UPDATE") {
-              const updated = payload.new as Order;
-
-              setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
-              setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
-
-              if (updated.status === "pending") {
-                setNewOrders((prev) => [updated, ...prev]);
-              } else if (
-                ["processing", "awaiting_payment", "paid"].includes(
-                  updated.status,
-                ) &&
-                updated.operator_id === currentUserId
-              ) {
-                setMyOrders((prev) => [updated, ...prev]);
-              }
+              applyOrderUpdate(payload.new as Order);
             } else if (payload.eventType === "DELETE") {
               setNewOrders((prev) =>
                 prev.filter((o) => o.id !== payload.old.id),
@@ -146,33 +162,17 @@ export default function OperatorOrdersPage() {
           },
         );
 
-      await subscribeWithAuth(supabase, channel, fallback.onStatus);
+      await subscribeWithAuth(supabase, pgChannel, fallback.onStatus);
     })();
 
     return () => {
       cancelled = true;
       fallback.clear();
       clearInterval(listPoll);
-      if (channel) supabase.removeChannel(channel);
+      supabase.removeChannel(inboxChannel);
+      if (pgChannel) supabase.removeChannel(pgChannel);
     };
   }, [user?.id, supabase]);
-
-  const applyOrderUpdate = (updated: Order) => {
-    setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
-    setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
-
-    if (updated.status === "pending") {
-      setNewOrders((prev) => [updated, ...prev]);
-      return;
-    }
-
-    if (
-      ["processing", "awaiting_payment", "paid"].includes(updated.status) &&
-      updated.operator_id === user?.id
-    ) {
-      setMyOrders((prev) => [updated, ...prev]);
-    }
-  };
 
   const handleClaimOrder = async (orderId: string) => {
     if (!user?.id) return;

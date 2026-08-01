@@ -3,6 +3,10 @@ import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
+import {
+  broadcastOrderEvent,
+  ORDER_UPDATED_EVENT,
+} from "@/src/utils/supabase/broadcast";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -151,6 +155,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 503 });
+    }
+
+    if (updated) {
+      void broadcastOrderEvent(ORDER_UPDATED_EVENT, updated);
     }
 
     return NextResponse.json({ order: updated });
