@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/src/utils/supabase/client";
+import {
+  bindRealtimeFallback,
+  subscribeWithAuth,
+} from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
 
 type OrderStatus =
@@ -86,13 +90,13 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAuthLoading) return;
     if (!user?.id) {
-      setLoading(false);
+      if (!isAuthLoading) setLoading(false);
       return;
     }
 
     let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     async function load() {
       try {
@@ -112,27 +116,34 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       }
     }
 
-    void load();
+    const fallback = bindRealtimeFallback(() => {}, () => void load());
 
-    const channel = supabase
-      .channel(`operator-order-${orderId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-          filter: `id=eq.${orderId}`,
-        },
-        (payload) => {
-          setOrder(payload.new as Order);
-        },
-      )
-      .subscribe();
+    void (async () => {
+      await load();
+      if (cancelled) return;
+
+      channel = supabase
+        .channel(`operator-order-${orderId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "orders",
+            filter: `id=eq.${orderId}`,
+          },
+          (payload) => {
+            setOrder(payload.new as Order);
+          },
+        );
+
+      await subscribeWithAuth(supabase, channel, fallback.onStatus);
+    })();
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      fallback.clear();
+      if (channel) supabase.removeChannel(channel);
     };
   }, [orderId, user?.id, isAuthLoading, supabase]);
 

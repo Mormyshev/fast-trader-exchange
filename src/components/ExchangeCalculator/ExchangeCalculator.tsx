@@ -5,6 +5,7 @@ import { ArrowLeftRight, ChevronDown, Check } from "lucide-react";
 import Link from "next/link";
 // Импортируем вашу функцию создания клиента
 import { createClient } from "@/src/utils/supabase/client";
+import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 
 interface Currency {
   id: string;
@@ -144,23 +145,28 @@ export default function ExchangeCalculator() {
 
     fetchRates();
 
-    const channel = supabase
-      .channel("live-calculator-rates")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "crypto_rates" },
-        (payload) => {
-          const updatedRow = payload.new as RateRow;
-          setRates((prev) => ({
-            ...prev,
-            [updatedRow.symbol]: updatedRow.exchange_price,
-          }));
-        },
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    void (async () => {
+      channel = supabase
+        .channel("live-calculator-rates")
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "crypto_rates" },
+          (payload) => {
+            const updatedRow = payload.new as RateRow;
+            setRates((prev) => ({
+              ...prev,
+              [updatedRow.symbol]: updatedRow.exchange_price,
+            }));
+          },
+        );
+
+      await subscribeWithAuth(supabase, channel);
+    })();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [supabase]);
 

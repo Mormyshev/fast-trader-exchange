@@ -61,8 +61,20 @@ export function AuthProvider({
       if (!session.user) return;
 
       setUser(session.user);
-      setIsLoading(true);
 
+      // Не трогаем isLoading на INITIAL_SESSION / TOKEN_REFRESHED —
+      // иначе все страницы с зависимостью isAuthLoading рвут Realtime-каналы
+      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
+        setIsLoading(false);
+        return;
+      }
+
+      if (event !== "SIGNED_IN") {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
       void (async () => {
         try {
           const res = await fetch("/api/me");
@@ -83,7 +95,11 @@ export function AuthProvider({
 
   const logoutUser = async () => {
     setIsLoading(true);
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // ignore network failures
+    }
     setUser(null);
     setRole("guest");
     setIsLoading(false);

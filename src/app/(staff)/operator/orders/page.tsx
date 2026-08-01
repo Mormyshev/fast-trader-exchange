@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/src/utils/supabase/client";
+import {
+  bindRealtimeFallback,
+  subscribeWithAuth,
+} from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
@@ -72,57 +76,84 @@ export default function OperatorOrdersPage() {
     void fetchInitialOrders();
   }, [user?.id, isAuthLoading]);
 
-  // Изолированная Realtime-подписка
+  // Realtime (+ редкий BFF-poll, если WS не подписался)
   useEffect(() => {
-    if (isAuthLoading || !user?.id) return;
+    if (!user?.id) return;
 
-    const channelId = `live-orders-${Math.random().toString(36).substring(2, 9)}`;
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        (payload) => {
-          const currentUserId = userIdRef.current;
-          if (!currentUserId) return;
+    async function refreshFromBff() {
+      try {
+        const res = await fetch("/api/orders/staff", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok || cancelled) return;
+        setNewOrders((json.pending || []) as Order[]);
+        setMyOrders((json.mine || []) as Order[]);
+      } catch {
+        // ignore
+      }
+    }
 
-          if (payload.eventType === "INSERT") {
-            const inserted = payload.new as Order;
-            if (inserted.status === "pending") {
-              setNewOrders((prev) => {
-                if (prev.some((o) => o.id === inserted.id)) return prev;
-                return [inserted, ...prev];
-              });
+    const fallback = bindRealtimeFallback(
+      () => {},
+      () => void refreshFromBff(),
+    );
+
+    void (async () => {
+      channel = supabase
+        .channel(`live-orders-${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "orders" },
+          (payload) => {
+            const currentUserId = userIdRef.current;
+            if (!currentUserId) return;
+
+            if (payload.eventType === "INSERT") {
+              const inserted = payload.new as Order;
+              if (inserted.status === "pending") {
+                setNewOrders((prev) => {
+                  if (prev.some((o) => o.id === inserted.id)) return prev;
+                  return [inserted, ...prev];
+                });
+              }
+            } else if (payload.eventType === "UPDATE") {
+              const updated = payload.new as Order;
+
+              setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
+              setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
+
+              if (updated.status === "pending") {
+                setNewOrders((prev) => [updated, ...prev]);
+              } else if (
+                ["processing", "awaiting_payment", "paid"].includes(
+                  updated.status,
+                ) &&
+                updated.operator_id === currentUserId
+              ) {
+                setMyOrders((prev) => [updated, ...prev]);
+              }
+            } else if (payload.eventType === "DELETE") {
+              setNewOrders((prev) =>
+                prev.filter((o) => o.id !== payload.old.id),
+              );
+              setMyOrders((prev) =>
+                prev.filter((o) => o.id !== payload.old.id),
+              );
             }
-          } else if (payload.eventType === "UPDATE") {
-            const updated = payload.new as Order;
+          },
+        );
 
-            setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
-            setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
-
-            if (updated.status === "pending") {
-              setNewOrders((prev) => [updated, ...prev]);
-            } else if (
-              ["processing", "awaiting_payment", "paid"].includes(
-                updated.status,
-              ) &&
-              updated.operator_id === currentUserId
-            ) {
-              setMyOrders((prev) => [updated, ...prev]);
-            }
-          } else if (payload.eventType === "DELETE") {
-            setNewOrders((prev) => prev.filter((o) => o.id !== payload.old.id));
-            setMyOrders((prev) => prev.filter((o) => o.id !== payload.old.id));
-          }
-        },
-      )
-      .subscribe();
+      await subscribeWithAuth(supabase, channel, fallback.onStatus);
+    })();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      fallback.clear();
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [isAuthLoading, user?.id, supabase]);
+  }, [user?.id, supabase]);
 
   const handleClaimOrder = async (orderId: string) => {
     if (!user?.id) return;

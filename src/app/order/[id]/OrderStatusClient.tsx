@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/src/utils/supabase/client";
 import {
+  bindRealtimeFallback,
+  subscribeWithAuth,
+} from "@/src/utils/supabase/realtime";
+import {
   Loader2,
   CheckCircle2,
   XCircle,
@@ -26,41 +30,53 @@ export default function OrderStatusClient({
   const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
   const supabase = createClient();
 
-  // BFF: разовая подгрузка + Realtime (без polling)
+  // BFF: разовая подгрузка + Realtime (+ редкий poll, если WS не поднялся)
   useEffect(() => {
     let cancelled = false;
     const client = createClient();
+    let channel: ReturnType<typeof client.channel> | null = null;
 
-    void (async () => {
+    const refreshOrder = async () => {
       try {
-        const res = await fetch(`/api/orders/${order.id}`);
+        const res = await fetch(`/api/orders/${order.id}`, {
+          cache: "no-store",
+        });
         if (!res.ok) return;
         const json = await res.json();
         if (!cancelled && json.order) setOrder(json.order);
       } catch {
         // ignore
       }
-    })();
+    };
 
-    const channel = client
-      .channel(`order-status-${order.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-          filter: `id=eq.${order.id}`,
-        },
-        (payload) => {
-          setOrder(payload.new);
-        },
-      )
-      .subscribe();
+    const fallback = bindRealtimeFallback(() => {}, () => void refreshOrder());
+
+    void (async () => {
+      await refreshOrder();
+      if (cancelled) return;
+
+      channel = client
+        .channel(`order-status-${order.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "orders",
+            filter: `id=eq.${order.id}`,
+          },
+          (payload) => {
+            setOrder(payload.new);
+          },
+        );
+
+      await subscribeWithAuth(client, channel, fallback.onStatus);
+    })();
 
     return () => {
       cancelled = true;
-      client.removeChannel(channel);
+      fallback.clear();
+      if (channel) client.removeChannel(channel);
     };
   }, [order.id]);
 

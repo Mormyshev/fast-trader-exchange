@@ -23,6 +23,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/src/utils/supabase/client";
+import {
+  bindRealtimeFallback,
+  subscribeWithAuth,
+} from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
 
 type OrderStatus =
@@ -153,83 +157,117 @@ export default function OperatorDashboard() {
   }, [user?.id, isAuthLoading]);
 
   useEffect(() => {
-    if (isAuthLoading || !user?.id) return;
+    if (!user?.id) return;
 
-    const channelId = `dashboard-orders-${Math.random().toString(36).slice(2, 9)}`;
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        (payload) => {
-          const currentUserId = userIdRef.current;
-          if (!currentUserId) return;
+    async function refreshFromBff() {
+      try {
+        const res = await fetch("/api/orders/staff", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok || cancelled) return;
+        setPendingOrders((json.pending || []) as Order[]);
+        setMyOrders((json.mine || []) as Order[]);
+        setCompletedOrders((json.completed || []) as Order[]);
+        setCompletedCount(
+          typeof json.completedCount === "number" ? json.completedCount : 0,
+        );
+      } catch {
+        // ignore
+      }
+    }
 
-          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-            const order = payload.new as Order;
-            const prevStatus =
-              payload.eventType === "UPDATE"
-                ? ((payload.old as Partial<Order>).status as
-                    | OrderStatus
-                    | undefined)
-                : undefined;
+    const fallback = bindRealtimeFallback(
+      () => {},
+      () => void refreshFromBff(),
+    );
 
-            setPendingOrders((prev) => {
-              const without = prev.filter((o) => o.id !== order.id);
-              return order.status === "pending" ? [order, ...without] : without;
-            });
-
-            setMyOrders((prev) => {
-              const without = prev.filter((o) => o.id !== order.id);
-              const mine =
-                IN_PROGRESS_STATUSES.includes(order.status) &&
-                order.operator_id === currentUserId;
-              return mine ? [order, ...without] : without;
-            });
-
-            setCompletedOrders((prev) => {
-              const without = prev.filter((o) => o.id !== order.id);
-              const mineCompleted =
-                order.status === "completed" &&
-                order.operator_id === currentUserId;
-              return mineCompleted ? [order, ...without].slice(0, 50) : without;
-            });
+    void (async () => {
+      channel = supabase
+        .channel(`dashboard-orders-${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "orders" },
+          (payload) => {
+            const currentUserId = userIdRef.current;
+            if (!currentUserId) return;
 
             if (
-              order.status === "completed" &&
-              order.operator_id === currentUserId &&
-              prevStatus !== "completed"
+              payload.eventType === "INSERT" ||
+              payload.eventType === "UPDATE"
             ) {
-              setCompletedCount((c) => c + 1);
-            } else if (
-              prevStatus === "completed" &&
-              (order.status !== "completed" ||
-                order.operator_id !== currentUserId)
-            ) {
-              setCompletedCount((c) => Math.max(0, c - 1));
-            }
-          } else if (payload.eventType === "DELETE") {
-            const id = payload.old.id as string;
-            const wasCompleted =
-              (payload.old as Partial<Order>).status === "completed" &&
-              (payload.old as Partial<Order>).operator_id === currentUserId;
+              const order = payload.new as Order;
+              const prevStatus =
+                payload.eventType === "UPDATE"
+                  ? ((payload.old as Partial<Order>).status as
+                      | OrderStatus
+                      | undefined)
+                  : undefined;
 
-            setPendingOrders((prev) => prev.filter((o) => o.id !== id));
-            setMyOrders((prev) => prev.filter((o) => o.id !== id));
-            setCompletedOrders((prev) => prev.filter((o) => o.id !== id));
-            if (wasCompleted) {
-              setCompletedCount((c) => Math.max(0, c - 1));
+              setPendingOrders((prev) => {
+                const without = prev.filter((o) => o.id !== order.id);
+                return order.status === "pending"
+                  ? [order, ...without]
+                  : without;
+              });
+
+              setMyOrders((prev) => {
+                const without = prev.filter((o) => o.id !== order.id);
+                const mine =
+                  IN_PROGRESS_STATUSES.includes(order.status) &&
+                  order.operator_id === currentUserId;
+                return mine ? [order, ...without] : without;
+              });
+
+              setCompletedOrders((prev) => {
+                const without = prev.filter((o) => o.id !== order.id);
+                const mineCompleted =
+                  order.status === "completed" &&
+                  order.operator_id === currentUserId;
+                return mineCompleted
+                  ? [order, ...without].slice(0, 50)
+                  : without;
+              });
+
+              if (
+                order.status === "completed" &&
+                order.operator_id === currentUserId &&
+                prevStatus !== "completed"
+              ) {
+                setCompletedCount((c) => c + 1);
+              } else if (
+                prevStatus === "completed" &&
+                (order.status !== "completed" ||
+                  order.operator_id !== currentUserId)
+              ) {
+                setCompletedCount((c) => Math.max(0, c - 1));
+              }
+            } else if (payload.eventType === "DELETE") {
+              const id = payload.old.id as string;
+              const wasCompleted =
+                (payload.old as Partial<Order>).status === "completed" &&
+                (payload.old as Partial<Order>).operator_id === currentUserId;
+
+              setPendingOrders((prev) => prev.filter((o) => o.id !== id));
+              setMyOrders((prev) => prev.filter((o) => o.id !== id));
+              setCompletedOrders((prev) => prev.filter((o) => o.id !== id));
+              if (wasCompleted) {
+                setCompletedCount((c) => Math.max(0, c - 1));
+              }
             }
-          }
-        },
-      )
-      .subscribe();
+          },
+        );
+
+      await subscribeWithAuth(supabase, channel, fallback.onStatus);
+    })();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      fallback.clear();
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [isAuthLoading, user?.id, supabase]);
+  }, [user?.id, supabase]);
 
   const orderMap = new Map<string, Order>();
   for (const order of [...pendingOrders, ...myOrders, ...completedOrders]) {

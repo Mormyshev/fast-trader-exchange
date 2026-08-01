@@ -93,10 +93,20 @@ WITH CHECK (
   )
 );
 
--- 3) Realtime (ignore error if already added)
+-- 3) Realtime publication (ignore error if already added)
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.crypto_rates;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- 4) Filters like user_id=eq.* need full row in WAL (default is PK-only)
+ALTER TABLE public.orders REPLICA IDENTITY FULL;

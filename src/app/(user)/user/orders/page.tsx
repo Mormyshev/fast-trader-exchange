@@ -12,6 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
+import {
+  bindRealtimeFallback,
+  subscribeWithAuth,
+} from "@/src/utils/supabase/realtime";
 
 type OrderStatus =
   | "pending"
@@ -28,6 +32,7 @@ interface Order {
   id: string;
   created_at: string;
   status: OrderStatus;
+  user_id?: string;
   currency_from: string;
   currency_to: string;
   amount_from: number;
@@ -88,15 +93,14 @@ export default function UserOrdersPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAuthLoading) return;
-
     if (!user?.id) {
-      setLoading(false);
+      if (!isAuthLoading) setLoading(false);
       return;
     }
 
     let cancelled = false;
     const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
     const activeStatuses = new Set([
       "pending",
       "processing",
@@ -131,51 +135,59 @@ export default function UserOrdersPage() {
       return activeStatuses.has(order.status);
     }
 
+    const fallback = bindRealtimeFallback(() => {}, () => void loadOrders());
+
     setLoading(true);
-    void loadOrders();
+    void (async () => {
+      await loadOrders();
+      if (cancelled) return;
 
-    const channel = supabase
-      .channel(`user-orders-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const oldId = (payload.old as { id?: string })?.id;
-            if (oldId) {
-              setOrders((prev) => prev.filter((o) => o.id !== oldId));
+      // Без filter по user_id: фильтр требует REPLICA IDENTITY FULL;
+      // RLS и так отдаёт только свои строки
+      channel = supabase
+        .channel(`user-orders-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "orders",
+          },
+          (payload) => {
+            if (payload.eventType === "DELETE") {
+              const oldId = (payload.old as { id?: string })?.id;
+              if (oldId) {
+                setOrders((prev) => prev.filter((o) => o.id !== oldId));
+              }
+              return;
             }
-            return;
-          }
 
-          const next = payload.new as Order;
-          if (!next?.id) return;
+            const next = payload.new as Order;
+            if (!next?.id || next.user_id !== user.id) return;
 
-          setOrders((prev) => {
-            const without = prev.filter((o) => o.id !== next.id);
-            if (!matchesTab(next)) return without;
-            return [next, ...without].sort(
-              (a, b) =>
-                new Date(b.created_at).getTime() -
-                new Date(a.created_at).getTime(),
-            );
-          });
-        },
-      )
-      .subscribe();
+            setOrders((prev) => {
+              const without = prev.filter((o) => o.id !== next.id);
+              if (!matchesTab(next)) return without;
+              return [next, ...without].sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() -
+                  new Date(a.created_at).getTime(),
+              );
+            });
+          },
+        );
+
+      await subscribeWithAuth(supabase, channel, fallback.onStatus);
+    })();
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      fallback.clear();
+      if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id, isAuthLoading, activeTab]);
 
-  if (isAuthLoading) {
+  if (isAuthLoading && !user) {
     return (
       <div className="flex justify-center p-20">
         <Loader2 className="w-8 h-8 animate-spin text-[#FFDD2D]" />
