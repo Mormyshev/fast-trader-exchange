@@ -161,7 +161,7 @@ export default function Header() {
                         <NextLink
                           href={cabinet.href}
                           onClick={() => setIsOpen(false)}
-                          className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors"
+                          className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer"
                         >
                           {cabinet.label}
                         </NextLink>
@@ -171,7 +171,7 @@ export default function Header() {
                             <NextLink
                               href="/user/orders"
                               onClick={() => setIsOpen(false)}
-                              className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors"
+                              className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer"
                             >
                               Мои заявки
                             </NextLink>
@@ -179,7 +179,7 @@ export default function Header() {
                             <NextLink
                               href="/user/profile"
                               onClick={() => setIsOpen(false)}
-                              className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors"
+                              className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer"
                             >
                               Профиль
                             </NextLink>

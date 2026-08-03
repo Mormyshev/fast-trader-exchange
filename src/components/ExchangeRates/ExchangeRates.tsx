@@ -1,0 +1,120 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
+import { CRYPTO_CURRENCIES } from "@/src/utils/exchange-currencies";
+import { applyBuySpread, applySellSpread } from "@/src/utils/market-rates";
+
+type RateRow = { symbol: string; exchange_price: number };
+
+function formatRub(value: number): string {
+  if (!(value > 0)) return "—";
+  if (value >= 1000) {
+    return value.toLocaleString("ru-RU", {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+    });
+  }
+  return value.toLocaleString("ru-RU", {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 2,
+  });
+}
+
+export default function ExchangeRates() {
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await fetch("/api/crypto-rates");
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data) || cancelled) return;
+        const formatted = (data as RateRow[]).reduce(
+          (acc, item) => {
+            acc[item.symbol] = item.exchange_price;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+        setRates(formatted);
+      } catch (err) {
+        console.error("Ошибка загрузки курсов:", err);
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    };
+
+    void load();
+    const id = window.setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const usdtMid = rates["USDTUSDT"] || 0;
+
+  const rows = CRYPTO_CURRENCIES.map((crypto) => {
+    const midUsdt = rates[crypto.bybitSymbol || ""] || 0;
+    const rubPerCoin =
+      crypto.bybitSymbol === "USDTUSDT"
+        ? usdtMid
+        : midUsdt > 0 && usdtMid > 0
+          ? midUsdt * usdtMid
+          : 0;
+
+    return {
+      ...crypto,
+      buy: rubPerCoin > 0 ? applyBuySpread(rubPerCoin) : 0,
+      sell: rubPerCoin > 0 ? applySellSpread(rubPerCoin) : 0,
+    };
+  });
+
+  return (
+    <div className="bg-white p-6 rounded-3xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+      <div className="flex items-baseline justify-between gap-3 mb-4">
+        <h3 className="text-zinc-900 font-bold text-xl">Курсы</h3>
+        <span className="text-[11px] font-semibold text-zinc-400">
+          RUB · ±3%
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-[11px] font-bold text-zinc-400 px-1 mb-2">
+        <span>Актив</span>
+        <span className="text-right w-[5.5rem]">Покупка</span>
+        <span className="text-right w-[5.5rem]">Продажа</span>
+      </div>
+
+      <div className="space-y-1">
+        {rows.map((row) => (
+          <div
+            key={row.id}
+            className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center rounded-2xl px-2 py-2.5 hover:bg-zinc-50 transition-colors"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <CurrencyIcon src={row.iconSrc} alt={row.code} size={28} />
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-zinc-900 truncate">
+                  {row.code}
+                </div>
+                <div className="text-[11px] text-zinc-400 truncate">
+                  {row.name.replace(` ${row.code}`, "")}
+                </div>
+              </div>
+            </div>
+            <span className="text-right w-[5.5rem] text-sm font-semibold text-zinc-800 tabular-nums">
+              {loaded ? formatRub(row.buy) : "…"}
+            </span>
+            <span className="text-right w-[5.5rem] text-sm font-semibold text-zinc-800 tabular-nums">
+              {loaded ? formatRub(row.sell) : "…"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

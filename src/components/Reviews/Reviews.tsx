@@ -54,7 +54,10 @@ export default function Reviews() {
                 ))}
             </div>
 
-            <button className="w-full text-center py-3 border border-yellow-400 text-zinc-800 font-medium text-sm rounded-full hover:bg-yellow-50 active:scale-[0.99] transition-all mt-2">
+            <button
+                type="button"
+                className="w-full text-center py-3 border border-yellow-400 text-zinc-800 font-medium text-sm rounded-full hover:bg-yellow-50 active:scale-[0.99] transition-all mt-2 cursor-pointer"
+            >
                 Все отзывы
             </button>
         </div>

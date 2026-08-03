@@ -156,4 +156,78 @@ html.lenis body {
   html {
     @apply font-sans;
   }
+
+  /* Курсор-указатель на интерактивных элементах */
+  button:not(:disabled):not([disabled]),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label[for],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"],
+  select {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  button[disabled],
+  [aria-disabled="true"],
+  input:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
 }
+
+/* ——— Number inputs: без стрелок (вне @layer, выше приоритет) ——— */
+input[type="number"].no-spin::-webkit-outer-spin-button,
+input[type="number"].no-spin::-webkit-inner-spin-button,
+.exchange-calculator input[type="number"]::-webkit-outer-spin-button,
+.exchange-calculator input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  margin: 0 !important;
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  width: 0 !important;
+}
+
+input[type="number"].no-spin,
+.exchange-calculator input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
+/*
+  Native scrollbar на Windows со стрелками CSS не убивает надёжно.
+  SlimScroll обрезает его через overflow:hidden; класс ниже — доп. страховка.
+*/
+.scrollbar-none-native,
+.scrollbar-slim {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.scrollbar-none-native::-webkit-scrollbar,
+.scrollbar-slim::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.scrollbar-none-native::-webkit-scrollbar-thumb,
+.scrollbar-none-native::-webkit-scrollbar-track,
+.scrollbar-none-native::-webkit-scrollbar-button,
+.scrollbar-slim::-webkit-scrollbar-thumb,
+.scrollbar-slim::-webkit-scrollbar-track,
+.scrollbar-slim::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+

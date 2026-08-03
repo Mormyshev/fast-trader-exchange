@@ -1,71 +1,298 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
+import SlimScroll from "@/src/components/SlimScroll/SlimScroll";
+import {
+  CRYPTO_CURRENCIES,
+  FIAT_CURRENCIES,
+  type ExchangeCurrency,
+  findCurrencyById,
+  formatAmount,
+  formatRateLabel,
+  getPairRate,
+  isCryptoCurrency,
+  isFiatCurrency,
+  sanitizeAmountInput,
+} from "@/src/utils/exchange-currencies";
+
+type RateRow = { symbol: string; exchange_price: number };
+
+const CITIES = ["Москва", "Санкт-Петербург", "Новосибирск"] as const;
+
+function CurrencyPicker({
+  selected,
+  options,
+  open,
+  onToggle,
+  onSelect,
+  containerRef,
+}: {
+  selected: ExchangeCurrency;
+  options: ExchangeCurrency[];
+  open: boolean;
+  onToggle: () => void;
+  onSelect: (c: ExchangeCurrency) => void;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  return (
+    <div className="relative w-full sm:max-w-md" ref={containerRef}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-3 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-full px-5 py-3 shadow-[0_0_15px_rgba(255,221,45,0.08)] cursor-pointer hover:border-zinc-200 transition-colors text-left overflow-hidden"
+      >
+        <div className="flex items-center space-x-3 min-w-0 flex-1">
+          <CurrencyIcon src={selected.iconSrc} alt={selected.name} size={28} />
+          <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate">
+            {selected.name}
+          </span>
+        </div>
+        <div className="w-7 h-7 rounded-full bg-[#FFDD2D] flex items-center justify-center text-zinc-950 shrink-0">
+          <ChevronDown
+            className={`w-4 h-4 stroke-[2.5] transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </div>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-2 w-full min-w-[280px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-xl z-50 overflow-hidden">
+          <SlimScroll>
+            <div className="space-y-1 p-2 pr-3">
+              {options.map((currency) => (
+                <button
+                  key={currency.id}
+                  type="button"
+                  onClick={() => onSelect(currency)}
+                  className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors overflow-hidden cursor-pointer ${
+                    selected.id === currency.id
+                      ? "bg-[#FFF3B0] dark:bg-amber-500/20"
+                      : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                  }`}
+                >
+                  <CurrencyIcon
+                    src={currency.iconSrc}
+                    alt={currency.name}
+                    size={28}
+                  />
+                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                    {currency.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </SlimScroll>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function OrderForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  // Константы математики обмена
-  const EXCHANGE_RATE = 75.6548; // 1 USDT = 75.6548 RUB
-  const MIN_RUB = 300000;
+  const MIN_RUB = 1000;
   const MAX_RUB = 15000000;
-  const MIN_USDT = 3965.3796;
-  const MAX_USDT = 1982689.7962;
 
-  // Состояния полей ввода
-  const [rubAmount, setRubAmount] = useState<string>("300000");
-  const [usdtAmount, setUsdtAmount] = useState<string>("3965.3796");
-  const [isRubActive, setIsRubActive] = useState<boolean>(true);
+  const initialFrom =
+    findCurrencyById(searchParams.get("from")) ?? FIAT_CURRENCIES[1]; // Наличные
+  const initialTo =
+    findCurrencyById(searchParams.get("to")) ?? CRYPTO_CURRENCIES[0];
+  const initialAmount = searchParams.get("amount") || "";
+
+  const [selectedSend, setSelectedSend] =
+    useState<ExchangeCurrency>(initialFrom);
+  const [selectedReceive, setSelectedReceive] =
+    useState<ExchangeCurrency>(initialTo);
+
+  const [sendAmount, setSendAmount] = useState<string>(initialAmount);
+  const [receiveAmount, setReceiveAmount] = useState<string>("");
+  const [isSendActive, setIsSendActive] = useState<boolean>(true);
+  const [rates, setRates] = useState<Record<string, number>>({});
+
   const [fio, setFio] = useState<string>("");
-  const [wallet, setWallet] = useState<string>("T");
-  const [city, setCity] = useState<string>("Москва");
-  const [email, setEmail] = useState<string>("demo.user@example.com");
-  const [telegram, setTelegram] = useState<string>("@demo_user");
+  const [wallet, setWallet] = useState<string>("");
+  const [city, setCity] = useState<string>(CITIES[0]);
+  const [email, setEmail] = useState<string>("");
+  const [telegram, setTelegram] = useState<string>("");
   const [coupon, setCoupon] = useState<string>("");
 
-  // Чекбоксы
   const [agreeAml, setAgreeAml] = useState<boolean>(false);
   const [dontRemember, setDontRemember] = useState<boolean>(false);
-
-  // Состояние отправки формы (для индикатора загрузки)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  // Калькуляция: RUB -> USDT
+
+  const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
+  const [isReceiveDropdownOpen, setIsReceiveDropdownOpen] = useState(false);
+  const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
+  const sendRef = useRef<HTMLDivElement>(null);
+  const receiveRef = useRef<HTMLDivElement>(null);
+  const cityRef = useRef<HTMLDivElement>(null);
+
+  const isSendCrypto = isCryptoCurrency(selectedSend);
+  const isReceiveCrypto = isCryptoCurrency(selectedReceive);
+  const isCashSelected =
+    selectedSend.id === "rub_cash" || selectedReceive.id === "rub_cash";
+  const allowedSendList = isReceiveCrypto ? FIAT_CURRENCIES : CRYPTO_CURRENCIES;
+  const allowedReceiveList = isSendCrypto ? FIAT_CURRENCIES : CRYPTO_CURRENCIES;
+
+  const pairRate = getPairRate(rates, selectedSend, selectedReceive);
+
+  const syncUrl = useCallback(
+    (from: ExchangeCurrency, to: ExchangeCurrency, amount: string) => {
+      const params = new URLSearchParams();
+      params.set("from", from.id);
+      params.set("to", to.id);
+      if (amount) params.set("amount", amount);
+      router.replace(`/user/exchange?${params.toString()}`, { scroll: false });
+    },
+    [router],
+  );
+
+  // Синхронизируем URL при первом заходе без query (для блока «Обмен … на …»)
   useEffect(() => {
-    if (isRubActive) {
-      const num = parseFloat(rubAmount);
-      if (!isNaN(num)) {
-        setUsdtAmount((num / EXCHANGE_RATE).toFixed(4));
-      } else {
-        setUsdtAmount("");
+    if (!searchParams.get("from") || !searchParams.get("to")) {
+      syncUrl(selectedSend, selectedReceive, sendAmount);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только при монтировании
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRates = async () => {
+      try {
+        const res = await fetch("/api/crypto-rates");
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data) || cancelled) return;
+        const formatted = data.reduce(
+          (acc: Record<string, number>, item: RateRow) => {
+            acc[item.symbol] = item.exchange_price;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+        setRates(formatted);
+      } catch (err) {
+        console.error("Ошибка загрузки курса:", err);
+      }
+    };
+
+    void loadRates();
+    const id = window.setInterval(loadRates, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isSendActive && pairRate > 0) {
+      const num = parseFloat(sendAmount);
+      setReceiveAmount(
+        !isNaN(num)
+          ? formatAmount(num * pairRate, isReceiveCrypto)
+          : "",
+      );
+    }
+  }, [sendAmount, pairRate, isSendActive, isReceiveCrypto]);
+
+  useEffect(() => {
+    if (!isSendActive && pairRate > 0) {
+      const num = parseFloat(receiveAmount);
+      setSendAmount(
+        !isNaN(num) ? formatAmount(num / pairRate, isSendCrypto) : "",
+      );
+    }
+  }, [receiveAmount, pairRate, isSendActive, isSendCrypto]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (sendRef.current && !sendRef.current.contains(event.target as Node)) {
+        setIsSendDropdownOpen(false);
+      }
+      if (
+        receiveRef.current &&
+        !receiveRef.current.contains(event.target as Node)
+      ) {
+        setIsReceiveDropdownOpen(false);
+      }
+      if (cityRef.current && !cityRef.current.contains(event.target as Node)) {
+        setIsCityDropdownOpen(false);
       }
     }
-  }, [rubAmount]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-  // Калькуляция: USDT -> RUB
   useEffect(() => {
-    if (!isRubActive) {
-      const num = parseFloat(usdtAmount);
-      if (!isNaN(num)) {
-        setRubAmount((num * EXCHANGE_RATE).toFixed(2));
-      } else {
-        setRubAmount("");
-      }
-    }
-  }, [usdtAmount]);
+    if (!isCashSelected) setIsCityDropdownOpen(false);
+  }, [isCashSelected]);
 
-  // Маска для кошелька (всегда начинается с T)
-  const handleWalletChange = (val: string) => {
-    if (!val.startsWith("T")) {
-      setWallet("T" + val.replace(/^T*/, ""));
-    } else {
-      setWallet(val);
+  const rubDealAmount = isSendCrypto
+    ? parseFloat(receiveAmount)
+    : parseFloat(sendAmount);
+
+  const minReceive =
+    pairRate > 0 && !isSendCrypto
+      ? Number(formatAmount(MIN_RUB * pairRate, true) || 0)
+      : pairRate > 0 && isSendCrypto
+        ? Number(formatAmount(MIN_RUB / pairRate, true) || 0)
+        : 0;
+  const maxReceive =
+    pairRate > 0 && !isSendCrypto
+      ? Number(formatAmount(MAX_RUB * pairRate, true) || 0)
+      : pairRate > 0 && isSendCrypto
+        ? Number(formatAmount(MAX_RUB / pairRate, true) || 0)
+        : 0;
+
+  const handleSelectSend = (currency: ExchangeCurrency) => {
+    setSelectedSend(currency);
+    setIsSendDropdownOpen(false);
+
+    let nextReceive = selectedReceive;
+    const newIsCrypto = isCryptoCurrency(currency);
+    if (newIsCrypto && isCryptoCurrency(selectedReceive)) {
+      nextReceive = FIAT_CURRENCIES[0];
+      setSelectedReceive(nextReceive);
+    } else if (!newIsCrypto && isFiatCurrency(selectedReceive)) {
+      nextReceive = CRYPTO_CURRENCIES[0];
+      setSelectedReceive(nextReceive);
     }
+    setIsSendActive(true);
+    syncUrl(currency, nextReceive, sendAmount);
   };
 
-  // Маска для Telegram (всегда начинается с @)
+  const handleSelectReceive = (currency: ExchangeCurrency) => {
+    setSelectedReceive(currency);
+    setIsReceiveDropdownOpen(false);
+    setIsSendActive(true);
+    syncUrl(selectedSend, currency, sendAmount);
+  };
+
+  const handleWalletChange = (val: string) => {
+    if (selectedReceive.id === "usdt_trc20") {
+      if (val === "") {
+        setWallet("");
+        return;
+      }
+      if (!val.startsWith("T")) {
+        setWallet("T" + val.replace(/^T*/, ""));
+      } else {
+        setWallet(val);
+      }
+      return;
+    }
+    setWallet(val);
+  };
+
   const handleTelegramChange = (val: string) => {
+    if (val === "") {
+      setTelegram("");
+      return;
+    }
     if (!val.startsWith("@")) {
       setTelegram("@" + val.replace(/^@*/, ""));
     } else {
@@ -73,23 +300,39 @@ export default function OrderForm() {
     }
   };
 
-  // Функция отправки заявки в Supabase
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Валидация согласия с AML политикой
     if (!agreeAml) {
       alert("Необходимо принять условия AML политики.");
       return;
     }
 
-    // Валидация лимитов сумм
-    const finalRub = parseFloat(rubAmount);
-    const finalUsdt = parseFloat(usdtAmount);
+    const finalSend = parseFloat(sendAmount);
+    const finalReceive = parseFloat(receiveAmount);
 
-    if (isNaN(finalRub) || finalRub < MIN_RUB || finalRub > MAX_RUB) {
+    if (!(pairRate > 0) || isNaN(finalSend) || isNaN(finalReceive) || finalReceive <= 0) {
+      alert("Курс ещё не загружен. Подождите пару секунд и попробуйте снова.");
+      return;
+    }
+
+    if (
+      !Number.isFinite(rubDealAmount) ||
+      rubDealAmount < MIN_RUB ||
+      rubDealAmount > MAX_RUB
+    ) {
       alert(
-        `Сумма RUB должна быть от ${MIN_RUB.toLocaleString("ru-RU")} до ${MAX_RUB.toLocaleString("ru-RU")}`,
+        `Сумма в рублях должна быть от ${MIN_RUB.toLocaleString("ru-RU")} до ${MAX_RUB.toLocaleString("ru-RU")}`,
+      );
+      return;
+    }
+
+    const payout = wallet.trim();
+    if (!payout) {
+      alert(
+        isReceiveCrypto
+          ? "Укажите адрес кошелька для получения."
+          : "Укажите реквизиты для получения средств.",
       );
       return;
     }
@@ -101,11 +344,11 @@ export default function OrderForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          currency_from: "RUB",
-          currency_to: "USDT_TRC20",
-          amount_from: finalRub,
-          amount_to: finalUsdt,
-          wallet_to: wallet,
+          currency_from: selectedSend.orderCode,
+          currency_to: selectedReceive.orderCode,
+          amount_from: finalSend,
+          amount_to: finalReceive,
+          wallet_to: payout,
         }),
       });
       const json = await res.json();
@@ -123,20 +366,24 @@ export default function OrderForm() {
 
       if (dontRemember) {
         setFio("");
-        setWallet("T");
-        setTelegram("@");
+        setWallet("");
+        setTelegram("");
+        setEmail("");
       }
 
       router.push(`/order/${json.order.id}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Order creation error:", err);
-      alert(
-        `Ошибка при оформлении заявки: ${err.message || "попробуйте позже"}`,
-      );
+      const message = err instanceof Error ? err.message : "попробуйте позже";
+      alert(`Ошибка при оформлении заявки: ${message}`);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const receiveCode = selectedReceive.code;
+  const sendCode = selectedSend.code;
+
   return (
     <div className="w-full antialiased select-none text-zinc-800 dark:text-zinc-100">
       <form
@@ -150,56 +397,85 @@ export default function OrderForm() {
               Отдаете
             </h2>
             <p className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 pl-1">
-              Курс: {EXCHANGE_RATE} RUB = 1 USDT
+              {formatRateLabel(pairRate, selectedSend, selectedReceive)}
             </p>
 
-            <div className="w-full sm:max-w-md flex items-center justify-between bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-full px-5 py-3 shadow-[0_0_15px_rgba(255,221,45,0.08)] cursor-pointer hover:border-zinc-200 transition-colors">
-              <div className="flex items-center space-x-3">
-                <span className="text-xl leading-none">💵</span>
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                  Наличные RUB
-                </span>
-              </div>
-              <div className="w-7 h-7 rounded-full bg-[#FFDD2D] flex items-center justify-center text-zinc-950 shrink-0">
-                <ChevronDown className="w-4 h-4 stroke-[2.5]" />
-              </div>
-            </div>
+            <CurrencyPicker
+              selected={selectedSend}
+              options={allowedSendList}
+              open={isSendDropdownOpen}
+              onToggle={() => {
+                setIsSendDropdownOpen((v) => !v);
+                setIsReceiveDropdownOpen(false);
+              }}
+              onSelect={handleSelectSend}
+              containerRef={sendRef}
+            />
 
             <div className="space-y-1.5">
               <div className="flex flex-col text-right text-[11px] font-bold text-zinc-400 dark:text-zinc-500 pr-4">
-                <span> min.: {MIN_RUB.toLocaleString("ru-RU")} RUB </span>
-                <span> max.: {MAX_RUB.toLocaleString("ru-RU")} RUB </span>
+                {!isSendCrypto ? (
+                  <>
+                    <span> min.: {MIN_RUB.toLocaleString("ru-RU")} RUB </span>
+                    <span> max.: {MAX_RUB.toLocaleString("ru-RU")} RUB </span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      {" "}
+                      min.:{" "}
+                      {minReceive > 0
+                        ? minReceive.toLocaleString("ru-RU")
+                        : "—"}{" "}
+                      {sendCode}{" "}
+                    </span>
+                    <span>
+                      {" "}
+                      max.:{" "}
+                      {maxReceive > 0
+                        ? maxReceive.toLocaleString("ru-RU")
+                        : "—"}{" "}
+                      {sendCode}{" "}
+                    </span>
+                  </>
+                )}
               </div>
               <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
                 Сумма <span className="text-red-500 font-bold ml-0.5"> * </span>{" "}
                 :
               </label>
               <input
-                type="number"
-                step="any"
-                value={rubAmount}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={sendAmount}
                 onChange={(e) => {
-                  setIsRubActive(true);
-                  setRubAmount(e.target.value);
+                  setIsSendActive(true);
+                  const next = sanitizeAmountInput(e.target.value);
+                  setSendAmount(next);
+                  syncUrl(selectedSend, selectedReceive, next);
                 }}
-                className="w-full bg-[#FFFEEB] dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/20 rounded-full px-6 py-4 text-base font-bold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-[#FFDD2D] shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] transition-all"
+                placeholder={isSendCrypto ? "0.00" : "100000"}
+                className="no-spin w-full bg-[#FFFEEB] dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/20 rounded-full px-6 py-4 text-base font-bold text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:ring-2 focus:ring-[#FFDD2D] shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] transition-all"
                 required
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
-                ФИО <span className="text-red-500 font-bold ml-0.5"> * </span> :
-              </label>
-              <input
-                type="text"
-                value={fio}
-                onChange={(e) => setFio(e.target.value)}
-                placeholder="Иванов Иван Иванович"
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
-                required
-              />
-            </div>
+            {!isSendCrypto && (
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
+                  ФИО <span className="text-red-500 font-bold ml-0.5"> * </span> :
+                </label>
+                <input
+                  type="text"
+                  value={fio}
+                  onChange={(e) => setFio(e.target.value)}
+                  placeholder="Иванов Иван Иванович"
+                  className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
+                  required
+                />
+              </div>
+            )}
           </div>
 
           <div className="h-[1px] bg-zinc-100 dark:bg-zinc-800 w-full" />
@@ -209,52 +485,80 @@ export default function OrderForm() {
               Получаете
             </h2>
 
-            <div className="w-full sm:max-w-md flex items-center justify-between bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-full px-5 py-2.5 shadow-[0_0_15px_rgba(255,221,45,0.08)] cursor-pointer hover:border-zinc-200 transition-colors">
-              <div className="flex items-center space-x-3">
-                <div className="w-7 h-7 rounded-full bg-[#26A17B] flex items-center justify-center text-white font-bold text-sm shrink-0">
-                  ₮
-                </div>
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                  Tether TRC20 USDT
-                </span>
-              </div>
-              <div className="w-7 h-7 rounded-full bg-[#FFDD2D] flex items-center justify-center text-zinc-950 shrink-0">
-                <ChevronDown className="w-4 h-4 stroke-[2.5]" />
-              </div>
-            </div>
+            <CurrencyPicker
+              selected={selectedReceive}
+              options={allowedReceiveList}
+              open={isReceiveDropdownOpen}
+              onToggle={() => {
+                setIsReceiveDropdownOpen((v) => !v);
+                setIsSendDropdownOpen(false);
+              }}
+              onSelect={handleSelectReceive}
+              containerRef={receiveRef}
+            />
 
             <div className="space-y-1.5">
               <div className="flex flex-col text-right text-[11px] font-bold text-zinc-400 dark:text-zinc-500 pr-4">
-                <span>min.: {MIN_USDT} USDT</span>
-                <span>max.: {MAX_USDT} USDT</span>
+                {isReceiveCrypto ? (
+                  <>
+                    <span>
+                      min.:{" "}
+                      {minReceive > 0
+                        ? minReceive.toLocaleString("ru-RU")
+                        : "—"}{" "}
+                      {receiveCode}
+                    </span>
+                    <span>
+                      max.:{" "}
+                      {maxReceive > 0
+                        ? maxReceive.toLocaleString("ru-RU")
+                        : "—"}{" "}
+                      {receiveCode}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span> min.: {MIN_RUB.toLocaleString("ru-RU")} RUB </span>
+                    <span> max.: {MAX_RUB.toLocaleString("ru-RU")} RUB </span>
+                  </>
+                )}
               </div>
               <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
                 Сумма <span className="text-red-500 font-bold ml-0.5"> * </span>{" "}
                 :
               </label>
               <input
-                type="number"
-                step="any"
-                value={usdtAmount}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={receiveAmount}
                 onChange={(e) => {
-                  setIsRubActive(false);
-                  setUsdtAmount(e.target.value);
+                  setIsSendActive(false);
+                  setReceiveAmount(sanitizeAmountInput(e.target.value));
                 }}
-                className="w-full bg-[#FFFEEB] dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/20 rounded-full px-6 py-4 text-base font-bold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-[#FFDD2D] transition-all"
+                placeholder={isReceiveCrypto ? "0.00" : "100000"}
+                className="no-spin w-full bg-[#FFFEEB] dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/20 rounded-full px-6 py-4 text-base font-bold text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:ring-2 focus:ring-[#FFDD2D] transition-all"
                 required
               />
             </div>
 
             <div className="space-y-2">
               <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
-                Адрес кошелька{" "}
+                {isReceiveCrypto ? "Адрес кошелька" : "Реквизиты для получения"}{" "}
                 <span className="text-red-500 font-bold ml-0.5"> * </span> :
               </label>
               <input
                 type="text"
                 value={wallet}
                 onChange={(e) => handleWalletChange(e.target.value)}
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all tracking-wide"
+                placeholder={
+                  isReceiveCrypto
+                    ? selectedReceive.id === "usdt_trc20"
+                      ? "T…"
+                      : `Адрес ${selectedReceive.code}`
+                    : "Номер карты / счёта"
+                }
+                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all tracking-wide"
                 required
               />
             </div>
@@ -267,19 +571,56 @@ export default function OrderForm() {
               Персональные данные
             </h2>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
-                Ваш город{" "}
-                <span className="text-red-500 font-bold ml-0.5"> * </span> :
-              </label>
-              <div className="w-full flex items-center justify-between bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full px-6 py-3.5 shadow-[0_0_15px_rgba(255,221,45,0.05)] cursor-pointer hover:border-[#FFDD2D] transition-all">
-                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                  {" "}
-                  {city}{" "}
-                </span>
-                <ChevronDown className="w-4 h-4 text-amber-400 stroke-[2.5]" />
+            {isCashSelected && (
+              <div className="space-y-2" ref={cityRef}>
+                <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
+                  Ваш город{" "}
+                  <span className="text-red-500 font-bold ml-0.5"> * </span> :
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCityDropdownOpen((v) => !v);
+                      setIsSendDropdownOpen(false);
+                      setIsReceiveDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full px-6 py-3.5 shadow-[0_0_15px_rgba(255,221,45,0.05)] cursor-pointer hover:border-[#FFDD2D] transition-all text-left"
+                  >
+                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                      {city}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-amber-400 stroke-[2.5] transition-transform ${
+                        isCityDropdownOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {isCityDropdownOpen && (
+                    <div className="absolute left-0 top-full mt-2 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-xl z-50 overflow-hidden p-2">
+                      {CITIES.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            setCity(item);
+                            setIsCityDropdownOpen(false);
+                          }}
+                          className={`w-full rounded-xl px-4 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ${
+                            city === item
+                              ? "bg-[#FFF3B0] dark:bg-amber-500/20 text-zinc-900 dark:text-zinc-100"
+                              : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-2">
               <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
@@ -290,7 +631,8 @@ export default function OrderForm() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
+                placeholder="name@example.com"
+                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
                 required
               />
             </div>
@@ -304,7 +646,8 @@ export default function OrderForm() {
                 type="text"
                 value={telegram}
                 onChange={(e) => handleTelegramChange(e.target.value)}
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
+                placeholder="@username"
+                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
                 required
               />
             </div>
@@ -317,7 +660,8 @@ export default function OrderForm() {
                 type="text"
                 value={coupon}
                 onChange={(e) => setCoupon(e.target.value)}
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.04)] focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
+                placeholder="Промокод"
+                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.04)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
               />
             </div>
           </div>
@@ -325,7 +669,6 @@ export default function OrderForm() {
           <div className="h-[1px] bg-zinc-100 dark:bg-zinc-800 w-full" />
           {/* ================= ЧЕКБОКСЫ И КНОПКА ОТПРАВКИ ================= */}
           <div className="space-y-6 pt-2">
-            {/* Чекбокс 1: AML политика */}
             <div className="flex items-start space-x-3 group cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -353,7 +696,6 @@ export default function OrderForm() {
               </label>
             </div>
 
-            {/* Чекбокс 2: Не запоминать */}
             <div className="flex items-center space-x-3 group cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -370,11 +712,10 @@ export default function OrderForm() {
               </label>
             </div>
 
-            {/* Кнопка отправки Продолжить */}
             <div className="pt-4">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !(pairRate > 0)}
                 className="w-full sm:max-w-xs bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold text-base py-4 rounded-full shadow-md active:scale-[0.99] transition-all flex items-center justify-center disabled:cursor-not-allowed cursor-pointer"
               >
                 {isSubmitting ? (
