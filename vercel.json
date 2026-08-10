@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/update-rates",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/expire-orders",
+      "schedule": "* * * * *"
     }
   ]
 }

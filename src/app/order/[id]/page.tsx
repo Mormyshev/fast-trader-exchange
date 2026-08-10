@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import Header from "@/src/components/Header/Header";
 import Footer from "@/src/components/Footer/Footer";
 import OrderStatusClient from "./OrderStatusClient";
+import { expireOrderIfNeeded } from "@/src/utils/orders/expire-orders";
 
 interface OrderPageProps {
   params: Promise<{ id: string }>;
@@ -42,11 +43,13 @@ export default async function OrderPage({ params }: OrderPageProps) {
     notFound();
   }
 
+  const fresh = await expireOrderIfNeeded(admin, order);
+
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-zinc-950">
       <Header />
       <main className="flex-grow w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 mb-16 mt-8 antialiased">
-        <OrderStatusClient initialOrder={order} />
+        <OrderStatusClient initialOrder={fresh} />
       </main>
       <Footer />
     </div>

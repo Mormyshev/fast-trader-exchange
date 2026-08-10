@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/src/utils/supabase/client";
+import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
+import { subscribeVerificationsInbox } from "@/src/utils/supabase/verifications-inbox";
 import {
   ShieldAlert,
   Check,
@@ -10,9 +12,11 @@ import {
   Send,
   Eye,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { normalizeVerificationStatus } from "@/src/utils/verification";
 
 interface ProfileRequest {
   id: string;
@@ -26,6 +30,10 @@ interface ProfileRequest {
   verification: string | null;
 }
 
+function isPendingQueue(status: string | null | undefined) {
+  return normalizeVerificationStatus(status) === "pending";
+}
+
 export default function VerificationPage() {
   const supabase = createClient();
 
@@ -35,7 +43,21 @@ export default function VerificationPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
-  const fetchRequests = async () => {
+  const applyProfile = useCallback((row: ProfileRequest) => {
+    if (!row?.id) return;
+
+    if (isPendingQueue(row.verification)) {
+      setRequests((prev) => {
+        const without = prev.filter((req) => req.id !== row.id);
+        return [row, ...without];
+      });
+      return;
+    }
+
+    setRequests((prev) => prev.filter((req) => req.id !== row.id));
+  }, []);
+
+  const fetchRequests = useCallback(async () => {
     try {
       const res = await fetch("/api/verifications", { cache: "no-store" });
       const json = await res.json();
@@ -48,11 +70,11 @@ export default function VerificationPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Доступ уже проверен в (staff)/layout — здесь только BFF + Realtime
   useEffect(() => {
     let cancelled = false;
+    let pgChannel: ReturnType<typeof supabase.channel> | null = null;
 
     void (async () => {
       setLoading(true);
@@ -60,44 +82,50 @@ export default function VerificationPage() {
       if (cancelled) return;
     })();
 
-    const poll = setInterval(() => void fetchRequests(), 5000);
+    const inboxChannel = subscribeVerificationsInbox(supabase, (profile) => {
+      applyProfile(profile as unknown as ProfileRequest);
+    });
 
-    const channel = supabase
-      .channel("operator-verifications-channel")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "profiles",
-        },
-        (payload) => {
-          const updatedRow = payload.new as ProfileRequest;
-          if (!updatedRow?.id) return;
+    void (async () => {
+      pgChannel = supabase
+        .channel("operator-verifications-channel")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "profiles",
+          },
+          (payload) => {
+            const updatedRow = payload.new as ProfileRequest;
+            applyProfile(updatedRow);
+          },
+        );
 
-          if (updatedRow.verification === "on_check") {
-            setRequests((prev) => {
-              if (prev.some((req) => req.id === updatedRow.id)) return prev;
-              return [updatedRow, ...prev];
-            });
-            return;
-          }
+      await subscribeWithAuth(supabase, pgChannel);
+    })();
 
-          setRequests((prev) => prev.filter((req) => req.id !== updatedRow.id));
-        },
-      )
-      .subscribe();
+    const onFocus = () => {
+      void fetchRequests();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") onFocus();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       cancelled = true;
-      clearInterval(poll);
-      supabase.removeChannel(channel);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      supabase.removeChannel(inboxChannel);
+      if (pgChannel) supabase.removeChannel(pgChannel);
     };
-  }, [supabase]);
+  }, [supabase, fetchRequests, applyProfile]);
 
   const handleVerdict = async (
     id: string,
-    status: "verified" | "not_started",
+    status: "verified" | "rejected",
   ) => {
     setProcessingId(id);
     setRequests((prev) => prev.filter((req) => req.id !== id));
@@ -115,11 +143,13 @@ export default function VerificationPage() {
       alert(
         status === "verified"
           ? "Анкета успешно подтверждена!"
-          : "Анкета отклонена.",
+          : "Анкета отклонена. Данные пользователя сохранены — он может исправить и отправить снова.",
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Ошибка обновления статуса:", err);
-      alert(`Ошибка: ${err.message}`);
+      alert(
+        `Ошибка: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`,
+      );
     } finally {
       setProcessingId(null);
     }
@@ -141,18 +171,33 @@ export default function VerificationPage() {
   return (
     <div className="min-h-screen bg-gray-50/50 py-12 dark:bg-zinc-950 text-gray-900 dark:text-zinc-50">
       <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-center space-x-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
-            <ShieldAlert className="h-6 w-6" />
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">
+                Панель оператора: Верификация
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-zinc-400">
+                Проверка персональных данных и документов пользователей
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">
-              Панель оператора: Верификация
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-zinc-400">
-              Проверка персональных данных и документов пользователей
-            </p>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setLoading(true);
+              void fetchRequests();
+            }}
+            className="rounded-full h-9 px-4 text-xs font-bold cursor-pointer"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Обновить
+          </Button>
         </div>
 
         {error && (
@@ -177,6 +222,18 @@ export default function VerificationPage() {
             <p className="text-gray-500 dark:text-zinc-400">
               Новых заявок на верификацию нет
             </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-4 text-xs font-bold"
+              onClick={() => {
+                setLoading(true);
+                void fetchRequests();
+              }}
+            >
+              Проверить ещё раз
+            </Button>
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-zinc-900 dark:bg-zinc-900/50">
@@ -252,7 +309,7 @@ export default function VerificationPage() {
                             size="sm"
                             variant="destructive"
                             disabled={processingId === req.id}
-                            onClick={() => handleVerdict(req.id, "not_started")}
+                            onClick={() => handleVerdict(req.id, "rejected")}
                             className="rounded-full h-8 px-3 text-xs font-bold"
                           >
                             <X className="h-3.5 w-3.5" />

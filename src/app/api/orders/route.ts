@@ -33,6 +33,23 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("verification")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.verification !== "verified") {
+      return NextResponse.json(
+        {
+          error:
+            "Перед обменом необходимо пройти верификацию. Откройте профиль и отправьте анкету.",
+        },
+        { status: 403 },
+      );
+    }
+
     const { data, error } = await admin
       .from("orders")
       .insert([

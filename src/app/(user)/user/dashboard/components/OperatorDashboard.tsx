@@ -175,11 +175,22 @@ export default function OperatorDashboard() {
                 className="p-6 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col justify-between gap-4"
               >
                 <div>
-                  <div className="flex justify-between items-start">
-                    <span className="text-xs font-mono font-bold text-zinc-400">
-                      ID: ...{order.id.slice(0, 8)}
-                    </span>
-                    <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400 px-2 py-0.5 rounded-md font-bold">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <span className="text-xs font-mono font-bold text-zinc-400">
+                        ID: ...{order.id.slice(0, 8)}
+                      </span>
+                      <p className="text-xs font-semibold text-zinc-500">
+                        {new Date(order.created_at).toLocaleString("ru-RU", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                    <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400 px-2 py-0.5 rounded-md font-bold shrink-0">
                       Ожидает
                     </span>
                   </div>
@@ -230,12 +241,21 @@ export default function OperatorDashboard() {
               >
                 {/* Левая часть: Подробная информация */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-mono font-bold text-zinc-400">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                    <span className="text-sm font-mono font-bold text-zinc-400 break-all">
                       ID: {order.id}
                     </span>
+                    <span className="text-xs font-semibold text-zinc-500">
+                      {new Date(order.created_at).toLocaleString("ru-RU", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
                     <span
-                      className={`text-xs font-black uppercase px-2 py-0.5 rounded ${
+                      className={`text-xs font-black uppercase px-2 py-0.5 rounded w-fit ${
                         order.status === "processing"
                           ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400"
                           : "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400"

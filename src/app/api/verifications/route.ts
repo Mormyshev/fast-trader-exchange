@@ -3,6 +3,7 @@ import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
+import { broadcastVerificationEvent } from "@/src/utils/supabase/broadcast-verification";
 
 async function requireStaff() {
   const supabase = await createClient();
@@ -36,7 +37,7 @@ export async function GET() {
         .select(
           "id, email, last_name, first_name, middle_name, phone, telegram, passport_url, verification",
         )
-        .eq("verification", "on_check"),
+        .eq("verification", "pending"),
       8000,
       { data: null, error: { message: "Database timeout" } } as any,
     );
@@ -66,7 +67,7 @@ export async function PATCH(request: Request) {
 
     const id = String(body.id || "");
     const status = body.status;
-    if (!id || (status !== "verified" && status !== "not_started")) {
+    if (!id || (status !== "verified" && status !== "rejected")) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
@@ -78,7 +79,7 @@ export async function PATCH(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .select("id")
+        .select("id, last_name, first_name, middle_name, phone, telegram, passport_url, verification")
         .single(),
       8000,
       { data: null, error: { message: "Database timeout" } } as any,
@@ -86,6 +87,10 @@ export async function PATCH(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 503 });
+    }
+
+    if (data) {
+      void broadcastVerificationEvent(data as Record<string, unknown>);
     }
 
     return NextResponse.json({ ok: true, id: data?.id ?? id, status });

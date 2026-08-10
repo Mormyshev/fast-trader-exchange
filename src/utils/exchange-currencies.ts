@@ -113,6 +113,12 @@ export function isFiatCurrency(currency: ExchangeCurrency): boolean {
   return FIAT_CURRENCIES.some((c) => c.id === currency.id);
 }
 
+/** Клиент получает рубли (оператор выплачивает RUB) */
+export function isRubPayout(currencyTo: string | null | undefined): boolean {
+  if (!currencyTo) return false;
+  return /RUB/i.test(currencyTo);
+}
+
 /**
  * Сколько единиц receive за 1 единицу send.
  * Buy (RUB→crypto): mid × 1.03; Sell (crypto→RUB): mid × 0.97.

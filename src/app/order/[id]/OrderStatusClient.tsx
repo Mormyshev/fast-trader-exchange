@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/src/utils/supabase/client";
-import {
-  bindRealtimeFallback,
-  subscribeWithAuth,
-} from "@/src/utils/supabase/realtime";
+import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import {
   Loader2,
   CheckCircle2,
@@ -16,23 +13,68 @@ import {
   Check,
   ArrowLeft,
 } from "lucide-react";
+import {
+  formatOrderTimeLeft,
+  isOrderExpiredByTtl,
+  ORDER_TTL_STATUSES,
+} from "@/src/utils/orders/ttl";
 
 interface OrderStatusClientProps {
   initialOrder: any;
 }
 
-const WAITING_STATUSES = new Set(["pending", "processing", "paid"]);
-
 export default function OrderStatusClient({
   initialOrder,
 }: OrderStatusClientProps) {
   const [order, setOrder] = useState<any>(initialOrder);
-  const [timeLeft, setTimeLeft] = useState<string>("15:00");
+  const [timeLeft, setTimeLeft] = useState<string>(() =>
+    formatOrderTimeLeft(initialOrder.created_at),
+  );
   const [isUploading, setIsUploading] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(
     Boolean(initialOrder?.receipt_url),
   );
+  const cancelInFlight = useRef(false);
+
+  const canCancel = (ORDER_TTL_STATUSES as readonly string[]).includes(
+    order.status,
+  );
+
+  const cancelOrder = async (reason: "manual" | "timeout" = "manual") => {
+    if (!canCancel || cancelInFlight.current) return;
+    cancelInFlight.current = true;
+    setIsCancelling(true);
+
+    const prevStatus = order.status;
+    setOrder((prev: any) => ({ ...prev, status: "cancelled" }));
+
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setOrder((prev: any) => ({ ...prev, status: prevStatus }));
+        throw new Error(json.error || "Не удалось отменить заявку");
+      }
+      if (json.order) setOrder(json.order);
+      if (reason === "timeout") {
+        alert("Время жизни заявки истекло. Заявка автоматически отменена.");
+      }
+    } catch (err: unknown) {
+      cancelInFlight.current = false;
+      const message =
+        err instanceof Error ? err.message : "Не удалось отменить заявку";
+      if (reason === "manual") alert(message);
+      console.error("Cancel order error:", err);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   // BFF + Realtime
   useEffect(() => {
@@ -56,8 +98,6 @@ export default function OrderStatusClient({
       }
     };
 
-    const fallback = bindRealtimeFallback(() => {}, () => void refreshOrder());
-
     void (async () => {
       await refreshOrder();
       if (cancelled) return;
@@ -78,69 +118,43 @@ export default function OrderStatusClient({
           },
         );
 
-      await subscribeWithAuth(client, channel, fallback.onStatus);
+      await subscribeWithAuth(client, channel);
     })();
 
     return () => {
       cancelled = true;
-      fallback.clear();
       if (channel) client.removeChannel(channel);
     };
   }, [order.id]);
 
-  // Пока ждём оператора — polling, не только Realtime
   useEffect(() => {
-    if (!WAITING_STATUSES.has(order.status)) return;
+    if (!(ORDER_TTL_STATUSES as readonly string[]).includes(order.status)) {
+      return;
+    }
 
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        const res = await fetch(`/api/orders/${order.id}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) return;
-        const json = await res.json();
-        if (!cancelled && json.order) {
-          setOrder(json.order);
-          if (json.order.receipt_url) setUploadSuccess(true);
-        }
-      } catch {
-        // ignore
+    const tick = () => {
+      setTimeLeft(formatOrderTimeLeft(order.created_at));
+      if (isOrderExpiredByTtl(order.created_at)) {
+        void cancelOrder("timeout");
       }
     };
 
-    const timer = setInterval(() => void tick(), 4000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [order.id, order.status]);
-
-  useEffect(() => {
-    if (order.status !== "awaiting_payment") return;
-
-    const calculateTimeLeft = () => {
-      const createdAt = new Date(order.created_at).getTime();
-      const expiresAt = createdAt + 15 * 60 * 1000;
-      const now = new Date().getTime();
-      const difference = expiresAt - now;
-
-      if (difference <= 0) {
-        setTimeLeft("00:00");
-        return;
-      }
-
-      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-      const strMinutes = minutes < 10 ? `0${minutes}` : String(minutes);
-      const strSeconds = seconds < 10 ? `0${seconds}` : String(seconds);
-      setTimeLeft(`${strMinutes}:${strSeconds}`);
-    };
-
-    calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [order.status, order.created_at]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cancel only when timer hits zero
+  }, [order.status, order.created_at, order.id]);
+
+  const handleCancelClick = () => {
+    if (
+      !confirm(
+        "Отменить заявку? Это действие нельзя будет отменить.",
+      )
+    ) {
+      return;
+    }
+    void cancelOrder("manual");
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -230,10 +244,17 @@ export default function OrderStatusClient({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-6">
           <div>
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              Заявка #{order.id.slice(0, 8)}...
+              Заявка на обмен
             </h1>
             <p className="text-xs font-medium text-zinc-400 mt-1">
-              Создана: {new Date(order.created_at).toLocaleString("ru-RU")}
+              Создана{" "}
+              {new Date(order.created_at).toLocaleString("ru-RU", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </p>
           </div>
 
@@ -281,9 +302,14 @@ export default function OrderStatusClient({
                   Первый освободившийся оператор отправит реквизиты для оплаты.
                 </p>
               </div>
-              <div className="flex items-center space-x-2.5 text-sm font-bold text-zinc-800 dark:text-zinc-200 bg-white/80 dark:bg-zinc-800/80 px-4 py-2 rounded-full border border-amber-300 shadow-xs">
-                <Loader2 className="w-4 h-4 animate-spin stroke-[2.5]" />
-                <span>Обычно это занимает не более 5 минут...</span>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="flex items-center space-x-2.5 text-sm font-bold text-zinc-800 dark:text-zinc-200 bg-white/80 dark:bg-zinc-800/80 px-4 py-2 rounded-full border border-amber-300 shadow-xs">
+                  <Loader2 className="w-4 h-4 animate-spin stroke-[2.5]" />
+                  <span>Обычно это занимает не более 5 минут...</span>
+                </div>
+                <div className="font-mono font-black text-base text-zinc-950 dark:text-zinc-50 bg-white dark:bg-zinc-800 px-4 py-2 rounded-full border border-amber-300">
+                  {timeLeft}
+                </div>
               </div>
             </div>
           )}
@@ -300,6 +326,9 @@ export default function OrderStatusClient({
                 <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 max-w-lg leading-relaxed">
                   Оператор взял ваш ордер в обработку. Пожалуйста, не закрывайте
                   страницу, реквизиты появятся здесь в течение 1–2 минут.
+                </p>
+                <p className="font-mono font-black text-lg text-zinc-900 dark:text-zinc-50">
+                  Осталось: {timeLeft}
                 </p>
               </div>
             </div>
@@ -324,7 +353,7 @@ export default function OrderStatusClient({
 
                 <div className="bg-white dark:bg-zinc-800 px-4 py-2 rounded-2xl border-2 border-purple-400 shadow-sm flex items-center space-x-2 shrink-0 self-start sm:self-center">
                   <span className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
-                    Время на оплату:
+                    Осталось:
                   </span>
                   <span className="font-mono font-black text-lg text-zinc-950 dark:text-zinc-50 tracking-wide">
                     {timeLeft}
@@ -384,10 +413,10 @@ export default function OrderStatusClient({
                 </label>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleConfirmPayment}
-                  disabled={isUploading || isConfirming}
+                  disabled={isUploading || isConfirming || isCancelling}
                   className="w-full sm:max-w-xs bg-purple-500 hover:bg-purple-600 disabled:bg-zinc-200 text-white font-bold py-4 rounded-full shadow-md transition-all text-sm cursor-pointer tracking-wide uppercase text-center inline-flex items-center justify-center gap-2"
                 >
                   {isConfirming && (
@@ -395,7 +424,32 @@ export default function OrderStatusClient({
                   )}
                   Я оплатил, проверить транзакцию
                 </button>
+                <button
+                  type="button"
+                  onClick={handleCancelClick}
+                  disabled={isUploading || isConfirming || isCancelling}
+                  className="w-full sm:w-auto px-6 py-4 rounded-full border border-rose-300 text-rose-600 hover:bg-rose-50 font-bold text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {isCancelling && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  Отменить заявку
+                </button>
               </div>
+            </div>
+          )}
+
+          {(order.status === "pending" || order.status === "processing") && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={handleCancelClick}
+                disabled={isCancelling}
+                className="px-6 py-3 rounded-full border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+              >
+                {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
+                Отменить заявку
+              </button>
             </div>
           )}
 
@@ -426,9 +480,8 @@ export default function OrderStatusClient({
                   Заявка отменена
                 </h3>
                 <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 max-w-lg leading-relaxed">
-                  Данный обмен был отменен системой или оператором. Если у вас
-                  возникли вопросы, свяжитесь с нашей службой поддержки в
-                  Telegram.
+                  Обмен отменён. Если средства уже были отправлены или остались
+                  вопросы — напишите в поддержку.
                 </p>
               </div>
             </div>

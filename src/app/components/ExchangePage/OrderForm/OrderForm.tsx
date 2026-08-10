@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, ShieldAlert } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
 import SlimScroll from "@/src/components/SlimScroll/SlimScroll";
 import {
@@ -17,6 +18,11 @@ import {
   isFiatCurrency,
   sanitizeAmountInput,
 } from "@/src/utils/exchange-currencies";
+import {
+  isVerificationComplete,
+  normalizeVerificationStatus,
+  type VerificationStatus,
+} from "@/src/utils/verification";
 
 type RateRow = { symbol: string; exchange_price: number };
 
@@ -123,6 +129,13 @@ export default function OrderForm() {
   const [agreeAml, setAgreeAml] = useState<boolean>(false);
   const [dontRemember, setDontRemember] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [verificationStatus, setVerificationStatus] =
+    useState<VerificationStatus | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(true);
+
+  const verified = isVerificationComplete(
+    verificationStatus ?? "not_started",
+  );
 
   const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
   const [isReceiveDropdownOpen, setIsReceiveDropdownOpen] = useState(false);
@@ -157,6 +170,32 @@ export default function OrderForm() {
       syncUrl(selectedSend, selectedReceive, sendAmount);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только при монтировании
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/profile", { cache: "no-store" });
+        if (res.status === 401) {
+          if (!cancelled) setVerificationStatus("not_started");
+          return;
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setVerificationStatus(
+            normalizeVerificationStatus(json.profile?.verification),
+          );
+        }
+      } catch {
+        if (!cancelled) setVerificationStatus("not_started");
+      } finally {
+        if (!cancelled) setVerificationLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -303,6 +342,12 @@ export default function OrderForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!verified) {
+      alert("Перед обменом необходимо пройти верификацию.");
+      router.push("/user/profile");
+      return;
+    }
+
     if (!agreeAml) {
       alert("Необходимо принять условия AML политики.");
       return;
@@ -355,6 +400,11 @@ export default function OrderForm() {
 
       if (res.status === 401) {
         alert("Для создания заявки необходимо авторизоваться на сайте!");
+        return;
+      }
+      if (res.status === 403) {
+        alert(json.error || "Перед обменом необходимо пройти верификацию.");
+        router.push("/user/profile");
         return;
       }
       if (!res.ok) {
@@ -712,21 +762,55 @@ export default function OrderForm() {
               </label>
             </div>
 
-            <div className="pt-4">
-              <button
-                type="submit"
-                disabled={isSubmitting || !(pairRate > 0)}
-                className="w-full sm:max-w-xs bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold text-base py-4 rounded-full shadow-md active:scale-[0.99] transition-all flex items-center justify-center disabled:cursor-not-allowed cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                    Создание заявки...
-                  </>
-                ) : (
-                  "Продолжить"
-                )}
-              </button>
+            <div className="pt-4 space-y-3">
+              {verificationLoading ? (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full sm:max-w-xs bg-zinc-200 text-zinc-400 font-bold text-base py-4 rounded-full flex items-center justify-center cursor-not-allowed"
+                >
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  Проверка профиля...
+                </button>
+              ) : !verified ? (
+                <>
+                  <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 max-w-xl">
+                    <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+                    <p>
+                      {verificationStatus === "pending"
+                        ? "Анкета на проверке. Обмен станет доступен после подтверждения оператором."
+                        : verificationStatus === "rejected"
+                          ? "Анкета отклонена. Исправьте данные в профиле и отправьте повторно."
+                          : "Перед обменом необходимо пройти верификацию аккаунта."}
+                    </p>
+                  </div>
+                  <Link
+                    href="/user/profile"
+                    className="w-full sm:max-w-xs inline-flex items-center justify-center bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 font-bold text-base py-4 rounded-full shadow-md active:scale-[0.99] transition-all cursor-pointer"
+                  >
+                    {verificationStatus === "pending"
+                      ? "Открыть статус верификации"
+                      : verificationStatus === "rejected"
+                        ? "Исправить анкету"
+                        : "Пройти верификацию"}
+                  </Link>
+                </>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !(pairRate > 0)}
+                  className="w-full sm:max-w-xs bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold text-base py-4 rounded-full shadow-md active:scale-[0.99] transition-all flex items-center justify-center disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      Создание заявки...
+                    </>
+                  ) : (
+                    "Продолжить"
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

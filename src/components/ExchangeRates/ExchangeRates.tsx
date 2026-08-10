@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
 import { CRYPTO_CURRENCIES } from "@/src/utils/exchange-currencies";
 import { applyBuySpread, applySellSpread } from "@/src/utils/market-rates";
 
 type RateRow = { symbol: string; exchange_price: number };
+
+const VISIBLE_COUNT = 2;
 
 function formatRub(value: number): string {
   if (!(value > 0)) return "—";
@@ -24,6 +27,7 @@ function formatRub(value: number): string {
 export default function ExchangeRates() {
   const [rates, setRates] = useState<Record<string, number>>({});
   const [loaded, setLoaded] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +78,9 @@ export default function ExchangeRates() {
     };
   });
 
+  const visibleRows = expanded ? rows : rows.slice(0, VISIBLE_COUNT);
+  const hiddenCount = rows.length - VISIBLE_COUNT;
+
   return (
     <div className="bg-white p-6 rounded-3xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="flex items-baseline justify-between gap-3 mb-4">
@@ -90,7 +97,7 @@ export default function ExchangeRates() {
       </div>
 
       <div className="space-y-1">
-        {rows.map((row) => (
+        {visibleRows.map((row) => (
           <div
             key={row.id}
             className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center rounded-2xl px-2 py-2.5 hover:bg-zinc-50 transition-colors"
@@ -115,6 +122,19 @@ export default function ExchangeRates() {
           </div>
         ))}
       </div>
+
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-3 w-full flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold text-zinc-600 hover:text-zinc-900 rounded-full hover:bg-zinc-50 transition-colors cursor-pointer"
+        >
+          {expanded ? "Скрыть" : `Ещё ${hiddenCount}`}
+          <ChevronDown
+            className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
+        </button>
+      )}
     </div>
   );
 }

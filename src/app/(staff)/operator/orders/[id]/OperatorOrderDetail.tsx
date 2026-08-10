@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,14 +8,16 @@ import {
   ArrowRightLeft,
   CheckCircle2,
   Loader2,
+  Upload,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/src/utils/supabase/client";
-import {
-  bindRealtimeFallback,
-  subscribeWithAuth,
-} from "@/src/utils/supabase/realtime";
+import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
+import { isRubPayout } from "@/src/utils/exchange-currencies";
+import { OrderTtlBadge, useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import { isOrderExpiredByTtl, ORDER_TTL_STATUSES } from "@/src/utils/orders/ttl";
 
 type OrderStatus =
   | "pending"
@@ -39,6 +41,7 @@ interface Order {
   wallet_to: string;
   payment_details: string | null;
   receipt_url: string | null;
+  operator_receipt_url: string | null;
 }
 
 function statusLabel(status: OrderStatus) {
@@ -87,7 +90,13 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingPayout, setUploadingPayout] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const expireRequestedRef = useRef(false);
+  const now = useNowTick(
+    !!order &&
+      (ORDER_TTL_STATUSES as readonly string[]).includes(order?.status ?? ""),
+  );
 
   useEffect(() => {
     if (!user?.id) {
@@ -116,8 +125,6 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       }
     }
 
-    const fallback = bindRealtimeFallback(() => {}, () => void load());
-
     void (async () => {
       await load();
       if (cancelled) return;
@@ -137,15 +144,40 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           },
         );
 
-      await subscribeWithAuth(supabase, channel, fallback.onStatus);
+      await subscribeWithAuth(supabase, channel);
     })();
 
     return () => {
       cancelled = true;
-      fallback.clear();
       if (channel) supabase.removeChannel(channel);
     };
   }, [orderId, user?.id, isAuthLoading, supabase]);
+
+  useEffect(() => {
+    if (!order) return;
+    if (!(ORDER_TTL_STATUSES as readonly string[]).includes(order.status)) {
+      return;
+    }
+    if (!isOrderExpiredByTtl(order.created_at, now)) return;
+    if (expireRequestedRef.current) return;
+    expireRequestedRef.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/orders/${order.id}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (!cancelled && json.order) setOrder(json.order);
+      } catch {
+        expireRequestedRef.current = false;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [order, now]);
 
   const handleClaim = async () => {
     if (!user?.id || !order) return;
@@ -203,6 +235,16 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleComplete = async (status: "completed" | "cancelled") => {
     if (!order) return;
+
+    if (
+      status === "completed" &&
+      isRubPayout(order.currency_to) &&
+      !order.operator_receipt_url
+    ) {
+      alert("Прикрепите PDF-чек выплаты рублей клиенту перед завершением.");
+      return;
+    }
+
     const ok = confirm(
       status === "completed"
         ? "Подтвердить получение и закрыть заявку как успешную?"
@@ -224,6 +266,38 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       alert(err.message || "Ошибка");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleOperatorReceiptUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    if (!order) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      alert("Нужен файл PDF");
+      e.target.value = "";
+      return;
+    }
+
+    setUploadingPayout(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/orders/${order.id}/operator-receipt`, {
+        method: "POST",
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось загрузить чек");
+      if (json.order) setOrder(json.order);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Ошибка загрузки");
+    } finally {
+      setUploadingPayout(false);
+      e.target.value = "";
     }
   };
 
@@ -269,15 +343,29 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             <p className="text-xs font-mono font-semibold text-zinc-400 mt-1 break-all">
               ID: {order.id}
             </p>
-            <p className="text-xs font-medium text-zinc-400 mt-1">
-              Создана: {new Date(order.created_at).toLocaleString("ru-RU")}
+            <p className="text-xs font-medium text-zinc-500 mt-1">
+              Создана{" "}
+              {new Date(order.created_at).toLocaleString("ru-RU", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </p>
           </div>
-          <span
-            className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border ${statusClass(order.status)}`}
-          >
-            {statusLabel(order.status)}
-          </span>
+          <div className="flex flex-col items-start sm:items-end gap-2">
+            <span
+              className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border ${statusClass(order.status)}`}
+            >
+              {statusLabel(order.status)}
+            </span>
+            <OrderTtlBadge
+              createdAt={order.created_at}
+              status={order.status}
+              now={now}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -404,24 +492,74 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                     rel="noopener noreferrer"
                     className="inline-block mt-2 text-xs font-bold text-blue-600 hover:underline"
                   >
-                    Открыть PDF чек
+                    Открыть PDF чек клиента
                   </a>
                 ) : (
                   <p className="text-xs text-zinc-500 mt-2">
-                    Файл чека не найден
+                    Файл чека клиента не найден
                   </p>
                 )}
               </div>
+
+              {isRubPayout(order.currency_to) && (
+                <div className="space-y-2 border-t border-emerald-200 pt-4">
+                  <p className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                    Чек выплаты RUB клиенту (обязательно)
+                  </p>
+                  {order.operator_receipt_url ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700">
+                        <Check className="w-3.5 h-3.5" />
+                        Чек выплаты прикреплён
+                      </span>
+                      <a
+                        href={order.operator_receipt_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-bold text-blue-600 hover:underline"
+                      >
+                        Открыть PDF
+                      </a>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-emerald-300 bg-white hover:bg-emerald-50/50 rounded-2xl p-5 text-center cursor-pointer transition-all">
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handleOperatorReceiptUpload}
+                        disabled={uploadingPayout || saving}
+                        className="sr-only"
+                      />
+                      {uploadingPayout ? (
+                        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                      ) : (
+                        <>
+                          <Upload className="w-6 h-6 text-emerald-600 mb-2" />
+                          <span className="text-xs font-bold text-zinc-700">
+                            Прикрепить PDF-чек перевода рублей
+                          </span>
+                        </>
+                      )}
+                    </label>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <Button
-                  disabled={saving}
+                  disabled={
+                    saving ||
+                    uploadingPayout ||
+                    (isRubPayout(order.currency_to) &&
+                      !order.operator_receipt_url)
+                  }
                   onClick={() => handleComplete("completed")}
-                  className="rounded-xl h-10 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none"
+                  className="rounded-xl h-10 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none disabled:opacity-50"
                 >
                   Успешно
                 </Button>
                 <Button
-                  disabled={saving}
+                  disabled={saving || uploadingPayout}
                   onClick={() => handleComplete("cancelled")}
                   className="rounded-xl h-10 font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-none"
                 >

@@ -7,15 +7,14 @@ import {
   Clock,
   Loader2,
   ClipboardList,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
-import {
-  bindRealtimeFallback,
-  subscribeWithAuth,
-} from "@/src/utils/supabase/realtime";
+import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 
 type OrderStatus =
   | "pending"
@@ -26,7 +25,7 @@ type OrderStatus =
   | "cancelled"
   | "failed";
 
-type TabId = "active" | "all";
+type TabId = "pending" | "in_progress" | "completed" | "cancelled" | "all";
 
 interface Order {
   id: string;
@@ -39,6 +38,14 @@ interface Order {
   amount_to: number;
   wallet_to: string;
 }
+
+const PAGE_SIZE = 10;
+
+const IN_PROGRESS_STATUSES: OrderStatus[] = [
+  "processing",
+  "awaiting_payment",
+  "paid",
+];
 
 function statusLabel(status: OrderStatus) {
   switch (status) {
@@ -85,12 +92,62 @@ function formatCurrency(value: number, currency: string) {
   return `${formatted} ${currency.replace(/_/g, " ")}`;
 }
 
+function formatOrderCreatedAt(iso: string) {
+  return new Date(iso).toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function matchesTab(order: Order, tab: TabId) {
+  if (tab === "all") return true;
+  if (tab === "pending") return order.status === "pending";
+  if (tab === "in_progress") return IN_PROGRESS_STATUSES.includes(order.status);
+  if (tab === "completed") return order.status === "completed";
+  if (tab === "cancelled") return order.status === "cancelled";
+  return false;
+}
+
+function emptyCopy(tab: TabId) {
+  switch (tab) {
+    case "pending":
+      return {
+        title: "Нет новых заявок",
+        text: "Новые заявки, ожидающие оператора, появятся здесь.",
+      };
+    case "in_progress":
+      return {
+        title: "Нет заявок в работе",
+        text: "Когда оператор возьмёт заявку или потребуется оплата, она отобразится в этом разделе.",
+      };
+    case "completed":
+      return {
+        title: "Нет выполненных заявок",
+        text: "Завершённые обмены будут храниться здесь.",
+      };
+    case "cancelled":
+      return {
+        title: "Нет отменённых заявок",
+        text: "Отменённые вручную или по истечении таймера заявки появятся здесь.",
+      };
+    case "all":
+      return {
+        title: "Заявок пока нет",
+        text: "Создайте первый обмен — история заявок будет отображаться в этом разделе.",
+      };
+  }
+}
+
 export default function UserOrdersPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>("active");
+  const [activeTab, setActiveTab] = useState<TabId>("pending");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (!user?.id) {
@@ -101,12 +158,6 @@ export default function UserOrdersPage() {
     let cancelled = false;
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
-    const activeStatuses = new Set([
-      "pending",
-      "processing",
-      "awaiting_payment",
-      "paid",
-    ]);
 
     async function loadOrders() {
       try {
@@ -129,15 +180,6 @@ export default function UserOrdersPage() {
         if (!cancelled) setLoading(false);
       }
     }
-
-    function matchesTab(order: Order) {
-      if (activeTab === "all") return true;
-      return activeStatuses.has(order.status);
-    }
-
-    const fallback = bindRealtimeFallback(() => {}, () => void loadOrders());
-    // Realtime часто падает — гарантируем обновление списка
-    const listPoll = setInterval(() => void loadOrders(), 8000);
 
     setLoading(true);
     void (async () => {
@@ -167,7 +209,7 @@ export default function UserOrdersPage() {
 
             setOrders((prev) => {
               const without = prev.filter((o) => o.id !== next.id);
-              if (!matchesTab(next)) return without;
+              if (!matchesTab(next, activeTab)) return without;
               return [next, ...without].sort(
                 (a, b) =>
                   new Date(b.created_at).getTime() -
@@ -177,16 +219,23 @@ export default function UserOrdersPage() {
           },
         );
 
-      await subscribeWithAuth(supabase, channel, fallback.onStatus);
+      await subscribeWithAuth(supabase, channel);
     })();
 
     return () => {
       cancelled = true;
-      fallback.clear();
-      clearInterval(listPoll);
       if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id, isAuthLoading, activeTab]);
+
+  const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedOrders = orders.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+  const showPagination = orders.length > PAGE_SIZE;
+  const empty = emptyCopy(activeTab);
 
   if (isAuthLoading && !user) {
     return (
@@ -197,8 +246,8 @@ export default function UserOrdersPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-16 text-zinc-900 font-sans">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+    <div className="w-full space-y-8 pb-16 text-zinc-900 font-sans">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
             Мои заявки
@@ -209,24 +258,30 @@ export default function UserOrdersPage() {
         </div>
         <Button
           asChild
-          className="rounded-full h-10 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none self-start sm:self-auto"
+          className="rounded-full h-10 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none self-start sm:self-auto cursor-pointer"
         >
           <Link href="/user/exchange">Создать обмен</Link>
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl self-start w-fit">
+      <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl w-fit">
         {(
           [
-            { id: "active", label: "Активные" },
-            { id: "all", label: "Все заявки" },
+            { id: "pending", label: "Новые" },
+            { id: "in_progress", label: "В работе" },
+            { id: "completed", label: "Выполненные" },
+            { id: "cancelled", label: "Отменённые" },
+            { id: "all", label: "Все" },
           ] as const
         ).map((tab) => (
           <Button
             key={tab.id}
             variant="ghost"
             size="sm"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setPage(1);
+            }}
             className={`text-xs font-bold rounded-xl h-8 px-4 transition-all cursor-pointer ${
               activeTab === tab.id
                 ? "bg-white text-zinc-900 shadow-xs hover:bg-white"
@@ -254,27 +309,21 @@ export default function UserOrdersPage() {
             <ClipboardList className="w-7 h-7" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-lg font-bold text-zinc-900">
-              {activeTab === "active"
-                ? "Нет активных заявок"
-                : "Заявок пока нет"}
-            </h2>
+            <h2 className="text-lg font-bold text-zinc-900">{empty.title}</h2>
             <p className="text-sm text-zinc-500 font-medium max-w-md mx-auto">
-              {activeTab === "active"
-                ? "Когда вы создадите обмен, он появится здесь. Вы сможете открыть его снова в любой момент."
-                : "Создайте первый обмен — история заявок будет отображаться в этом разделе."}
+              {empty.text}
             </p>
           </div>
           <Button
             asChild
-            className="rounded-full h-10 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none"
+            className="rounded-full h-10 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none cursor-pointer"
           >
             <Link href="/user/exchange">Перейти к обмену</Link>
           </Button>
         </Card>
       ) : (
         <div className="space-y-4">
-          {orders.map((order) => {
+          {paginatedOrders.map((order) => {
             const isActive = [
               "pending",
               "processing",
@@ -287,22 +336,12 @@ export default function UserOrdersPage() {
                 key={order.id}
                 className="rounded-[28px] border border-zinc-200 bg-white shadow-none p-5 md:p-6"
               >
-                <div className="flex flex-col md:flex-row md:items-center gap-5">
-                  <div className="flex-1 space-y-3 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 justify-between">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>
-                          {new Date(order.created_at).toLocaleString("ru-RU")}
-                        </span>
-                        <span className="font-mono text-zinc-500">
-                          #{order.id.slice(0, 8)}
-                        </span>
-                      </div>
-                      <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${statusClass(order.status)}`}
-                      >
-                        {statusLabel(order.status)}
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center gap-4 md:gap-6">
+                  <div className="space-y-3 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-zinc-400">
+                      <span className="inline-flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        {formatOrderCreatedAt(order.created_at)}
                       </span>
                     </div>
 
@@ -324,22 +363,67 @@ export default function UserOrdersPage() {
                     </p>
                   </div>
 
-                  <Button
-                    asChild
-                    className={`rounded-full h-11 px-6 font-bold shadow-none shrink-0 w-full md:w-auto ${
-                      isActive
-                        ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
-                        : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
-                    }`}
-                  >
-                    <Link href={`/order/${order.id}`}>
-                      {isActive ? "Открыть заявку" : "Подробнее"}
-                    </Link>
-                  </Button>
+                  <div className="flex md:justify-center md:min-w-[11rem]">
+                    <span
+                      className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${statusClass(order.status)}`}
+                    >
+                      {statusLabel(order.status)}
+                    </span>
+                  </div>
+
+                  <div className="flex md:justify-end">
+                    <Button
+                      asChild
+                      className={`rounded-full h-11 px-6 font-bold shadow-none w-full md:w-auto cursor-pointer ${
+                        isActive
+                          ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
+                          : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
+                      }`}
+                    >
+                      <Link href={`/order/${order.id}`}>
+                        {isActive ? "Открыть заявку" : "Подробнее"}
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               </Card>
             );
           })}
+
+          {showPagination && (
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <p className="text-xs font-semibold text-zinc-400">
+                {(currentPage - 1) * PAGE_SIZE + 1}–
+                {Math.min(currentPage * PAGE_SIZE, orders.length)} из{" "}
+                {orders.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="h-9 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-xs font-bold text-zinc-700 min-w-[4.5rem] text-center">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-9 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

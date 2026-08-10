@@ -110,9 +110,16 @@ export default function ClientDashboard({
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-400">
-                    <span className="font-mono text-zinc-600">
-                      #{order.id.slice(0, 8)}
+                    <span>
+                      {new Date(order.created_at).toLocaleString("ru-RU", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </span>
+                    <span>·</span>
                     <span>{statusLabel(order.status)}</span>
                   </div>
                   <p className="text-sm font-bold text-zinc-900 truncate">

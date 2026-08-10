@@ -9,6 +9,8 @@ import {
   Search,
   ArrowRightLeft,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import {
@@ -23,12 +25,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/src/utils/supabase/client";
-import {
-  bindRealtimeFallback,
-  subscribeWithAuth,
-} from "@/src/utils/supabase/realtime";
+import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import { useAuth } from "@/src/app/context/AuthContext";
+import {
+  OrderTtlBadge,
+  useNowTick,
+} from "@/src/components/OrderTtlBadge/OrderTtlBadge";
 
 type OrderStatus =
   | "pending"
@@ -50,7 +53,9 @@ interface Order {
   amount_to: number;
 }
 
-type TabId = "all" | "pending" | "in_progress" | "completed";
+type TabId = "all" | "pending" | "in_progress" | "completed" | "cancelled";
+
+const PAGE_SIZE = 10;
 
 const IN_PROGRESS_STATUSES: OrderStatus[] = [
   "processing",
@@ -58,8 +63,11 @@ const IN_PROGRESS_STATUSES: OrderStatus[] = [
   "paid",
 ];
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("ru-RU", {
+function formatCreatedAt(iso: string) {
+  return new Date(iso).toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -118,10 +126,14 @@ export default function OperatorDashboard() {
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
+  const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
   const [completedCount, setCompletedCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabId>("all");
+  const [activeTab, setActiveTab] = useState<TabId>("pending");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+
+  const now = useNowTick(!loading && !!user?.id);
 
   const userIdRef = useRef<string | null>(null);
   if (user?.id) {
@@ -144,6 +156,7 @@ export default function OperatorDashboard() {
         setPendingOrders((json.pending || []) as Order[]);
         setMyOrders((json.mine || []) as Order[]);
         setCompletedOrders((json.completed || []) as Order[]);
+        setCancelledOrders((json.cancelled || []) as Order[]);
         setCompletedCount(
           typeof json.completedCount === "number" ? json.completedCount : 0,
         );
@@ -160,24 +173,7 @@ export default function OperatorDashboard() {
   useEffect(() => {
     if (!user?.id) return;
 
-    let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    async function refreshFromBff() {
-      try {
-        const res = await fetch("/api/orders/staff", { cache: "no-store" });
-        const json = await res.json();
-        if (!res.ok || cancelled) return;
-        setPendingOrders((json.pending || []) as Order[]);
-        setMyOrders((json.mine || []) as Order[]);
-        setCompletedOrders((json.completed || []) as Order[]);
-        setCompletedCount(
-          typeof json.completedCount === "number" ? json.completedCount : 0,
-        );
-      } catch {
-        // ignore
-      }
-    }
 
     const applyLiveOrder = (order: Order) => {
       const currentUserId = userIdRef.current;
@@ -202,14 +198,15 @@ export default function OperatorDashboard() {
           order.status === "completed" && order.operator_id === currentUserId;
         return mineCompleted ? [order, ...without].slice(0, 50) : without;
       });
-    };
 
-    const fallback = bindRealtimeFallback(
-      () => {},
-      () => void refreshFromBff(),
-      2000,
-    );
-    const listPoll = setInterval(() => void refreshFromBff(), 2500);
+      setCancelledOrders((prev) => {
+        const without = prev.filter((o) => o.id !== order.id);
+        const visible =
+          order.status === "cancelled" &&
+          (order.operator_id === currentUserId || order.operator_id == null);
+        return visible ? [order, ...without].slice(0, 100) : without;
+      });
+    };
 
     const inboxChannel = subscribeOrdersInbox(supabase, (order) => {
       applyLiveOrder(order as Order);
@@ -235,24 +232,27 @@ export default function OperatorDashboard() {
               setPendingOrders((prev) => prev.filter((o) => o.id !== id));
               setMyOrders((prev) => prev.filter((o) => o.id !== id));
               setCompletedOrders((prev) => prev.filter((o) => o.id !== id));
+              setCancelledOrders((prev) => prev.filter((o) => o.id !== id));
             }
           },
         );
 
-      await subscribeWithAuth(supabase, channel, fallback.onStatus);
+      await subscribeWithAuth(supabase, channel);
     })();
 
     return () => {
-      cancelled = true;
-      fallback.clear();
-      clearInterval(listPoll);
       supabase.removeChannel(inboxChannel);
       if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id, supabase]);
 
   const orderMap = new Map<string, Order>();
-  for (const order of [...pendingOrders, ...myOrders, ...completedOrders]) {
+  for (const order of [
+    ...pendingOrders,
+    ...myOrders,
+    ...completedOrders,
+    ...cancelledOrders,
+  ]) {
     orderMap.set(order.id, order);
   }
   const allOrders = Array.from(orderMap.values()).sort(
@@ -267,11 +267,20 @@ export default function OperatorDashboard() {
       (activeTab === "pending" && order.status === "pending") ||
       (activeTab === "in_progress" &&
         IN_PROGRESS_STATUSES.includes(order.status)) ||
-      (activeTab === "completed" && order.status === "completed");
+      (activeTab === "completed" && order.status === "completed") ||
+      (activeTab === "cancelled" && order.status === "cancelled");
 
     const matchesSearch = !q || order.id.toLowerCase().includes(q);
     return matchesTab && matchesSearch;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+  const showPagination = filteredOrders.length > PAGE_SIZE;
 
   if (isAuthLoading || loading) {
     return (
@@ -344,17 +353,21 @@ export default function OperatorDashboard() {
           <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl self-start">
             {(
               [
-                { id: "all", label: "Все" },
                 { id: "pending", label: "Новые" },
                 { id: "in_progress", label: "В работе" },
                 { id: "completed", label: "Выполненные" },
+                { id: "cancelled", label: "Отменённые" },
+                { id: "all", label: "Все" },
               ] as const
             ).map((tab) => (
               <Button
                 key={tab.id}
                 variant="ghost"
                 size="sm"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setPage(1);
+                }}
                 className={`text-xs font-bold rounded-xl h-8 px-4 transition-all cursor-pointer ${
                   activeTab === tab.id
                     ? "bg-white text-zinc-900 shadow-xs hover:bg-white"
@@ -372,7 +385,10 @@ export default function OperatorDashboard() {
               type="text"
               placeholder="Поиск по ID заявки..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
               className="pl-11 h-10 rounded-full bg-zinc-50 border-zinc-200 focus-visible:ring-[#FFDD2D] text-sm font-medium"
             />
           </div>
@@ -384,7 +400,7 @@ export default function OperatorDashboard() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent border-none">
                   <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
-                    ID / Время
+                    ID / Дата
                   </TableHead>
                   <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
                     Направление обмена
@@ -398,8 +414,8 @@ export default function OperatorDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody className="text-sm font-medium">
-                {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order) => {
+                {paginatedOrders.length > 0 ? (
+                  paginatedOrders.map((order) => {
                     const from = formatAmount(
                       order.amount_from,
                       order.currency_from,
@@ -416,7 +432,15 @@ export default function OperatorDashboard() {
                             {shortId(order.id)}
                           </div>
                           <div className="text-xs text-zinc-400 font-semibold mt-0.5">
-                            {formatTime(order.created_at)}
+                            {formatCreatedAt(order.created_at)}
+                          </div>
+                          <div className="mt-1.5">
+                            <OrderTtlBadge
+                              createdAt={order.created_at}
+                              status={order.status}
+                              now={now}
+                              compact
+                            />
                           </div>
                         </TableCell>
 
@@ -483,8 +507,8 @@ export default function OperatorDashboard() {
           </div>
 
           <div className="block md:hidden space-y-4">
-            {filteredOrders.length > 0 ? (
-              filteredOrders.map((order) => {
+            {paginatedOrders.length > 0 ? (
+              paginatedOrders.map((order) => {
                 const from = formatAmount(
                   order.amount_from,
                   order.currency_from,
@@ -502,7 +526,15 @@ export default function OperatorDashboard() {
                           {shortId(order.id)}
                         </div>
                         <div className="text-xs text-zinc-400 font-semibold mt-0.5">
-                          {formatTime(order.created_at)}
+                          {formatCreatedAt(order.created_at)}
+                        </div>
+                        <div className="mt-1.5">
+                          <OrderTtlBadge
+                            createdAt={order.created_at}
+                            status={order.status}
+                            now={now}
+                            compact
+                          />
                         </div>
                       </div>
                       <span
@@ -563,6 +595,41 @@ export default function OperatorDashboard() {
               </div>
             )}
           </div>
+
+          {showPagination && (
+            <div className="mt-6 flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
+              <p className="text-xs font-semibold text-zinc-400">
+                {(currentPage - 1) * PAGE_SIZE + 1}–
+                {Math.min(currentPage * PAGE_SIZE, filteredOrders.length)} из{" "}
+                {filteredOrders.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="h-9 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-xs font-bold text-zinc-700 min-w-[4.5rem] text-center">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-9 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     </div>

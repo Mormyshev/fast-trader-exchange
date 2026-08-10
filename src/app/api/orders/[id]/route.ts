@@ -7,6 +7,8 @@ import {
   broadcastOrderEvent,
   ORDER_UPDATED_EVENT,
 } from "@/src/utils/supabase/broadcast";
+import { isRubPayout } from "@/src/utils/exchange-currencies";
+import { expireOrderIfNeeded } from "@/src/utils/orders/expire-orders";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -64,7 +66,8 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    return NextResponse.json({ order });
+    const fresh = await expireOrderIfNeeded(actor.admin, order);
+    return NextResponse.json({ order: fresh });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });
@@ -99,7 +102,15 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const isOwner = order.user_id === actor.user.id;
+    const current = await expireOrderIfNeeded(actor.admin, order);
+    if (current.status === "cancelled" && order.status !== "cancelled") {
+      return NextResponse.json(
+        { error: "Заявка отменена: истекло время жизни", order: current },
+        { status: 409 },
+      );
+    }
+
+    const isOwner = current.user_id === actor.user.id;
 
     if (!isOwner && !actor.isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -112,13 +123,31 @@ export async function PATCH(request: Request, context: RouteContext) {
         patch.payment_details = body.payment_details;
       }
       if (typeof body.status === "string") {
+        if (
+          body.status === "completed" &&
+          isRubPayout(current.currency_to as string) &&
+          !(current as { operator_receipt_url?: string | null })
+            .operator_receipt_url &&
+          !(typeof body.operator_receipt_url === "string" && body.operator_receipt_url)
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "Перед завершением прикрепите PDF-чек выплаты рублей клиенту",
+            },
+            { status: 400 },
+          );
+        }
         patch.status = body.status;
+      }
+      if (typeof body.operator_receipt_url === "string") {
+        patch.operator_receipt_url = body.operator_receipt_url;
       }
       if (typeof body.operator_id === "string" || body.operator_id === null) {
         if (
           typeof body.operator_id === "string" &&
-          order.operator_id &&
-          order.operator_id !== body.operator_id
+          current.operator_id &&
+          current.operator_id !== body.operator_id
         ) {
           return NextResponse.json(
             { error: "Эту заявку уже забрал другой оператор" },
@@ -133,8 +162,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       if (typeof body.receipt_url === "string") {
         patch.receipt_url = body.receipt_url;
       }
-      if (body.status === "paid" && order.status === "awaiting_payment") {
+      if (body.status === "paid" && current.status === "awaiting_payment") {
         patch.status = "paid";
+      }
+      if (body.status === "cancelled") {
+        const cancellable = ["pending", "processing", "awaiting_payment"];
+        if (!cancellable.includes(current.status)) {
+          return NextResponse.json(
+            { error: "Эту заявку уже нельзя отменить" },
+            { status: 400 },
+          );
+        }
+        patch.status = "cancelled";
       }
     }
 

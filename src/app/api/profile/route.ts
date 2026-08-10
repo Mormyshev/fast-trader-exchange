@@ -3,6 +3,7 @@ import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
+import { broadcastVerificationEvent } from "@/src/utils/supabase/broadcast-verification";
 
 export async function GET() {
   try {
@@ -149,7 +150,7 @@ export async function PATCH(request: Request) {
           phone,
           telegram,
           passport_url: passportUrl,
-          verification: "on_check",
+          verification: "pending",
           updated_at: new Date().toISOString(),
         })
         .eq("id", user.id)
@@ -161,6 +162,10 @@ export async function PATCH(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 503 });
+    }
+
+    if (data) {
+      void broadcastVerificationEvent(data as Record<string, unknown>);
     }
 
     return NextResponse.json({ profile: data });

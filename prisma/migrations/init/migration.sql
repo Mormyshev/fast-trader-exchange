@@ -37,6 +37,7 @@ CREATE TABLE "orders" (
     "tx_hash" TEXT,
     "payment_details" TEXT,
     "receipt_url" TEXT,
+    "operator_receipt_url" TEXT,
 
     CONSTRAINT "orders_pkey" PRIMARY KEY ("id")
 );

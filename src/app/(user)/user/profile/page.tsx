@@ -10,37 +10,39 @@ import {
   X,
   Phone,
   Send,
+  AlertTriangle,
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
+import {
+  canEditVerification,
+  normalizeVerificationStatus,
+  type VerificationStatus,
+} from "@/src/utils/verification";
 
-type VerificationStatus = "not_started" | "on_check" | "verified";
-
-// Инициализируем клиент один раз ВНЕ компонента (как синглтон)
 const supabase = createClient();
 
 export default function ProfilePage() {
   const { user } = useAuth();
 
-  // Системные состояния
   const [verificationStatus, setVerificationStatus] =
     useState<VerificationStatus>("not_started");
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Текстовые поля анкеты
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [phone, setPhone] = useState("");
   const [telegram, setTelegram] = useState("");
 
-  // Состояния для работы с файлом паспорта
   const [passportFile, setPassportFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  // BFF: загрузка профиля (+ poll, т.к. Realtime нестабилен)
+
+  const editable = canEditVerification(verificationStatus);
+
   useEffect(() => {
     if (!user?.id) return;
 
@@ -63,7 +65,7 @@ export default function ProfilePage() {
         setPhone(data.phone || "");
         setTelegram(data.telegram || "");
         setVerificationStatus(
-          (data.verification as VerificationStatus) || "not_started",
+          normalizeVerificationStatus(data.verification),
         );
         if (data.passport_url) setPreviewUrl(data.passport_url);
       } catch (err) {
@@ -86,51 +88,68 @@ export default function ProfilePage() {
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
-          const updatedProfile = payload.new as any;
-          if (updatedProfile?.verification) {
+          const updatedProfile = payload.new as Record<string, unknown>;
+          if (updatedProfile?.verification != null) {
             setVerificationStatus(
-              updatedProfile.verification as VerificationStatus,
+              normalizeVerificationStatus(String(updatedProfile.verification)),
             );
+          }
+          // Подтягиваем поля с сервера, не затирая их пустыми значениями
+          if (typeof updatedProfile.last_name === "string") {
+            setLastName(updatedProfile.last_name);
+          }
+          if (typeof updatedProfile.first_name === "string") {
+            setFirstName(updatedProfile.first_name);
+          }
+          if (typeof updatedProfile.middle_name === "string") {
+            setMiddleName(updatedProfile.middle_name);
+          }
+          if (updatedProfile.middle_name === null) {
+            setMiddleName("");
+          }
+          if (typeof updatedProfile.phone === "string") {
+            setPhone(updatedProfile.phone);
+          }
+          if (typeof updatedProfile.telegram === "string") {
+            setTelegram(updatedProfile.telegram);
+          }
+          if (typeof updatedProfile.passport_url === "string") {
+            setPreviewUrl(updatedProfile.passport_url);
           }
         },
       )
       .subscribe();
 
-    const poll = setInterval(() => void fetchProfile(), 10000);
-
     return () => {
       cancelled = true;
-      clearInterval(poll);
       supabase.removeChannel(profileSubscription);
     };
   }, [user?.id]);
-  // Выбор файла в инпуте
-  // Замените вашу функцию handleFileChange на этот код:
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // ВАЖНО: Достаем строго первый файл [0] из массива files
     const file = e.target.files?.[0];
 
     if (file) {
-      // Валидация размера файла на 10 МБ для безопасности
       const maxSize = 10 * 1024 * 1024;
       if (file.size > maxSize) {
         alert(
           "Файл слишком большой! Пожалуйста, загрузите фото размером менее 10 МБ.",
         );
-        e.target.value = ""; // Сбрасываем поле инпута
+        e.target.value = "";
         return;
       }
 
-      setPassportFile(file); // Сохраняем чистый объект File
-      setPreviewUrl(URL.createObjectURL(file)); // Создаем временную ссылку для превью
+      setPassportFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
     }
   };
 
-  // Удаление выбранного файла
   const removeFile = () => {
     setPassportFile(null);
     if (previewUrl && !previewUrl.startsWith("http")) {
       URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    } else {
       setPreviewUrl(null);
     }
   };
@@ -144,6 +163,7 @@ export default function ProfilePage() {
       return alert("Пожалуйста, загрузите фото паспорта");
 
     setIsSubmitting(true);
+    const prevStatus = verificationStatus;
 
     try {
       const form = new FormData();
@@ -152,15 +172,14 @@ export default function ProfilePage() {
       form.append("middle_name", middleName);
       form.append("phone", phone);
       form.append("telegram", telegram);
-      if (previewUrl && !passportFile) {
+      if (previewUrl && !passportFile && previewUrl.startsWith("http")) {
         form.append("passport_url", previewUrl);
       }
       if (passportFile) {
         form.append("passport", passportFile);
       }
 
-      // мгновенный UI
-      setVerificationStatus("on_check");
+      setVerificationStatus("pending");
 
       const res = await fetch("/api/profile", {
         method: "PATCH",
@@ -168,27 +187,34 @@ export default function ProfilePage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        setVerificationStatus("not_started");
+        setVerificationStatus(prevStatus);
         throw new Error(json.error || "Не удалось сохранить");
       }
 
-      if (json.profile?.passport_url) {
-        setPreviewUrl(json.profile.passport_url);
+      const profile = json.profile;
+      if (profile) {
+        setLastName(profile.last_name || lastName);
+        setFirstName(profile.first_name || firstName);
+        setMiddleName(profile.middle_name || middleName);
+        setPhone(profile.phone || phone);
+        setTelegram(profile.telegram || telegram);
+        if (profile.passport_url) setPreviewUrl(profile.passport_url);
+        setVerificationStatus(
+          normalizeVerificationStatus(profile.verification),
+        );
       }
       setPassportFile(null);
-      setVerificationStatus(
-        (json.profile?.verification as VerificationStatus) || "on_check",
-      );
       alert("Данные успешно сохранены и отправлены на проверку!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Ошибка при отправке анкеты:", err);
-      alert(`Произошла ошибка: ${err.message || "Неизвестная ошибка"}`);
+      alert(
+        `Произошла ошибка: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`,
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Экран загрузки первичных данных
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50/50 dark:bg-zinc-950">
@@ -196,12 +222,11 @@ export default function ProfilePage() {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen bg-gray-50/50 py-12 dark:bg-zinc-950 text-gray-900 dark:text-zinc-50">
-      {/* Контейнер на всю ширину (max-w-4xl) */}
       <div className="mx-auto max-w-4xl w-full px-4 sm:px-6">
-        {/* Статус: НА ПРОВЕРКЕ */}
-        {verificationStatus === "on_check" && (
+        {verificationStatus === "pending" && (
           <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-6 text-center shadow-sm dark:border-blue-900/30 dark:bg-blue-950/20 mb-6">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400">
               <Clock className="h-6 w-6 animate-pulse" />
@@ -216,7 +241,19 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Статус: ПОДТВЕРЖДЕНО */}
+        {verificationStatus === "rejected" && (
+          <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-6 text-center shadow-sm dark:border-rose-900/30 dark:bg-rose-950/20 mb-6">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/50 dark:text-rose-400">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold">Анкета отклонена</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400 max-w-md mx-auto">
+              Проверьте данные и фото паспорта, при необходимости исправьте и
+              отправьте анкету повторно. Ранее введённые поля сохранены.
+            </p>
+          </div>
+        )}
+
         {verificationStatus === "verified" && (
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-6 text-center shadow-sm dark:border-emerald-900/30 dark:bg-emerald-950/20 mb-6">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400">
@@ -232,7 +269,6 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Основная карточка анкеты */}
         <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm dark:border-zinc-900 dark:bg-zinc-900/50">
           <div className="flex items-center space-x-3 border-b border-gray-100 pb-5 dark:border-zinc-800">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFDD2D]/10 text-zinc-900 dark:text-[#FFDD2D]">
@@ -248,7 +284,6 @@ export default function ProfilePage() {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-5">
-            {/* Фамилия */}
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
                 Фамилия
@@ -256,7 +291,7 @@ export default function ProfilePage() {
               <input
                 type="text"
                 required
-                disabled={verificationStatus !== "not_started"}
+                disabled={!editable}
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Иванов"
@@ -264,7 +299,6 @@ export default function ProfilePage() {
               />
             </div>
 
-            {/* Имя */}
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
                 Имя
@@ -272,7 +306,7 @@ export default function ProfilePage() {
               <input
                 type="text"
                 required
-                disabled={verificationStatus !== "not_started"}
+                disabled={!editable}
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Иван"
@@ -280,14 +314,13 @@ export default function ProfilePage() {
               />
             </div>
 
-            {/* Отчество */}
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
                 Отчество
               </label>
               <input
                 type="text"
-                disabled={verificationStatus !== "not_started"}
+                disabled={!editable}
                 value={middleName}
                 onChange={(e) => setMiddleName(e.target.value)}
                 placeholder="Иванович"
@@ -295,7 +328,6 @@ export default function ProfilePage() {
               />
             </div>
 
-            {/* Телефон */}
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
                 Телефон
@@ -305,7 +337,7 @@ export default function ProfilePage() {
                 <input
                   type="tel"
                   required
-                  disabled={verificationStatus !== "not_started"}
+                  disabled={!editable}
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+7 (999) 000-00-00"
@@ -314,7 +346,6 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Telegram */}
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
                 Telegram
@@ -324,7 +355,7 @@ export default function ProfilePage() {
                 <input
                   type="text"
                   required
-                  disabled={verificationStatus !== "not_started"}
+                  disabled={!editable}
                   value={telegram}
                   onChange={(e) => setTelegram(e.target.value)}
                   placeholder="@username"
@@ -332,7 +363,7 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-            {/* Поле загрузки паспорта */}
+
             <div className="pt-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300">
                 Фото паспорта рядом с лицом
@@ -342,7 +373,7 @@ export default function ProfilePage() {
                 документа должен быть читаемым.
               </p>
 
-              {verificationStatus === "not_started" ? (
+              {editable ? (
                 <div className="mt-3">
                   {!previewUrl ? (
                     <label className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-6 text-center transition-all hover:border-[#FFDD2D] hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900/30 dark:hover:border-[#FFDD2D]">
@@ -356,7 +387,7 @@ export default function ProfilePage() {
                       <input
                         type="file"
                         accept="image/*"
-                        required
+                        required={!previewUrl}
                         className="hidden"
                         onChange={handleFileChange}
                       />
@@ -392,7 +423,6 @@ export default function ProfilePage() {
                   )}
                 </div>
               ) : (
-                /* Если анкета заблокирована — просто показываем превью отправленного фото */
                 <div className="mt-3 space-y-4">
                   <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-zinc-400 bg-gray-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-gray-100 dark:border-zinc-800">
                     <FileText className="h-4 w-4 text-emerald-500" />
@@ -414,8 +444,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Кнопка отправки формы */}
-            {verificationStatus === "not_started" && (
+            {editable && (
               <Button
                 type="submit"
                 disabled={
@@ -430,7 +459,9 @@ export default function ProfilePage() {
               >
                 {isSubmitting
                   ? "Отправка..."
-                  : "Сохранить и отправить на проверку"}
+                  : verificationStatus === "rejected"
+                    ? "Исправить и отправить снова"
+                    : "Сохранить и отправить на проверку"}
               </Button>
             )}
           </form>
