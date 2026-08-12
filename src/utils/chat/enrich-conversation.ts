@@ -23,7 +23,7 @@ export async function enrichConversations(
     { data: [], error: null } as any,
   );
 
-  const byId = new Map(
+  const byId = new Map<string, Record<string, unknown>>(
     (profiles ?? []).map((p: Record<string, unknown>) => [String(p.id), p]),
   );
 
@@ -42,9 +42,13 @@ export async function enrichConversations(
       status: String(row.status),
       user: user
         ? {
-            email: String(user.email ?? ""),
-            first_name: (user.first_name as string | null) ?? null,
-            last_name: (user.last_name as string | null) ?? null,
+            email: String(
+              typeof user.email === "string" ? user.email : "",
+            ),
+            first_name:
+              typeof user.first_name === "string" ? user.first_name : null,
+            last_name:
+              typeof user.last_name === "string" ? user.last_name : null,
           }
         : undefined,
       operator: buildOperatorMeta(row, operatorProfile),
