@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
-import { CRYPTO_CURRENCIES } from "@/src/utils/exchange-currencies";
+import { CRYPTO_ASSETS } from "@/src/utils/exchange-currencies";
 import { applyBuySpread, applySellSpread } from "@/src/utils/market-rates";
 
 type RateRow = { symbol: string; exchange_price: number };
@@ -62,17 +62,20 @@ export default function ExchangeRates() {
 
   const usdtMid = rates["USDTUSDT"] || 0;
 
-  const rows = CRYPTO_CURRENCIES.map((crypto) => {
-    const midUsdt = rates[crypto.bybitSymbol || ""] || 0;
+  const rows = CRYPTO_ASSETS.map((asset) => {
+    const midUsdt = rates[asset.bybitSymbol || ""] || 0;
     const rubPerCoin =
-      crypto.bybitSymbol === "USDTUSDT"
+      asset.bybitSymbol === "USDTUSDT"
         ? usdtMid
         : midUsdt > 0 && usdtMid > 0
           ? midUsdt * usdtMid
           : 0;
 
     return {
-      ...crypto,
+      id: asset.id,
+      code: asset.code,
+      name: asset.name,
+      iconSrc: asset.iconSrc,
       buy: rubPerCoin > 0 ? applyBuySpread(rubPerCoin) : 0,
       sell: rubPerCoin > 0 ? applySellSpread(rubPerCoin) : 0,
     };

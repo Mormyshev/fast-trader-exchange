@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,14 +13,22 @@ import {
   Menu,
   LogOut,
   ExternalLink,
+  MessageCircle,
+  UserCog,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
 import { useAuth } from "@/src/app/context/AuthContext";
+import { createClient } from "@/src/utils/supabase/client";
+import { subscribeSupportInbox } from "@/src/utils/supabase/support-inbox";
+import type { ChatConversation } from "@/src/utils/chat/types";
 
 const pageTitles: { [key: string]: string } = {
   "/operator/dashboard": "Дашборд статистики",
   "/operator/orders": "Активные ордера",
   "/operator/verification": "Проверка анкет",
+  "/operator/support": "Чат поддержки",
+  "/operator/profile": "Профиль оператора",
   "/admin/manage-operators": "Управление персоналом",
   "/admin/settings": "Настройки системы",
 };
@@ -35,15 +43,71 @@ function getPageTitle(pathname: string) {
 interface StaffLayoutClientProps {
   children: React.ReactNode;
   role: string;
+  initialOperatorPseudonym?: string | null;
 }
 
 export default function StaffLayoutClient({
   children,
   role,
+  initialOperatorPseudonym = null,
 }: StaffLayoutClientProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [pendingChats, setPendingChats] = useState(0);
+  const [operatorPseudonym, setOperatorPseudonym] = useState(
+    initialOperatorPseudonym,
+  );
   const pathname = usePathname();
-  const { logoutUser } = useAuth(); // Оставляем только для функции выхода
+  const { logoutUser } = useAuth();
+
+  const loadPendingChats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/chat/conversations");
+      const data = await res.json();
+      if (!res.ok) return;
+
+      const unassigned = ((data.conversations ?? []) as ChatConversation[]).filter(
+        (c) => !c.operator_id,
+      ).length;
+      setPendingChats(unassigned);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    setOperatorPseudonym(initialOperatorPseudonym);
+  }, [initialOperatorPseudonym]);
+
+  useEffect(() => {
+    const handleProfileUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ pseudonym?: string | null }>)
+        .detail;
+      const value = detail?.pseudonym?.trim();
+      setOperatorPseudonym(value || null);
+    };
+
+    window.addEventListener("operator-profile-updated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("operator-profile-updated", handleProfileUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    void loadPendingChats();
+
+    const supabase = createClient();
+    const channel = subscribeSupportInbox(supabase, {
+      onMessage: () => void loadPendingChats(),
+      onConversation: () => void loadPendingChats(),
+    });
+
+    const interval = setInterval(() => void loadPendingChats(), 30_000);
+
+    return () => {
+      clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [loadPendingChats]);
 
   const isAdmin = role === "admin";
   const currentTitle = getPageTitle(pathname);
@@ -111,6 +175,44 @@ export default function StaffLayoutClient({
             >
               <UserCheck className="w-4 h-4" />
               Проверка анкет
+            </Link>
+
+            <Link
+              href="/operator/support"
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer relative ${
+                pathname === "/operator/support"
+                  ? "bg-[#FFDD2D] text-zinc-900"
+                  : pendingChats > 0
+                    ? "bg-amber-50 text-amber-950 border border-amber-200 shadow-[0_0_0_1px_rgba(251,191,36,0.25)]"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+              }`}
+              onClick={handleNavClick}
+            >
+              <span className="relative shrink-0">
+                <MessageCircle className="w-4 h-4" />
+                {pendingChats > 0 && pathname !== "/operator/support" && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white animate-pulse" />
+                )}
+              </span>
+              <span className="flex-1">Чат поддержки</span>
+              {pendingChats > 0 && (
+                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                  {pendingChats}
+                </span>
+              )}
+            </Link>
+
+            <Link
+              href="/operator/profile"
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                pathname === "/operator/profile"
+                  ? "bg-[#FFDD2D] text-zinc-900"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+              }`}
+              onClick={handleNavClick}
+            >
+              <UserCog className="w-4 h-4" />
+              Профиль оператора
             </Link>
 
             {/* АДМИНСКИЙ БЛОК */}
@@ -181,19 +283,37 @@ export default function StaffLayoutClient({
             </h2>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3 border-r border-zinc-200 pr-6 hidden sm:flex">
-              <div className="text-right">
-                <p className="text-sm font-bold text-zinc-800 leading-none">
-                  {isAdmin ? "Администратор" : "Оператор #01"}
-                </p>
-                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mt-1 block">
-                  Онлайн
-                </span>
-              </div>
-              <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 shrink-0 select-none">
-                <User className="w-4 h-4" />
-              </div>
+          <div className="flex items-center gap-4 md:gap-6">
+            <div className="flex items-center gap-3 border-r border-zinc-200 pr-4 md:pr-6">
+              {operatorPseudonym ? (
+                <>
+                  <div className="text-right min-w-0">
+                    <p className="text-sm font-bold text-zinc-800 leading-none truncate max-w-[140px] sm:max-w-[200px]">
+                      {operatorPseudonym}
+                    </p>
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mt-1 block">
+                      {isAdmin ? "Администратор" : "Оператор"} · Онлайн
+                    </span>
+                  </div>
+                  <OperatorAvatar
+                    name={operatorPseudonym}
+                    size="sm"
+                    className="w-9 h-9"
+                  />
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/operator/profile"
+                    className="inline-flex items-center rounded-full bg-[#FFDD2D] px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-bold text-zinc-900 shadow-[0_0_16px_rgba(255,221,45,0.55)] ring-2 ring-amber-300/60 animate-pulse hover:bg-[#e6c628] transition-colors whitespace-nowrap"
+                  >
+                    Заполнить информацию
+                  </Link>
+                  <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 shrink-0 select-none">
+                    <User className="w-4 h-4" />
+                  </div>
+                </>
+              )}
             </div>
 
             <Button

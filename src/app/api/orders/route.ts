@@ -6,6 +6,14 @@ import {
   broadcastOrderEvent,
   ORDER_CREATED_EVENT,
 } from "@/src/utils/supabase/broadcast";
+import {
+  isCryptoOrderCode,
+  orderCodeToCurrencyId,
+  validatePayoutDetails,
+} from "@/src/utils/validation";
+
+const MIN_RUB = 1000;
+const MAX_RUB = 15000000;
 
 export async function POST(request: Request) {
   try {
@@ -24,13 +32,46 @@ export async function POST(request: Request) {
     const amountFrom = Number(body.amount_from);
     const amountTo = Number(body.amount_to);
     const walletTo = String(body.wallet_to || "").trim();
+    const currencyTo = String(body.currency_to || "USDT_TRC20");
+    const currencyFrom = String(body.currency_from || "RUB");
 
-    if (!walletTo || Number.isNaN(amountFrom) || Number.isNaN(amountTo)) {
+    if (Number.isNaN(amountFrom) || Number.isNaN(amountTo)) {
       return NextResponse.json(
-        { error: "Некорректные данные заявки" },
+        { error: "Некорректная сумма обмена" },
         { status: 400 },
       );
     }
+
+    if (amountFrom <= 0 || amountTo <= 0) {
+      return NextResponse.json(
+        { error: "Сумма должна быть больше нуля" },
+        { status: 400 },
+      );
+    }
+
+    const receiveCrypto = isCryptoOrderCode(currencyTo);
+    const sendCrypto = isCryptoOrderCode(currencyFrom);
+    const rubAmount = sendCrypto ? amountTo : amountFrom;
+
+    if (rubAmount < MIN_RUB || rubAmount > MAX_RUB) {
+      return NextResponse.json(
+        {
+          error: `Сумма в рублях должна быть от ${MIN_RUB.toLocaleString("ru-RU")} до ${MAX_RUB.toLocaleString("ru-RU")}`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const walletCheck = validatePayoutDetails(
+      walletTo,
+      orderCodeToCurrencyId(currencyTo),
+      receiveCrypto,
+    );
+    if (!walletCheck.ok) {
+      return NextResponse.json({ error: walletCheck.error }, { status: 400 });
+    }
+
+    const normalizedWallet = walletCheck.value;
 
     const admin = createAdminClient();
 
@@ -57,12 +98,12 @@ export async function POST(request: Request) {
           user_id: user.id,
           status: "pending",
           operator_id: null,
-          currency_from: body.currency_from || "RUB",
-          currency_to: body.currency_to || "USDT_TRC20",
+          currency_from: currencyFrom,
+          currency_to: currencyTo,
           amount_from: amountFrom,
           amount_to: amountTo,
           wallet_from: null,
-          wallet_to: walletTo,
+          wallet_to: normalizedWallet,
           tx_hash: null,
         },
       ])

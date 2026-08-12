@@ -5,6 +5,12 @@ import { X, RefreshCw } from "lucide-react";
 import { useLenis } from "lenis/react";
 import { createClient } from "@/src/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import {
+  validateEmail,
+  validatePassword,
+  validatePasswordConfirm,
+  validateUsername,
+} from "@/src/utils/validation";
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -90,13 +96,37 @@ export default function RegisterModal({
       return;
     }
 
+    const usernameCheck = validateUsername(login);
+    if (!usernameCheck.ok) {
+      setError(usernameCheck.error);
+      return;
+    }
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) {
+      setError(emailCheck.error);
+      return;
+    }
+
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.ok) {
+      setError(passwordCheck.error);
+      return;
+    }
+
+    const confirmCheck = validatePasswordConfirm(password, passwordConfirm);
+    if (!confirmCheck.ok) {
+      setError(confirmCheck.error);
+      return;
+    }
+
     setIsLoading(true);
 
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
+      email: emailCheck.value,
+      password: passwordCheck.value,
       options: {
-        data: { username: login },
+        data: { username: usernameCheck.value },
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, MessageCircle } from "lucide-react";
+import { Mail } from "lucide-react";
+import ChatWidget from "@/src/components/Chat/ChatWidget";
+
+const TELEGRAM_URL = "https://t.me/FastTraderExchange";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -9,14 +12,7 @@ export default function Footer() {
   return (
     <footer className="w-full bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-900 pt-12 pb-10 md:pt-16 md:pb-12 transition-colors duration-200 relative">
       <div className="fixed bottom-6 right-6 z-50">
-        <a
-          href="mailto:hello@aurumswap.demo"
-          className="w-14 h-14 bg-[#FFDD2D] hover:bg-[#e6c628] rounded-full flex items-center justify-center text-zinc-900 shadow-xl hover:scale-110 active:scale-95 transition-all duration-200 relative group"
-          aria-label="Написать в поддержку"
-        >
-          <span className="absolute inset-0 rounded-full bg-[#FFDD2D]/40 animate-ping pointer-events-none group-hover:opacity-0 transition-opacity" />
-          <MessageCircle className="w-6 h-6 fill-zinc-900 stroke-none relative z-10" />
-        </a>
+        <ChatWidget />
       </div>
 
       <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
@@ -43,18 +39,49 @@ export default function Footer() {
           </div>
 
           <div className="grid grid-cols-2 gap-x-6 gap-y-6 w-full md:flex md:flex-row md:justify-start md:gap-12 lg:gap-20">
-            <div className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400">
-              <span>Пользовательское соглашение</span>
-              <span>Проверить адрес перед обменом</span>
-              <span>AML/KYC</span>
-            </div>
+            <nav
+              className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400"
+              aria-label="Правовая информация"
+            >
+              <Link
+                href="/tos"
+                className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              >
+                Пользовательское соглашение
+              </Link>
+              <Link
+                href="/legal/verify-address"
+                className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              >
+                Проверить адрес перед обменом
+              </Link>
+              <Link
+                href="/legal/aml-kyc"
+                className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              >
+                AML/KYC
+              </Link>
+            </nav>
 
-            <div className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400">
-              <span>Сообщество в телеграм</span>
-              <span className="leading-normal">
+            <nav
+              className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400"
+              aria-label="Сообщество и конфиденциальность"
+            >
+              <a
+                href={TELEGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              >
+                Сообщество в телеграм
+              </a>
+              <Link
+                href="/legal/privacy"
+                className="leading-normal hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              >
                 Пользовательское соглашение по обработке персональных данных
-              </span>
-            </div>
+              </Link>
+            </nav>
           </div>
 
           <div className="w-full md:w-auto flex justify-start md:justify-end shrink-0 pt-2 md:pt-0">

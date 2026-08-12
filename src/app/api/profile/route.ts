@@ -4,6 +4,7 @@ import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { broadcastVerificationEvent } from "@/src/utils/supabase/broadcast-verification";
+import { validateProfileFormFields } from "@/src/utils/validation";
 
 export async function GET() {
   try {
@@ -104,6 +105,59 @@ export async function PATCH(request: Request) {
         { error: "Заполните все обязательные поля" },
         { status: 400 },
       );
+    }
+
+    const profileValidation = validateProfileFormFields(
+      {
+        lastName,
+        firstName,
+        middleName,
+        phone,
+        telegram,
+      },
+      { hasPassport: Boolean(file || passportUrl) },
+    );
+
+    if (!profileValidation.ok) {
+      const firstError =
+        profileValidation.errors.lastName ||
+        profileValidation.errors.firstName ||
+        profileValidation.errors.middleName ||
+        profileValidation.errors.phone ||
+        profileValidation.errors.telegram ||
+        profileValidation.errors.passport ||
+        "Некорректные данные";
+      return NextResponse.json({ error: firstError }, { status: 400 });
+    }
+
+    ({
+      lastName,
+      firstName,
+      middleName,
+      phone,
+      telegram,
+    } = {
+      lastName: profileValidation.values.lastName,
+      firstName: profileValidation.values.firstName,
+      middleName: profileValidation.values.middleName,
+      phone: profileValidation.values.phone,
+      telegram: profileValidation.values.telegram,
+    });
+
+    if (file) {
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+      if (!allowedTypes.includes(file.type)) {
+        return NextResponse.json(
+          { error: "Паспорт: загрузите JPG, PNG или WEBP" },
+          { status: 400 },
+        );
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: "Файл слишком большой (макс. 10 МБ)" },
+          { status: 400 },
+        );
+      }
     }
 
     if (file) {

@@ -1,0 +1,434 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Loader2, Paperclip, Send } from "lucide-react";
+import { createClient } from "@/src/utils/supabase/client";
+import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
+import type { ChatConversation, ChatMessage } from "@/src/utils/chat/types";
+import { MAX_CHAT_ATTACHMENT_BYTES } from "@/src/utils/chat/types";
+import OperatorAvatar from "./OperatorAvatar";
+import { Button } from "@/components/ui/button";
+
+type ChatPanelProps = {
+  conversationId: string;
+  mode: "user" | "operator";
+  conversation?: ChatConversation | null;
+  onConversationChange?: (conversation: ChatConversation) => void;
+  showClaimButton?: boolean;
+  onClaim?: () => Promise<void>;
+  canReply?: boolean;
+  currentOperatorId?: string | null;
+};
+
+function getOperatorDisplayName(conversation?: ChatConversation | null) {
+  const pseudonym = conversation?.operator?.operator_pseudonym?.trim();
+  return pseudonym || null;
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function ChatPanel({
+  conversationId,
+  mode,
+  conversation,
+  onConversationChange,
+  showClaimButton,
+  onClaim,
+  canReply = true,
+  currentOperatorId = null,
+}: ChatPanelProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [claiming, setClaiming] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const operatorName = getOperatorDisplayName(conversation);
+  const isAssignedToMe =
+    mode === "operator" &&
+    !!conversation?.operator_id &&
+    !!currentOperatorId &&
+    conversation.operator_id === currentOperatorId;
+  const isAssignedToOther =
+    mode === "operator" &&
+    !!conversation?.operator_id &&
+    !!currentOperatorId &&
+    conversation.operator_id !== currentOperatorId;
+  const assignedStaffName =
+    conversation?.assigned_operator?.operator_pseudonym?.trim() || null;
+  const canSend =
+    mode === "user" ||
+    (canReply && (!conversation?.operator_id || isAssignedToMe));
+  const canTakeDialog =
+    !!showClaimButton &&
+    canReply &&
+    !!onClaim &&
+    (!conversation?.operator_id || isAssignedToOther);
+  const takeDialogLabel = conversation?.operator_id
+    ? "Взять диалог на себя"
+    : "Взять в работу";
+
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  const loadMessages = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/chat/conversations/${conversationId}/messages`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+      setMessages(data.messages ?? []);
+      if (data.conversation && onConversationChange) {
+        onConversationChange(data.conversation);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка загрузки");
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationId, onConversationChange]);
+
+  useEffect(() => {
+    void loadMessages();
+  }, [loadMessages]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`chat-messages-${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        () => {
+          void loadMessages();
+        },
+      );
+
+    void subscribeWithAuth(supabase, channel);
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [conversationId, loadMessages]);
+
+  const sendText = async () => {
+    const body = text.trim();
+    if (!body || sending) return;
+
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/chat/conversations/${conversationId}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Не удалось отправить");
+      setText("");
+      setMessages((prev) => [...prev, data.message]);
+      void loadMessages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка отправки");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const sendFile = async (file: File) => {
+    if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+      setError("Файл слишком большой (макс. 10 МБ)");
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      if (text.trim()) form.append("body", text.trim());
+
+      const res = await fetch(
+        `/api/chat/conversations/${conversationId}/attachments`,
+        { method: "POST", body: form },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Не удалось загрузить файл");
+      setText("");
+      setMessages((prev) => [...prev, data.message]);
+      void loadMessages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка загрузки");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleClaim = async () => {
+    if (!onClaim || claiming) return;
+    setClaiming(true);
+    setError(null);
+    try {
+      await onClaim();
+      await loadMessages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось взять чат");
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full min-h-0 bg-[#FFFDE7] dark:bg-amber-950/20 rounded-2xl border border-amber-200/70 dark:border-amber-900/40 overflow-hidden shadow-[0_8px_24px_rgba(255,221,45,0.08)]">
+      <div className="px-4 py-3 border-b border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] dark:from-amber-950/40 dark:to-amber-950/20 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {mode === "user" ? (
+            operatorName ? (
+              <>
+                <OperatorAvatar name={operatorName} size="sm" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                    {operatorName}
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold">
+                    Оператор поддержки
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Поддержка Aurum Swap
+                </p>
+                <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
+                  Ожидайте оператора
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                {conversation?.user?.email ?? "Клиент"}
+              </p>
+              <p className="text-xs text-zinc-500 truncate">
+                {!conversation?.operator_id
+                  ? "Не назначен"
+                  : isAssignedToMe
+                    ? "Ваш диалог"
+                    : assignedStaffName
+                      ? `В работе у: ${assignedStaffName}`
+                      : "В работе у другого оператора"}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {canTakeDialog && (
+          <Button
+            size="sm"
+            onClick={() => void handleClaim()}
+            disabled={claiming}
+            className="rounded-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 font-bold shrink-0"
+          >
+            {claiming ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              takeDialogLabel
+            )}
+          </Button>
+        )}
+      </div>
+
+      {!canReply && mode === "operator" && (
+        <div className="px-4 py-3 bg-amber-100/80 border-b border-amber-200/70 text-sm text-amber-950">
+          Заполните{" "}
+          <Link
+            href="/operator/profile"
+            className="font-bold underline underline-offset-2"
+          >
+            профиль оператора
+          </Link>
+          , чтобы отвечать в чате.
+        </div>
+      )}
+
+      {isAssignedToOther && (
+        <div className="px-4 py-3 bg-zinc-100 border-b border-zinc-200 text-sm text-zinc-700">
+          {assignedStaffName
+            ? `Диалог в работе у ${assignedStaffName}.`
+            : "Диалог в работе у другого оператора."}{" "}
+          Нажмите «Взять диалог на себя», чтобы ответить.
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0 bg-[#FFFEEB]/50 dark:bg-zinc-950/30">
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="w-6 h-6 animate-spin text-[#FFDD2D]" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="rounded-2xl border border-amber-200/50 bg-white/70 dark:bg-zinc-900/50 px-4 py-6 text-center">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Напишите сообщение — оператор ответит в ближайшее время.
+            </p>
+          </div>
+        ) : (
+          messages.map((message) => {
+            const isMine =
+              mode === "user"
+                ? message.sender_id === conversation?.user_id
+                : message.sender_id !== conversation?.user_id;
+
+            return (
+              <div
+                key={message.id}
+                className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+                    isMine
+                      ? "bg-[#FFDD2D] text-zinc-900 border border-[#e6c628]/30"
+                      : "bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-amber-100 dark:border-amber-900/30"
+                  }`}
+                >
+                  {message.body && (
+                    <p className="whitespace-pre-wrap break-words">
+                      {message.body}
+                    </p>
+                  )}
+                  {message.attachment_url && (
+                    <div className="mt-2">
+                      {message.attachment_type?.startsWith("video/") ? (
+                        <video
+                          controls
+                          className="max-w-full rounded-lg max-h-48"
+                          src={message.attachment_url}
+                        />
+                      ) : message.attachment_type?.startsWith("image/") ? (
+                        <a
+                          href={message.attachment_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={message.attachment_url}
+                            alt={message.attachment_name ?? "attachment"}
+                            className="max-w-full rounded-lg max-h-48 object-cover"
+                          />
+                        </a>
+                      ) : (
+                        <a
+                          href={message.attachment_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline font-semibold break-all"
+                        >
+                          {message.attachment_name ?? "Файл"}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[10px] opacity-60 mt-1 text-right">
+                    {formatTime(message.created_at)}
+                  </p>
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {error && (
+        <p className="px-4 pb-2 text-xs text-rose-600 font-medium bg-rose-50 border-t border-rose-100">
+          {error}
+        </p>
+      )}
+
+      <div
+        className={`border-t border-amber-200/60 dark:border-amber-900/40 bg-[#FFFDE7] dark:bg-amber-950/30 p-3 flex items-end gap-2 ${
+          !canSend ? "opacity-60 pointer-events-none" : ""
+        }`}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          accept="image/*,video/*,application/pdf"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void sendFile(file);
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="rounded-full shrink-0 border-amber-200 bg-white hover:bg-[#FFF3B0] hover:border-[#FFDD2D]"
+          disabled={uploading || sending}
+          onClick={() => fileRef.current?.click()}
+          aria-label="Прикрепить файл"
+        >
+          {uploading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Paperclip className="w-4 h-4" />
+          )}
+        </Button>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void sendText();
+            }
+          }}
+          rows={1}
+          placeholder="Сообщение..."
+          className="flex-1 min-h-[44px] max-h-28 resize-none rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-white dark:bg-zinc-900 px-4 py-3 text-sm focus:outline-none focus:border-[#FFDD2D] focus:ring-2 focus:ring-[#FFDD2D]/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]"
+        />
+        <Button
+          type="button"
+          size="icon"
+          className="rounded-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shrink-0 shadow-md"
+          disabled={sending || uploading || !text.trim()}
+          onClick={() => void sendText()}
+          aria-label="Отправить"
+        >
+          {sending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}

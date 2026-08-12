@@ -20,7 +20,11 @@ export default async function StaffLayout({
   // role через admin — не зависит от RLS и браузерного REST
   const admin = createAdminClient();
   const { data: profile } = await withTimeout(
-    admin.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+    admin
+      .from("profiles")
+      .select("role, operator_pseudonym")
+      .eq("id", user.id)
+      .maybeSingle(),
     5000,
     { data: null, error: null } as any,
   );
@@ -31,5 +35,11 @@ export default async function StaffLayout({
     redirect("/user/dashboard");
   }
 
-  return <StaffLayoutClient role={role}>{children}</StaffLayoutClient>;
+  const operatorPseudonym = profile?.operator_pseudonym?.trim() || null;
+
+  return (
+    <StaffLayoutClient role={role} initialOperatorPseudonym={operatorPseudonym}>
+      {children}
+    </StaffLayoutClient>
+  );
 }

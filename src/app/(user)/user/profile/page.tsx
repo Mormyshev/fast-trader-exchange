@@ -21,6 +21,23 @@ import {
   normalizeVerificationStatus,
   type VerificationStatus,
 } from "@/src/utils/verification";
+import {
+  formatTelegramInput,
+  validateProfileFormField,
+  validateProfileFormFields,
+  type ProfileFormErrors,
+} from "@/src/utils/validation";
+
+function inputClass(hasError: boolean, base: string) {
+  return hasError
+    ? `${base} border-red-400 focus:border-red-500`
+    : base;
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-xs font-medium text-red-500">{message}</p>;
+}
 
 const supabase = createClient();
 
@@ -40,6 +57,8 @@ export default function ProfilePage() {
 
   const [passportFile, setPassportFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<ProfileFormErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
 
   const editable = canEditVerification(verificationStatus);
 
@@ -126,6 +145,22 @@ export default function ProfilePage() {
     };
   }, [user?.id]);
 
+  const getFormInput = () => ({
+    lastName,
+    firstName,
+    middleName,
+    phone,
+    telegram,
+  });
+
+  const touchField = (field: Exclude<keyof ProfileFormErrors, "passport">) => {
+    const result = validateProfileFormField(field, getFormInput());
+    setFieldErrors((prev) => ({
+      ...prev,
+      [field]: result && !result.ok ? result.error : undefined,
+    }));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
 
@@ -141,6 +176,7 @@ export default function ProfilePage() {
 
       setPassportFile(file);
       setPreviewUrl(URL.createObjectURL(file));
+      setFieldErrors((prev) => ({ ...prev, passport: undefined }));
     }
   };
 
@@ -157,21 +193,32 @@ export default function ProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return alert("Пользователь не авторизован");
-    if (!lastName || !firstName || !phone || !telegram)
-      return alert("Заполните все обязательные поля");
-    if (!passportFile && !previewUrl)
-      return alert("Пожалуйста, загрузите фото паспорта");
 
+    const validation = validateProfileFormFields(getFormInput(), {
+      hasPassport: Boolean(passportFile || previewUrl),
+    });
+
+    if (!validation.ok) {
+      setFieldErrors(validation.errors);
+      setFormError(
+        Object.values(validation.errors).find(Boolean) ||
+          "Проверьте заполнение полей",
+      );
+      return;
+    }
+
+    setFieldErrors({});
+    setFormError(null);
     setIsSubmitting(true);
     const prevStatus = verificationStatus;
 
     try {
       const form = new FormData();
-      form.append("last_name", lastName);
-      form.append("first_name", firstName);
-      form.append("middle_name", middleName);
-      form.append("phone", phone);
-      form.append("telegram", telegram);
+      form.append("last_name", validation.values.lastName);
+      form.append("first_name", validation.values.firstName);
+      form.append("middle_name", validation.values.middleName);
+      form.append("phone", validation.values.phone);
+      form.append("telegram", validation.values.telegram);
       if (previewUrl && !passportFile && previewUrl.startsWith("http")) {
         form.append("passport_url", previewUrl);
       }
@@ -284,6 +331,12 @@ export default function ProfilePage() {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+            {formError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {formError}
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
                 Фамилия
@@ -293,10 +346,20 @@ export default function ProfilePage() {
                 required
                 disabled={!editable}
                 value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                onChange={(e) => {
+                  setLastName(e.target.value);
+                  if (fieldErrors.lastName) {
+                    setFieldErrors((prev) => ({ ...prev, lastName: undefined }));
+                  }
+                }}
+                onBlur={() => touchField("lastName")}
                 placeholder="Иванов"
-                className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]"
+                className={inputClass(
+                  !!fieldErrors.lastName,
+                  "mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
+                )}
               />
+              <FieldError message={fieldErrors.lastName} />
             </div>
 
             <div>
@@ -308,10 +371,20 @@ export default function ProfilePage() {
                 required
                 disabled={!editable}
                 value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                onChange={(e) => {
+                  setFirstName(e.target.value);
+                  if (fieldErrors.firstName) {
+                    setFieldErrors((prev) => ({ ...prev, firstName: undefined }));
+                  }
+                }}
+                onBlur={() => touchField("firstName")}
                 placeholder="Иван"
-                className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]"
+                className={inputClass(
+                  !!fieldErrors.firstName,
+                  "mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
+                )}
               />
+              <FieldError message={fieldErrors.firstName} />
             </div>
 
             <div>
@@ -322,10 +395,20 @@ export default function ProfilePage() {
                 type="text"
                 disabled={!editable}
                 value={middleName}
-                onChange={(e) => setMiddleName(e.target.value)}
+                onChange={(e) => {
+                  setMiddleName(e.target.value);
+                  if (fieldErrors.middleName) {
+                    setFieldErrors((prev) => ({ ...prev, middleName: undefined }));
+                  }
+                }}
+                onBlur={() => touchField("middleName")}
                 placeholder="Иванович"
-                className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]"
+                className={inputClass(
+                  !!fieldErrors.middleName,
+                  "mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
+                )}
               />
+              <FieldError message={fieldErrors.middleName} />
             </div>
 
             <div>
@@ -339,11 +422,21 @@ export default function ProfilePage() {
                   required
                   disabled={!editable}
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (fieldErrors.phone) {
+                      setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+                    }
+                  }}
+                  onBlur={() => touchField("phone")}
                   placeholder="+7 (999) 000-00-00"
-                  className="block w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]"
+                  className={inputClass(
+                    !!fieldErrors.phone,
+                    "block w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
+                  )}
                 />
               </div>
+              <FieldError message={fieldErrors.phone} />
             </div>
 
             <div>
@@ -357,11 +450,21 @@ export default function ProfilePage() {
                   required
                   disabled={!editable}
                   value={telegram}
-                  onChange={(e) => setTelegram(e.target.value)}
+                  onChange={(e) => {
+                    setTelegram(formatTelegramInput(e.target.value));
+                    if (fieldErrors.telegram) {
+                      setFieldErrors((prev) => ({ ...prev, telegram: undefined }));
+                    }
+                  }}
+                  onBlur={() => touchField("telegram")}
                   placeholder="@username"
-                  className="block w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]"
+                  className={inputClass(
+                    !!fieldErrors.telegram,
+                    "block w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
+                  )}
                 />
               </div>
+              <FieldError message={fieldErrors.telegram} />
             </div>
 
             <div className="pt-2">
@@ -442,6 +545,8 @@ export default function ProfilePage() {
                   )}
                 </div>
               )}
+
+              <FieldError message={fieldErrors.passport} />
             </div>
 
             {editable && (

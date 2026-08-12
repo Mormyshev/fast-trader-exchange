@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import NextLink from "next/link";
-import { Menu, Globe, UserPlus, LogIn, LogOut, User } from "lucide-react";
+import { Menu, UserPlus, LogIn, LogOut, User } from "lucide-react";
 import AuthModal from "../AuthModal/AuthModal";
 import RegisterModal from "../RegisterModal/RegisterModal";
 import { useAuth } from "@/src/app/context/AuthContext";
@@ -70,14 +70,6 @@ export default function Header() {
             </NextLink>
 
             <div className="hidden md:flex items-center space-x-6">
-              <span
-                className="flex items-center space-x-1.5 text-sm font-medium text-gray-600 dark:text-zinc-400"
-                title="Язык интерфейса"
-              >
-                <Globe className="h-4 w-4 text-[#FFDD2D]" />
-                <span>RU</span>
-              </span>
-
               {role === "guest" ? (
                 <div className="flex items-center space-x-3">
                   <Button
@@ -188,11 +180,6 @@ export default function Header() {
                       </div>
                     )}
 
-                    <div className="flex items-center space-x-4 px-3 py-2 border-t border-gray-100 dark:border-zinc-900 mt-2 pt-4">
-                      <span className="text-sm font-medium text-zinc-500">
-                        Язык: RU
-                      </span>
-                    </div>
                   </div>
 
                   <div className="pt-4 border-t border-gray-100 dark:border-zinc-900">

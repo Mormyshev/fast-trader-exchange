@@ -43,12 +43,52 @@ model Profiles {
   phone        String?
   telegram     String?
   passport_url String?
+  operator_pseudonym String?
 
   orders_as_user     Orders[]     @relation("UserOrders")
   orders_as_operator Orders[]     @relation("OperatorOrders")
+  chat_conversations_as_user     ChatConversation[] @relation("UserConversations")
+  chat_conversations_as_operator ChatConversation[] @relation("OperatorConversations")
+  chat_messages      ChatMessage[]
 
   @@index([id, role], name: "idx_profiles_id_role")
   @@map("profiles")
+}
+
+model ChatConversation {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @default(now()) @db.Timestamptz
+  user_id     String   @db.Uuid
+  operator_id String?  @db.Uuid
+  operator_pseudonym_snapshot String?
+  status      String   @default("open")
+
+  user     Profiles      @relation("UserConversations", fields: [user_id], references: [id], onDelete: Cascade)
+  operator Profiles?     @relation("OperatorConversations", fields: [operator_id], references: [id], onDelete: SetNull)
+  messages ChatMessage[]
+
+  @@index([user_id], name: "idx_chat_conversations_user_id")
+  @@index([operator_id], name: "idx_chat_conversations_operator_id")
+  @@index([status, updated_at(sort: Desc)], name: "idx_chat_conversations_status_updated")
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at      DateTime @default(now()) @db.Timestamptz
+  conversation_id String   @db.Uuid
+  sender_id       String   @db.Uuid
+  body            String?
+  attachment_url  String?
+  attachment_name String?
+  attachment_type String?
+
+  conversation ChatConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender       Profiles         @relation(fields: [sender_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id, created_at(sort: Asc)], name: "idx_chat_messages_conversation_id")
+  @@map("chat_messages")
 }
 
 model Orders {

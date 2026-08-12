@@ -8,15 +8,21 @@ import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
 import SlimScroll from "@/src/components/SlimScroll/SlimScroll";
 import {
+  CRYPTO_ASSETS,
   CRYPTO_CURRENCIES,
   FIAT_CURRENCIES,
+  type CryptoAsset,
   type ExchangeCurrency,
   formatAmount,
   formatRateLabel,
+  getAssetForCurrency,
+  getDefaultCryptoCurrency,
   getPairRate,
   isCryptoCurrency,
+  resolveCurrencyVariant,
   sanitizeAmountInput,
 } from "@/src/utils/exchange-currencies";
+import CryptoNetworkSelect from "@/src/components/Exchange/CryptoNetworkSelect";
 
 interface RateRow {
   symbol: string;
@@ -45,6 +51,8 @@ export default function ExchangeCalculator() {
 
   const isSendCrypto = isCryptoCurrency(selectedSend);
   const isReceiveCrypto = isCryptoCurrency(selectedReceive);
+  const sendAsset = isSendCrypto ? getAssetForCurrency(selectedSend) : null;
+  const receiveAsset = isReceiveCrypto ? getAssetForCurrency(selectedReceive) : null;
 
   const allowedSendList = isReceiveCrypto ? FIAT_CURRENCIES : CRYPTO_CURRENCIES;
   const allowedReceiveList = isSendCrypto ? FIAT_CURRENCIES : CRYPTO_CURRENCIES;
@@ -233,7 +241,10 @@ export default function ExchangeCalculator() {
                     size={28}
                   />
                   <span className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">
-                    {selectedSend.name}
+                    {sendAsset?.name ?? selectedSend.name}
+                    {selectedSend.network
+                      ? ` · ${selectedSend.network.shortLabel}`
+                      : ""}
                   </span>
                 </div>
                 <div className="w-6 h-6 rounded-full bg-[#FFDD2D] flex items-center justify-center text-zinc-900 shrink-0">
@@ -247,48 +258,79 @@ export default function ExchangeCalculator() {
                 <div className="absolute left-0 top-full mt-2 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-xl z-50 overflow-hidden">
                   <SlimScroll>
                     <div className="space-y-1 p-2 pr-3">
-                      {allowedSendList.map((currency) => (
-                        <button
-                          key={currency.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSend(currency);
-                            setIsSendDropdownOpen(false);
-
-                            const isNewSendCrypto = isCryptoCurrency(currency);
-                            if (
-                              isNewSendCrypto &&
-                              isCryptoCurrency(selectedReceive)
-                            ) {
-                              setSelectedReceive(FIAT_CURRENCIES[0]);
-                            } else if (
-                              !isNewSendCrypto &&
-                              !isCryptoCurrency(selectedReceive)
-                            ) {
-                              setSelectedReceive(CRYPTO_CURRENCIES[0]);
-                            }
-                          }}
-                          className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors overflow-hidden cursor-pointer ${
-                            selectedSend.id === currency.id
-                              ? "bg-[#FFF3B0] dark:bg-amber-500/20"
-                              : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
-                          }`}
-                        >
-                          <CurrencyIcon
-                            src={currency.iconSrc}
-                            alt={currency.name}
-                            size={28}
-                          />
-                          <span className="text-sm font-medium leading-none text-zinc-900 dark:text-zinc-100 truncate">
-                            {currency.name}
-                          </span>
-                        </button>
-                      ))}
+                      {isReceiveCrypto
+                        ? FIAT_CURRENCIES.map((currency) => (
+                            <button
+                              key={currency.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedSend(currency);
+                                setIsSendDropdownOpen(false);
+                              }}
+                              className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors overflow-hidden cursor-pointer ${
+                                selectedSend.id === currency.id
+                                  ? "bg-[#FFF3B0] dark:bg-amber-500/20"
+                                  : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                              }`}
+                            >
+                              <CurrencyIcon
+                                src={currency.iconSrc}
+                                alt={currency.name}
+                                size={28}
+                              />
+                              <span className="text-sm font-medium leading-none text-zinc-900 dark:text-zinc-100 truncate">
+                                {currency.name}
+                              </span>
+                            </button>
+                          ))
+                        : CRYPTO_ASSETS.map((asset) => (
+                            <button
+                              key={asset.id}
+                              type="button"
+                              onClick={() => {
+                                const next = resolveCurrencyVariant(asset.id);
+                                if (!next) return;
+                                setSelectedSend(next);
+                                setIsSendDropdownOpen(false);
+                                if (
+                                  isCryptoCurrency(next) &&
+                                  isCryptoCurrency(selectedReceive)
+                                ) {
+                                  setSelectedReceive(FIAT_CURRENCIES[0]);
+                                }
+                              }}
+                              className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors overflow-hidden cursor-pointer ${
+                                sendAsset?.id === asset.id
+                                  ? "bg-[#FFF3B0] dark:bg-amber-500/20"
+                                  : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                              }`}
+                            >
+                              <CurrencyIcon
+                                src={asset.iconSrc}
+                                alt={asset.name}
+                                size={28}
+                              />
+                              <span className="text-sm font-medium leading-none text-zinc-900 dark:text-zinc-100 truncate">
+                                {asset.name}
+                              </span>
+                            </button>
+                          ))}
                     </div>
                   </SlimScroll>
                 </div>
               )}
             </div>
+            {sendAsset && (
+              <CryptoNetworkSelect
+                asset={sendAsset}
+                selectedVariantId={selectedSend.id}
+                onSelectVariant={(variantId) => {
+                  const next = resolveCurrencyVariant(sendAsset.id, variantId);
+                  if (next) setSelectedSend(next);
+                }}
+                label="Сеть"
+              />
+            )}
             <div className="relative">
               <input
                 type="text"
@@ -354,7 +396,10 @@ export default function ExchangeCalculator() {
                     size={28}
                   />
                   <span className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">
-                    {selectedReceive.name}
+                    {receiveAsset?.name ?? selectedReceive.name}
+                    {selectedReceive.network
+                      ? ` · ${selectedReceive.network.shortLabel}`
+                      : ""}
                   </span>
                 </div>
                 <div className="w-6 h-6 rounded-full bg-[#FFDD2D] flex items-center justify-center text-zinc-900 shrink-0">
@@ -368,35 +413,76 @@ export default function ExchangeCalculator() {
                 <div className="absolute left-0 top-full mt-2 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-xl z-50 overflow-hidden">
                   <SlimScroll>
                     <div className="space-y-1 p-2 pr-3">
-                      {allowedReceiveList.map((currency) => (
-                        <button
-                          key={currency.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedReceive(currency);
-                            setIsReceiveDropdownOpen(false);
-                          }}
-                          className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors overflow-hidden cursor-pointer ${
-                            selectedReceive.id === currency.id
-                              ? "bg-[#FFF3B0] dark:bg-amber-500/20"
-                              : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
-                          }`}
-                        >
-                          <CurrencyIcon
-                            src={currency.iconSrc}
-                            alt={currency.name}
-                            size={28}
-                          />
-                          <span className="text-sm font-medium leading-none text-zinc-900 dark:text-zinc-100 truncate">
-                            {currency.name}
-                          </span>
-                        </button>
-                      ))}
+                      {isSendCrypto
+                        ? FIAT_CURRENCIES.map((currency) => (
+                            <button
+                              key={currency.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedReceive(currency);
+                                setIsReceiveDropdownOpen(false);
+                              }}
+                              className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors overflow-hidden cursor-pointer ${
+                                selectedReceive.id === currency.id
+                                  ? "bg-[#FFF3B0] dark:bg-amber-500/20"
+                                  : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                              }`}
+                            >
+                              <CurrencyIcon
+                                src={currency.iconSrc}
+                                alt={currency.name}
+                                size={28}
+                              />
+                              <span className="text-sm font-medium leading-none text-zinc-900 dark:text-zinc-100 truncate">
+                                {currency.name}
+                              </span>
+                            </button>
+                          ))
+                        : CRYPTO_ASSETS.map((asset) => (
+                            <button
+                              key={asset.id}
+                              type="button"
+                              onClick={() => {
+                                const next = resolveCurrencyVariant(asset.id);
+                                if (!next) return;
+                                setSelectedReceive(next);
+                                setIsReceiveDropdownOpen(false);
+                              }}
+                              className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors overflow-hidden cursor-pointer ${
+                                receiveAsset?.id === asset.id
+                                  ? "bg-[#FFF3B0] dark:bg-amber-500/20"
+                                  : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                              }`}
+                            >
+                              <CurrencyIcon
+                                src={asset.iconSrc}
+                                alt={asset.name}
+                                size={28}
+                              />
+                              <span className="text-sm font-medium leading-none text-zinc-900 dark:text-zinc-100 truncate">
+                                {asset.name}
+                              </span>
+                            </button>
+                          ))}
                     </div>
                   </SlimScroll>
                 </div>
               )}
             </div>
+            {receiveAsset && (
+              <CryptoNetworkSelect
+                asset={receiveAsset}
+                selectedVariantId={selectedReceive.id}
+                onSelectVariant={(variantId) => {
+                  const next = resolveCurrencyVariant(
+                    receiveAsset.id,
+                    variantId,
+                  );
+                  if (next) setSelectedReceive(next);
+                }}
+                label="Сеть"
+              />
+            )}
             <input
               type="text"
               inputMode="decimal"

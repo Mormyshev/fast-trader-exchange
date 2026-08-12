@@ -28,6 +28,12 @@ export default function ExchangeNotice() {
           Обмен {from.name} на {to.name}
         </h2>
 
+        {to.network && (
+          <p className="text-xs md:text-sm font-semibold text-amber-800 dark:text-amber-300 mb-4 leading-relaxed">
+            Выплата {to.name} — {to.network.label}. {to.network.description}
+          </p>
+        )}
+
         <p className="text-xs md:text-sm font-semibold text-zinc-700 dark:text-zinc-400 mb-4 leading-relaxed">
           Для обмена Вам необходимо выполнить несколько шагов:
         </p>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, RefreshCw } from "lucide-react";
 import { useLenis } from "lenis/react";
 import { loginAndGetRoute } from "@/src/app/actions/auth";
+import { validateEmail, validatePassword } from "@/src/utils/validation";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -70,10 +71,21 @@ export default function AuthModal({
       return;
     }
 
+    const emailCheck = validateEmail(login);
+    if (!emailCheck.ok) {
+      setError(emailCheck.error);
+      return;
+    }
+
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.ok) {
+      setError(passwordCheck.error);
+      return;
+    }
+
     setIsLoading(true);
 
-    // Вызываем серверное действие (Server Action)
-    const result = await loginAndGetRoute(login, password);
+    const result = await loginAndGetRoute(emailCheck.value, passwordCheck.value);
 
     if (result.error) {
       setIsLoading(false);

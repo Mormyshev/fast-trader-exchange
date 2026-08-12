@@ -7,26 +7,62 @@ import Link from "next/link";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
 import SlimScroll from "@/src/components/SlimScroll/SlimScroll";
 import {
+  CRYPTO_ASSETS,
   CRYPTO_CURRENCIES,
   FIAT_CURRENCIES,
+  type CryptoAsset,
   type ExchangeCurrency,
   findCurrencyById,
   formatAmount,
   formatRateLabel,
+  getAssetForCurrency,
+  getDefaultCryptoCurrency,
   getPairRate,
   isCryptoCurrency,
   isFiatCurrency,
+  resolveCurrencyVariant,
   sanitizeAmountInput,
 } from "@/src/utils/exchange-currencies";
+import CryptoAssetPicker from "@/src/components/Exchange/CryptoAssetPicker";
+import CryptoNetworkSelect from "@/src/components/Exchange/CryptoNetworkSelect";
 import {
   isVerificationComplete,
   normalizeVerificationStatus,
   type VerificationStatus,
 } from "@/src/utils/verification";
+import {
+  formatTelegramInput,
+  formatWalletInput,
+  getWalletPlaceholder,
+  ORDER_CITIES,
+  validateOrderFormField,
+  validateOrderFormFields,
+  type OrderFormErrors,
+} from "@/src/utils/validation";
 
 type RateRow = { symbol: string; exchange_price: number };
 
-const CITIES = ["Москва", "Санкт-Петербург", "Новосибирск"] as const;
+function inputClass(hasError: boolean, base: string) {
+  return hasError
+    ? `${base} border-red-400 focus:border-red-500 focus:ring-red-200`
+    : base;
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="text-xs font-semibold text-red-500 pl-4 pt-1">{message}</p>
+  );
+}
+
+function NetworkBadge({ currency }: { currency: ExchangeCurrency }) {
+  if (!currency.network) return null;
+  return (
+    <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-900 border border-amber-200/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shrink-0">
+      {currency.network.shortLabel}
+    </span>
+  );
+}
 
 function CurrencyPicker({
   selected,
@@ -35,6 +71,7 @@ function CurrencyPicker({
   onToggle,
   onSelect,
   containerRef,
+  showNetwork = false,
 }: {
   selected: ExchangeCurrency;
   options: ExchangeCurrency[];
@@ -42,6 +79,7 @@ function CurrencyPicker({
   onToggle: () => void;
   onSelect: (c: ExchangeCurrency) => void;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  showNetwork?: boolean;
 }) {
   return (
     <div className="relative w-full sm:max-w-md" ref={containerRef}>
@@ -52,9 +90,17 @@ function CurrencyPicker({
       >
         <div className="flex items-center space-x-3 min-w-0 flex-1">
           <CurrencyIcon src={selected.iconSrc} alt={selected.name} size={28} />
-          <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate">
-            {selected.name}
-          </span>
+          <div className="min-w-0 flex-1">
+            <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate block">
+              {selected.name}
+            </span>
+            {showNetwork && selected.network && (
+              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 truncate block">
+                Сеть: {selected.network.label}
+              </span>
+            )}
+          </div>
+          {showNetwork && <NetworkBadge currency={selected} />}
         </div>
         <div className="w-7 h-7 rounded-full bg-[#FFDD2D] flex items-center justify-center text-zinc-950 shrink-0">
           <ChevronDown
@@ -83,9 +129,17 @@ function CurrencyPicker({
                     alt={currency.name}
                     size={28}
                   />
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                    {currency.name}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate block">
+                      {currency.name}
+                    </span>
+                    {showNetwork && currency.network && (
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate block">
+                        {currency.network.label}
+                      </span>
+                    )}
+                  </div>
+                  {showNetwork && <NetworkBadge currency={currency} />}
                 </button>
               ))}
             </div>
@@ -121,10 +175,11 @@ export default function OrderForm() {
 
   const [fio, setFio] = useState<string>("");
   const [wallet, setWallet] = useState<string>("");
-  const [city, setCity] = useState<string>(CITIES[0]);
+  const [city, setCity] = useState<string>(ORDER_CITIES[0]);
   const [email, setEmail] = useState<string>("");
   const [telegram, setTelegram] = useState<string>("");
   const [coupon, setCoupon] = useState<string>("");
+  const [fieldErrors, setFieldErrors] = useState<OrderFormErrors>({});
 
   const [agreeAml, setAgreeAml] = useState<boolean>(false);
   const [dontRemember, setDontRemember] = useState<boolean>(false);
@@ -148,8 +203,8 @@ export default function OrderForm() {
   const isReceiveCrypto = isCryptoCurrency(selectedReceive);
   const isCashSelected =
     selectedSend.id === "rub_cash" || selectedReceive.id === "rub_cash";
-  const allowedSendList = isReceiveCrypto ? FIAT_CURRENCIES : CRYPTO_CURRENCIES;
-  const allowedReceiveList = isSendCrypto ? FIAT_CURRENCIES : CRYPTO_CURRENCIES;
+  const sendAsset = isSendCrypto ? getAssetForCurrency(selectedSend) : null;
+  const receiveAsset = isReceiveCrypto ? getAssetForCurrency(selectedReceive) : null;
 
   const pairRate = getPairRate(rates, selectedSend, selectedReceive);
 
@@ -297,45 +352,122 @@ export default function OrderForm() {
       nextReceive = FIAT_CURRENCIES[0];
       setSelectedReceive(nextReceive);
     } else if (!newIsCrypto && isFiatCurrency(selectedReceive)) {
-      nextReceive = CRYPTO_CURRENCIES[0];
+      nextReceive = getDefaultCryptoCurrency();
       setSelectedReceive(nextReceive);
     }
     setIsSendActive(true);
+    setWallet("");
+    setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(currency, nextReceive, sendAmount);
+  };
+
+  const handleSelectSendAsset = (asset: CryptoAsset) => {
+    const next = resolveCurrencyVariant(asset.id);
+    if (!next) return;
+
+    setSelectedSend(next);
+    setIsSendDropdownOpen(false);
+
+    if (isCryptoCurrency(next) && isCryptoCurrency(selectedReceive)) {
+      setSelectedReceive(FIAT_CURRENCIES[0]);
+    } else if (!isCryptoCurrency(next) && isFiatCurrency(selectedReceive)) {
+      setSelectedReceive(getDefaultCryptoCurrency());
+    }
+
+    setIsSendActive(true);
+    syncUrl(next, selectedReceive, sendAmount);
+  };
+
+  const handleSelectSendNetwork = (variantId: string) => {
+    const asset = getAssetForCurrency(selectedSend);
+    if (!asset) return;
+    const next = resolveCurrencyVariant(asset.id, variantId);
+    if (!next) return;
+    setSelectedSend(next);
+    syncUrl(next, selectedReceive, sendAmount);
+  };
+
+  const handleSelectReceiveAsset = (asset: CryptoAsset) => {
+    const next = resolveCurrencyVariant(asset.id);
+    if (!next) return;
+
+    setSelectedReceive(next);
+    setIsReceiveDropdownOpen(false);
+    setIsSendActive(true);
+    setWallet("");
+    setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
+    syncUrl(selectedSend, next, sendAmount);
+  };
+
+  const handleSelectReceiveNetwork = (variantId: string) => {
+    const asset = getAssetForCurrency(selectedReceive);
+    if (!asset) return;
+    const next = resolveCurrencyVariant(asset.id, variantId);
+    if (!next) return;
+    setSelectedReceive(next);
+    setWallet("");
+    setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
+    syncUrl(selectedSend, next, sendAmount);
   };
 
   const handleSelectReceive = (currency: ExchangeCurrency) => {
     setSelectedReceive(currency);
     setIsReceiveDropdownOpen(false);
     setIsSendActive(true);
+    setWallet("");
+    setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, currency, sendAmount);
   };
 
+  const getFormInput = useCallback(
+    () => ({
+      fio,
+      wallet,
+      city,
+      email,
+      telegram,
+      coupon,
+      receiveCurrencyId: selectedReceive.id,
+      isReceiveCrypto,
+      isCashSelected,
+      requireFio: !isSendCrypto,
+    }),
+    [
+      fio,
+      wallet,
+      city,
+      email,
+      telegram,
+      coupon,
+      selectedReceive.id,
+      isReceiveCrypto,
+      isCashSelected,
+      isSendCrypto,
+    ],
+  );
+
+  const touchField = useCallback(
+    (field: keyof OrderFormErrors) => {
+      const result = validateOrderFormField(field, getFormInput());
+      setFieldErrors((prev) => ({
+        ...prev,
+        [field]: result && !result.ok ? result.error : undefined,
+      }));
+    },
+    [getFormInput],
+  );
+
   const handleWalletChange = (val: string) => {
-    if (selectedReceive.id === "usdt_trc20") {
-      if (val === "") {
-        setWallet("");
-        return;
-      }
-      if (!val.startsWith("T")) {
-        setWallet("T" + val.replace(/^T*/, ""));
-      } else {
-        setWallet(val);
-      }
-      return;
+    setWallet(formatWalletInput(val, selectedReceive.id));
+    if (fieldErrors.wallet) {
+      setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     }
-    setWallet(val);
   };
 
   const handleTelegramChange = (val: string) => {
-    if (val === "") {
-      setTelegram("");
-      return;
-    }
-    if (!val.startsWith("@")) {
-      setTelegram("@" + val.replace(/^@*/, ""));
-    } else {
-      setTelegram(val);
+    setTelegram(formatTelegramInput(val));
+    if (fieldErrors.telegram) {
+      setFieldErrors((prev) => ({ ...prev, telegram: undefined }));
     }
   };
 
@@ -372,15 +504,16 @@ export default function OrderForm() {
       return;
     }
 
-    const payout = wallet.trim();
-    if (!payout) {
-      alert(
-        isReceiveCrypto
-          ? "Укажите адрес кошелька для получения."
-          : "Укажите реквизиты для получения средств.",
-      );
+    const validation = validateOrderFormFields(getFormInput());
+    if (!validation.ok) {
+      setFieldErrors(validation.errors);
+      const firstError = Object.values(validation.errors).find(Boolean);
+      if (firstError) alert(firstError);
       return;
     }
+
+    setFieldErrors({});
+    const payout = validation.values.wallet;
 
     setIsSubmitting(true);
 
@@ -450,17 +583,53 @@ export default function OrderForm() {
               {formatRateLabel(pairRate, selectedSend, selectedReceive)}
             </p>
 
-            <CurrencyPicker
-              selected={selectedSend}
-              options={allowedSendList}
-              open={isSendDropdownOpen}
-              onToggle={() => {
-                setIsSendDropdownOpen((v) => !v);
-                setIsReceiveDropdownOpen(false);
-              }}
-              onSelect={handleSelectSend}
-              containerRef={sendRef}
-            />
+            {isReceiveCrypto ? (
+              <CurrencyPicker
+                selected={selectedSend}
+                options={FIAT_CURRENCIES}
+                open={isSendDropdownOpen}
+                onToggle={() => {
+                  setIsSendDropdownOpen((v) => !v);
+                  setIsReceiveDropdownOpen(false);
+                }}
+                onSelect={handleSelectSend}
+                containerRef={sendRef}
+              />
+            ) : isSendCrypto ? (
+              <>
+                <CryptoAssetPicker
+                  assets={CRYPTO_ASSETS}
+                  selected={selectedSend}
+                  open={isSendDropdownOpen}
+                  onToggle={() => {
+                    setIsSendDropdownOpen((v) => !v);
+                    setIsReceiveDropdownOpen(false);
+                  }}
+                  onSelectAsset={handleSelectSendAsset}
+                  containerRef={sendRef}
+                />
+                {sendAsset && (
+                  <CryptoNetworkSelect
+                    asset={sendAsset}
+                    selectedVariantId={selectedSend.id}
+                    onSelectVariant={handleSelectSendNetwork}
+                    label="Сеть отправки"
+                  />
+                )}
+              </>
+            ) : (
+              <CurrencyPicker
+                selected={selectedSend}
+                options={FIAT_CURRENCIES}
+                open={isSendDropdownOpen}
+                onToggle={() => {
+                  setIsSendDropdownOpen((v) => !v);
+                  setIsReceiveDropdownOpen(false);
+                }}
+                onSelect={handleSelectSend}
+                containerRef={sendRef}
+              />
+            )}
 
             <div className="space-y-1.5">
               <div className="flex flex-col text-right text-[11px] font-bold text-zinc-400 dark:text-zinc-500 pr-4">
@@ -519,11 +688,21 @@ export default function OrderForm() {
                 <input
                   type="text"
                   value={fio}
-                  onChange={(e) => setFio(e.target.value)}
+                  onChange={(e) => {
+                    setFio(e.target.value);
+                    if (fieldErrors.fio) {
+                      setFieldErrors((prev) => ({ ...prev, fio: undefined }));
+                    }
+                  }}
+                  onBlur={() => touchField("fio")}
                   placeholder="Иванов Иван Иванович"
-                  className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
+                  className={inputClass(
+                    !!fieldErrors.fio,
+                    "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all",
+                  )}
                   required
                 />
+                <FieldError message={fieldErrors.fio} />
               </div>
             )}
           </div>
@@ -535,17 +714,53 @@ export default function OrderForm() {
               Получаете
             </h2>
 
-            <CurrencyPicker
-              selected={selectedReceive}
-              options={allowedReceiveList}
-              open={isReceiveDropdownOpen}
-              onToggle={() => {
-                setIsReceiveDropdownOpen((v) => !v);
-                setIsSendDropdownOpen(false);
-              }}
-              onSelect={handleSelectReceive}
-              containerRef={receiveRef}
-            />
+            {isSendCrypto ? (
+              <CurrencyPicker
+                selected={selectedReceive}
+                options={FIAT_CURRENCIES}
+                open={isReceiveDropdownOpen}
+                onToggle={() => {
+                  setIsReceiveDropdownOpen((v) => !v);
+                  setIsSendDropdownOpen(false);
+                }}
+                onSelect={handleSelectReceive}
+                containerRef={receiveRef}
+              />
+            ) : isReceiveCrypto ? (
+              <>
+                <CryptoAssetPicker
+                  assets={CRYPTO_ASSETS}
+                  selected={selectedReceive}
+                  open={isReceiveDropdownOpen}
+                  onToggle={() => {
+                    setIsReceiveDropdownOpen((v) => !v);
+                    setIsSendDropdownOpen(false);
+                  }}
+                  onSelectAsset={handleSelectReceiveAsset}
+                  containerRef={receiveRef}
+                />
+                {receiveAsset && (
+                  <CryptoNetworkSelect
+                    asset={receiveAsset}
+                    selectedVariantId={selectedReceive.id}
+                    onSelectVariant={handleSelectReceiveNetwork}
+                    label="Сеть получения"
+                  />
+                )}
+              </>
+            ) : (
+              <CurrencyPicker
+                selected={selectedReceive}
+                options={FIAT_CURRENCIES}
+                open={isReceiveDropdownOpen}
+                onToggle={() => {
+                  setIsReceiveDropdownOpen((v) => !v);
+                  setIsSendDropdownOpen(false);
+                }}
+                onSelect={handleSelectReceive}
+                containerRef={receiveRef}
+              />
+            )}
 
             <div className="space-y-1.5">
               <div className="flex flex-col text-right text-[11px] font-bold text-zinc-400 dark:text-zinc-500 pr-4">
@@ -595,22 +810,26 @@ export default function OrderForm() {
             <div className="space-y-2">
               <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
                 {isReceiveCrypto ? "Адрес кошелька" : "Реквизиты для получения"}{" "}
+                {selectedReceive.network && (
+                  <span className="text-amber-700 dark:text-amber-400 font-bold">
+                    ({selectedReceive.network.shortLabel})
+                  </span>
+                )}{" "}
                 <span className="text-red-500 font-bold ml-0.5"> * </span> :
               </label>
               <input
                 type="text"
                 value={wallet}
                 onChange={(e) => handleWalletChange(e.target.value)}
-                placeholder={
-                  isReceiveCrypto
-                    ? selectedReceive.id === "usdt_trc20"
-                      ? "T…"
-                      : `Адрес ${selectedReceive.code}`
-                    : "Номер карты / счёта"
-                }
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all tracking-wide"
+                onBlur={() => touchField("wallet")}
+                placeholder={getWalletPlaceholder(selectedReceive.id)}
+                className={inputClass(
+                  !!fieldErrors.wallet,
+                  "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all tracking-wide",
+                )}
                 required
               />
+              <FieldError message={fieldErrors.wallet} />
             </div>
           </div>
 
@@ -649,13 +868,16 @@ export default function OrderForm() {
 
                   {isCityDropdownOpen && (
                     <div className="absolute left-0 top-full mt-2 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-xl z-50 overflow-hidden p-2">
-                      {CITIES.map((item) => (
+                      {ORDER_CITIES.map((item) => (
                         <button
                           key={item}
                           type="button"
                           onClick={() => {
                             setCity(item);
                             setIsCityDropdownOpen(false);
+                            if (fieldErrors.city) {
+                              setFieldErrors((prev) => ({ ...prev, city: undefined }));
+                            }
                           }}
                           className={`w-full rounded-xl px-4 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ${
                             city === item
@@ -669,6 +891,7 @@ export default function OrderForm() {
                     </div>
                   )}
                 </div>
+                <FieldError message={fieldErrors.city} />
               </div>
             )}
 
@@ -680,11 +903,21 @@ export default function OrderForm() {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (fieldErrors.email) {
+                    setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                  }
+                }}
+                onBlur={() => touchField("email")}
                 placeholder="name@example.com"
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
+                className={inputClass(
+                  !!fieldErrors.email,
+                  "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all",
+                )}
                 required
               />
+              <FieldError message={fieldErrors.email} />
             </div>
 
             <div className="space-y-2">
@@ -696,10 +929,15 @@ export default function OrderForm() {
                 type="text"
                 value={telegram}
                 onChange={(e) => handleTelegramChange(e.target.value)}
+                onBlur={() => touchField("telegram")}
                 placeholder="@username"
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
+                className={inputClass(
+                  !!fieldErrors.telegram,
+                  "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all",
+                )}
                 required
               />
+              <FieldError message={fieldErrors.telegram} />
             </div>
 
             <div className="space-y-2">
@@ -709,10 +947,20 @@ export default function OrderForm() {
               <input
                 type="text"
                 value={coupon}
-                onChange={(e) => setCoupon(e.target.value)}
+                onChange={(e) => {
+                  setCoupon(e.target.value);
+                  if (fieldErrors.coupon) {
+                    setFieldErrors((prev) => ({ ...prev, coupon: undefined }));
+                  }
+                }}
+                onBlur={() => touchField("coupon")}
                 placeholder="Промокод"
-                className="w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.04)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all"
+                className={inputClass(
+                  !!fieldErrors.coupon,
+                  "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.04)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all",
+                )}
               />
+              <FieldError message={fieldErrors.coupon} />
             </div>
           </div>
 
