@@ -204,8 +204,8 @@ export default function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-[#FFFDE7] dark:bg-amber-950/20 rounded-2xl border border-amber-200/70 dark:border-amber-900/40 overflow-hidden shadow-[0_8px_24px_rgba(255,221,45,0.08)]">
-      <div className="px-4 py-3 border-b border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] dark:from-amber-950/40 dark:to-amber-950/20 flex items-center justify-between gap-3">
+    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
+      <div className="px-4 py-3 border-b border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] dark:from-amber-950/40 dark:to-amber-950/20 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           {mode === "user" ? (
             operatorName ? (
@@ -286,13 +286,13 @@ export default function ChatPanel({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0 bg-[#FFFEEB]/50 dark:bg-zinc-950/30">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0 bg-white dark:bg-zinc-950">
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-6 h-6 animate-spin text-[#FFDD2D]" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="rounded-2xl border border-amber-200/50 bg-white/70 dark:bg-zinc-900/50 px-4 py-6 text-center">
+          <div className="rounded-2xl border border-amber-200/40 bg-[#FFF9E6] dark:bg-amber-950/20 px-4 py-6 text-center">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Напишите сообщение — оператор ответит в ближайшее время.
             </p>
@@ -312,8 +312,8 @@ export default function ChatPanel({
                 <div
                   className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
                     isMine
-                      ? "bg-[#FFDD2D] text-zinc-900 border border-[#e6c628]/30"
-                      : "bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-amber-100 dark:border-amber-900/30"
+                      ? "bg-[#FFDD2D] text-zinc-900 border border-[#e6c628]/35"
+                      : "bg-[#FFF3B0]/55 dark:bg-amber-950/30 text-zinc-800 dark:text-zinc-200 border border-amber-200/70 dark:border-amber-900/40"
                   }`}
                 >
                   {message.body && (
@@ -372,7 +372,7 @@ export default function ChatPanel({
       )}
 
       <div
-        className={`border-t border-amber-200/60 dark:border-amber-900/40 bg-[#FFFDE7] dark:bg-amber-950/30 p-3 flex items-end gap-2 ${
+        className={`shrink-0 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/80 px-3 py-3 flex items-end gap-2 ${
           !canSend ? "opacity-60 pointer-events-none" : ""
         }`}
       >
@@ -390,7 +390,7 @@ export default function ChatPanel({
           type="button"
           variant="outline"
           size="icon"
-          className="rounded-full shrink-0 border-amber-200 bg-white hover:bg-[#FFF3B0] hover:border-[#FFDD2D]"
+          className="rounded-full shrink-0 h-10 w-10 border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 hover:border-zinc-400 dark:bg-zinc-800 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700"
           disabled={uploading || sending}
           onClick={() => fileRef.current?.click()}
           aria-label="Прикрепить файл"
@@ -412,12 +412,12 @@ export default function ChatPanel({
           }}
           rows={1}
           placeholder="Сообщение..."
-          className="flex-1 min-h-[44px] max-h-28 resize-none rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-white dark:bg-zinc-900 px-4 py-3 text-sm focus:outline-none focus:border-[#FFDD2D] focus:ring-2 focus:ring-[#FFDD2D]/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]"
+          className="flex-1 min-h-[44px] max-h-28 resize-none rounded-2xl border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-950 px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-[#FFDD2D] focus:ring-2 focus:ring-[#FFDD2D]/20"
         />
         <Button
           type="button"
           size="icon"
-          className="rounded-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shrink-0 shadow-md"
+          className="rounded-full h-10 w-10 bg-zinc-900 hover:bg-zinc-800 text-white shrink-0 disabled:bg-zinc-300 disabled:text-zinc-500 dark:disabled:bg-zinc-700"
           disabled={sending || uploading || !text.trim()}
           onClick={() => void sendText()}
           aria-label="Отправить"
