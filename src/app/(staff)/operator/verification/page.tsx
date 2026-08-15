@@ -169,36 +169,35 @@ export default function VerificationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 py-12 dark:bg-zinc-950 text-gray-900 dark:text-zinc-50">
-      <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
-              <ShieldAlert className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">
-                Панель оператора: Верификация
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-zinc-400">
-                Проверка персональных данных и документов пользователей
-              </p>
-            </div>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-start sm:items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 shrink-0">
+            <ShieldAlert className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setLoading(true);
-              void fetchRequests();
-            }}
-            className="rounded-full h-9 px-4 text-xs font-bold cursor-pointer"
-          >
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-            Обновить
-          </Button>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold">
+              Проверка анкет
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400">
+              Персональные данные и документы пользователей
+            </p>
+          </div>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setLoading(true);
+            void fetchRequests();
+          }}
+          className="rounded-full h-9 px-4 text-xs font-bold cursor-pointer self-start sm:self-auto"
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          Обновить
+        </Button>
+      </div>
 
         {error && (
           <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -218,7 +217,7 @@ export default function VerificationPage() {
         )}
 
         {requests.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-8 sm:p-12 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
             <p className="text-gray-500 dark:text-zinc-400">
               Новых заявок на верификацию нет
             </p>
@@ -236,7 +235,80 @@ export default function VerificationPage() {
             </Button>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-zinc-900 dark:bg-zinc-900/50">
+          <>
+            <div className="md:hidden space-y-3">
+              {requests.map((req) => (
+                <div
+                  key={req.id}
+                  className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 space-y-3"
+                >
+                  <div>
+                    <p className="font-bold text-sm text-zinc-900 break-all">
+                      {req.email}
+                    </p>
+                    <p className="text-xs text-zinc-400 font-mono truncate">
+                      {req.id}
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium">
+                    {[req.last_name, req.first_name, req.middle_name]
+                      .filter(Boolean)
+                      .join(" ") || "—"}
+                  </p>
+                  <div className="space-y-1 text-xs text-zinc-600">
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="h-3 w-3 text-zinc-400" />
+                      {req.phone || "—"}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Send className="h-3 w-3 text-zinc-400" />
+                      {req.telegram || "—"}
+                    </div>
+                  </div>
+                  {req.passport_url ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPhoto(req.passport_url)}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Открыть документ
+                    </button>
+                  ) : (
+                    <span className="text-xs text-zinc-400">Нет файла</span>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      disabled={processingId === req.id}
+                      onClick={() => handleVerdict(req.id, "verified")}
+                      className="rounded-full bg-emerald-500 hover:bg-emerald-600 text-white h-10 text-xs font-bold w-full"
+                    >
+                      {processingId === req.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <>
+                          <Check className="h-3.5 w-3.5 mr-1" />
+                          Одобрить
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={processingId === req.id}
+                      onClick={() => handleVerdict(req.id, "rejected")}
+                      className="rounded-full h-10 text-xs font-bold w-full"
+                    >
+                      <X className="h-3.5 w-3.5 mr-1" />
+                      Отклонить
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-zinc-900 dark:bg-zinc-900/50">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-zinc-900 dark:text-zinc-400 border-b border-gray-100 dark:border-zinc-800">
@@ -322,9 +394,9 @@ export default function VerificationPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+            </div>
+          </>
         )}
-      </div>
 
       {selectedPhoto && (
         <div

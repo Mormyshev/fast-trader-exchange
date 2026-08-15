@@ -27,6 +27,9 @@ import { Card } from "@/components/ui/card";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
+import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
+import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
+import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
 import { useAuth } from "@/src/app/context/AuthContext";
 import {
   OrderTtlBadge,
@@ -51,6 +54,7 @@ interface Order {
   currency_to: string;
   amount_from: number;
   amount_to: number;
+  operator_pseudonym_snapshot?: string | null;
 }
 
 type TabId = "all" | "pending" | "in_progress" | "completed" | "cancelled";
@@ -121,7 +125,7 @@ function shortId(id: string) {
 
 export default function OperatorDashboard() {
   const supabase = createClient();
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, role, isLoading: isAuthLoading } = useAuth();
 
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
@@ -136,9 +140,11 @@ export default function OperatorDashboard() {
   const now = useNowTick(!loading && !!user?.id);
 
   const userIdRef = useRef<string | null>(null);
+  const roleRef = useRef(role);
   if (user?.id) {
     userIdRef.current = user.id;
   }
+  roleRef.current = role;
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -194,9 +200,11 @@ export default function OperatorDashboard() {
 
       setCompletedOrders((prev) => {
         const without = prev.filter((o) => o.id !== order.id);
-        const mineCompleted =
-          order.status === "completed" && order.operator_id === currentUserId;
-        return mineCompleted ? [order, ...without].slice(0, 50) : without;
+        const isAdmin = roleRef.current === "admin";
+        const visibleCompleted =
+          order.status === "completed" &&
+          (isAdmin || order.operator_id === currentUserId);
+        return visibleCompleted ? [order, ...without].slice(0, 50) : without;
       });
 
       setCancelledOrders((prev) => {
@@ -291,27 +299,23 @@ export default function OperatorDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 text-zinc-900 font-sans">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pl-14 md:pl-0">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
-            Панель оператора
-          </h1>
-          <p className="text-sm font-medium text-zinc-400 mt-1">
-            Мониторинг заявок Aurum Swap Demo
-          </p>
-        </div>
+    <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 text-zinc-900 font-sans">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <StaffPageHeader
+          title="Панель оператора"
+          description="Мониторинг заявок Aurum Swap Demo"
+        />
 
-        <div className="flex items-center space-x-2.5 bg-emerald-50 border border-emerald-100 px-4 py-1.5 rounded-full self-start md:self-auto">
+        <div className="flex items-center space-x-2.5 bg-emerald-50 border border-emerald-100 px-3 sm:px-4 py-1.5 rounded-full self-start">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs font-bold text-emerald-700">
-            Очередь обновляется в реальном времени
+          <span className="text-[11px] sm:text-xs font-bold text-emerald-700">
+            Live-обновление
           </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card className="rounded-[32px] border-none bg-[#FFDD2D] p-6 shadow-none flex flex-col justify-between h-36">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <Card className="rounded-[24px] sm:rounded-[32px] border-none bg-[#FFDD2D] p-5 sm:p-6 shadow-none flex flex-col justify-between min-h-[7rem] sm:h-36">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-zinc-800 uppercase tracking-wide">
               Новые заявки
@@ -323,7 +327,7 @@ export default function OperatorDashboard() {
           </div>
         </Card>
 
-        <Card className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-none flex flex-col justify-between h-36">
+        <Card className="rounded-[24px] sm:rounded-[32px] border border-zinc-200 bg-white p-5 sm:p-6 shadow-none flex flex-col justify-between min-h-[7rem] sm:h-36">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-zinc-400 uppercase tracking-wide">
               В работе
@@ -335,10 +339,10 @@ export default function OperatorDashboard() {
           </div>
         </Card>
 
-        <Card className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-none flex flex-col justify-between h-36 sm:col-span-2 lg:col-span-1">
+        <Card className="rounded-[24px] sm:rounded-[32px] border border-zinc-200 bg-white p-5 sm:p-6 shadow-none flex flex-col justify-between min-h-[7rem] sm:h-36 sm:col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-zinc-400 uppercase tracking-wide">
-              Выполнено мной
+              {role === "admin" ? "Выполнено" : "Выполнено мной"}
             </span>
             <CheckCircle2 className="w-5 h-5 text-zinc-400" />
           </div>
@@ -348,9 +352,9 @@ export default function OperatorDashboard() {
         </Card>
       </div>
 
-      <Card className="rounded-[32px] border border-[#FFDD2D] bg-white shadow-none p-4 md:p-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-zinc-100">
-          <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl self-start">
+      <Card className="rounded-[24px] sm:rounded-[32px] border border-[#FFDD2D] bg-white shadow-none p-3 sm:p-4 md:p-6">
+        <div className="flex flex-col gap-4 pb-4 sm:pb-6 border-b border-zinc-100">
+          <StaffScrollTabs>
             {(
               [
                 { id: "pending", label: "Новые" },
@@ -368,7 +372,7 @@ export default function OperatorDashboard() {
                   setActiveTab(tab.id);
                   setPage(1);
                 }}
-                className={`text-xs font-bold rounded-xl h-8 px-4 transition-all cursor-pointer ${
+                className={`text-xs font-bold rounded-xl h-8 px-3 sm:px-4 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                   activeTab === tab.id
                     ? "bg-white text-zinc-900 shadow-xs hover:bg-white"
                     : "text-zinc-400 hover:text-zinc-600"
@@ -377,9 +381,9 @@ export default function OperatorDashboard() {
                 {tab.label}
               </Button>
             ))}
-          </div>
+          </StaffScrollTabs>
 
-          <div className="relative w-full md:w-80">
+          <div className="relative w-full md:w-80 md:ml-auto">
             <Search className="absolute left-4 top-3 w-4 h-4 text-zinc-400" />
             <Input
               type="text"
@@ -407,6 +411,9 @@ export default function OperatorDashboard() {
                   </TableHead>
                   <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
                     Статус
+                  </TableHead>
+                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
+                    Оператор
                   </TableHead>
                   <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10 text-right">
                     Управление
@@ -470,6 +477,18 @@ export default function OperatorDashboard() {
                           </span>
                         </TableCell>
 
+                        <TableCell className="py-4 px-4">
+                          <StaffOperatorLabel
+                            snapshot={order.operator_pseudonym_snapshot}
+                          />
+                          {!order.operator_pseudonym_snapshot &&
+                            order.operator_id && (
+                              <span className="text-[11px] text-zinc-400 font-medium">
+                                Без подписи
+                              </span>
+                            )}
+                        </TableCell>
+
                         <TableCell className="py-4 px-4 text-right">
                           <Button
                             asChild
@@ -495,7 +514,7 @@ export default function OperatorDashboard() {
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="h-32 text-center text-zinc-400 font-semibold"
                     >
                       Нет заявок
@@ -543,6 +562,8 @@ export default function OperatorDashboard() {
                         {statusLabel(order.status)}
                       </span>
                     </div>
+
+                    <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
 
                     <div className="bg-white p-3 rounded-xl border border-zinc-100 text-xs font-bold text-zinc-800 space-y-2">
                       <div className="flex items-center justify-between">

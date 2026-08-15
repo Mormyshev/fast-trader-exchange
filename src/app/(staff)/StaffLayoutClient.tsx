@@ -11,6 +11,7 @@ import {
   Users,
   User,
   Menu,
+  X,
   LogOut,
   ExternalLink,
   MessageCircle,
@@ -51,7 +52,8 @@ export default function StaffLayoutClient({
   role,
   initialOperatorPseudonym = null,
 }: StaffLayoutClientProps) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const [pendingChats, setPendingChats] = useState(0);
   const [operatorPseudonym, setOperatorPseudonym] = useState(
     initialOperatorPseudonym,
@@ -73,6 +75,23 @@ export default function StaffLayoutClient({
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 768px)");
+    const syncViewport = () => {
+      const desktop = media.matches;
+      setIsDesktop(desktop);
+      if (desktop) setSidebarOpen(true);
+    };
+
+    syncViewport();
+    media.addEventListener("change", syncViewport);
+    return () => media.removeEventListener("change", syncViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktop) setSidebarOpen(false);
+  }, [pathname, isDesktop]);
 
   useEffect(() => {
     setOperatorPseudonym(initialOperatorPseudonym);
@@ -113,31 +132,53 @@ export default function StaffLayoutClient({
   const currentTitle = getPageTitle(pathname);
 
   const handleNavClick = () => {
-    if (window.innerWidth < 768) {
-      setIsSidebarOpen(false);
+    if (!isDesktop) {
+      setSidebarOpen(false);
     }
+  };
+
+  const toggleSidebar = () => {
+    setSidebarOpen((open) => !open);
   };
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50 text-zinc-900 font-sans antialiased overflow-x-hidden">
-      {/* НОВОЕ КРАСИВОЕ БОКОВОЕ МЕНЮ (SIDEBAR) */}
+      {!isDesktop && sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Закрыть меню"
+          className="fixed inset-0 z-40 bg-zinc-900/45 backdrop-blur-[1px] md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-40 w-64 bg-white border-r border-zinc-200 transition-transform duration-300 ease-in-out px-4 py-6 flex flex-col justify-between ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        className={`fixed top-0 left-0 bottom-0 z-50 w-[min(100vw-2.5rem,17rem)] md:w-64 bg-white border-r border-zinc-200 transition-transform duration-300 ease-in-out px-3 sm:px-4 py-5 sm:py-6 flex flex-col justify-between ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="space-y-6">
-          <div className="flex items-center justify-between px-2">
+        <div className="space-y-6 flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-1 sm:px-2 gap-2 shrink-0">
             <Link
               href="/"
-              className="text-lg font-black tracking-tight text-zinc-900 select-none hover:opacity-80 transition-opacity"
+              className="text-base sm:text-lg font-black tracking-tight text-zinc-900 select-none hover:opacity-80 transition-opacity truncate"
               title="На главную сайта"
             >
               AURUM SWAP<span className="text-[#e6c628] font-medium">.DEMO</span>
             </Link>
+            {!isDesktop && (
+              <button
+                type="button"
+                aria-label="Закрыть меню"
+                onClick={() => setSidebarOpen(false)}
+                className="md:hidden w-9 h-9 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-500 hover:bg-zinc-50 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          <nav className="space-y-1 pt-4">
+          <nav className="space-y-1 pt-4 overflow-y-auto flex-1 min-h-0 pb-2 [scrollbar-width:thin]">
             <Link
               href="/operator/dashboard"
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
@@ -147,8 +188,8 @@ export default function StaffLayoutClient({
               }`}
               onClick={handleNavClick}
             >
-              <LayoutDashboard className="w-4 h-4" />
-              Дашборд статистики
+              <LayoutDashboard className="w-4 h-4 shrink-0" />
+              <span className="truncate">Дашборд</span>
             </Link>
 
             <Link
@@ -160,8 +201,8 @@ export default function StaffLayoutClient({
               }`}
               onClick={handleNavClick}
             >
-              <ClipboardList className="w-4 h-4" />
-              Активные ордера
+              <ClipboardList className="w-4 h-4 shrink-0" />
+              <span className="truncate">Активные ордера</span>
             </Link>
 
             <Link
@@ -173,8 +214,8 @@ export default function StaffLayoutClient({
               }`}
               onClick={handleNavClick}
             >
-              <UserCheck className="w-4 h-4" />
-              Проверка анкет
+              <UserCheck className="w-4 h-4 shrink-0" />
+              <span className="truncate">Проверка анкет</span>
             </Link>
 
             <Link
@@ -194,7 +235,7 @@ export default function StaffLayoutClient({
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white animate-pulse" />
                 )}
               </span>
-              <span className="flex-1">Чат поддержки</span>
+              <span className="flex-1 truncate">Чат поддержки</span>
               {pendingChats > 0 && (
                 <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
                   {pendingChats}
@@ -211,8 +252,8 @@ export default function StaffLayoutClient({
               }`}
               onClick={handleNavClick}
             >
-              <UserCog className="w-4 h-4" />
-              Профиль оператора
+              <UserCog className="w-4 h-4 shrink-0" />
+              <span className="truncate">Профиль</span>
             </Link>
 
             {/* АДМИНСКИЙ БЛОК */}
@@ -269,47 +310,53 @@ export default function StaffLayoutClient({
         </div>
       </aside>
 
-      {/* ОСНОВНОЙ КОНТЕНТ СТРАНИЦ */}
       <div
-        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
-          isSidebarOpen ? "md:pl-64" : "pl-0"
+        className={`flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-300 ease-in-out ${
+          sidebarOpen ? "md:pl-64" : "md:pl-0"
         }`}
       >
-        {/* НОВАЯ ФУНКЦИОНАЛЬНАЯ ШАПКА */}
-        <header className="h-20 bg-white border-b border-zinc-200 px-6 md:px-10 flex items-center justify-between sticky top-0 z-30">
-          <div className="flex items-center">
-            <h2 className="text-lg md:text-xl font-bold text-zinc-800 tracking-tight select-none">
+        <header className="h-14 sm:h-16 md:h-20 bg-white border-b border-zinc-200 px-3 sm:px-4 md:px-10 flex items-center justify-between gap-2 sticky top-0 z-30 safe-area-inset-top">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleSidebar}
+              className="rounded-full border-zinc-200 h-9 w-9 sm:h-10 sm:w-10 shrink-0 bg-white hover:bg-zinc-50 cursor-pointer shadow-none md:hidden"
+            >
+              <Menu className="w-5 h-5 text-[#2A2A2A]" />
+            </Button>
+            <h2 className="text-sm sm:text-base md:text-xl font-bold text-zinc-800 tracking-tight select-none truncate">
               {currentTitle}
             </h2>
           </div>
 
-          <div className="flex items-center gap-4 md:gap-6">
-            <div className="flex items-center gap-3 border-r border-zinc-200 pr-4 md:pr-6">
+          <div className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 sm:border-r sm:border-zinc-200 sm:pr-4 md:pr-6">
               {operatorPseudonym ? (
                 <>
-                  <div className="text-right min-w-0">
-                    <p className="text-sm font-bold text-zinc-800 leading-none truncate max-w-[140px] sm:max-w-[200px]">
+                  <div className="hidden sm:block text-right min-w-0">
+                    <p className="text-sm font-bold text-zinc-800 leading-none truncate max-w-[120px] md:max-w-[200px]">
                       {operatorPseudonym}
                     </p>
                     <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mt-1 block">
-                      {isAdmin ? "Администратор" : "Оператор"} · Онлайн
+                      {isAdmin ? "Админ" : "Оператор"} · Онлайн
                     </span>
                   </div>
                   <OperatorAvatar
                     name={operatorPseudonym}
                     size="sm"
-                    className="w-9 h-9"
+                    className="w-8 h-8 sm:w-9 sm:h-9"
                   />
                 </>
               ) : (
                 <>
                   <Link
                     href="/operator/profile"
-                    className="inline-flex items-center rounded-full bg-[#FFDD2D] px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-bold text-zinc-900 shadow-[0_0_16px_rgba(255,221,45,0.55)] ring-2 ring-amber-300/60 animate-pulse hover:bg-[#e6c628] transition-colors whitespace-nowrap"
+                    className="hidden sm:inline-flex items-center rounded-full bg-[#FFDD2D] px-2.5 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-bold text-zinc-900 shadow-[0_0_16px_rgba(255,221,45,0.55)] ring-2 ring-amber-300/60 animate-pulse hover:bg-[#e6c628] transition-colors whitespace-nowrap max-w-[120px] sm:max-w-none truncate"
                   >
-                    Заполнить информацию
+                    Заполнить профиль
                   </Link>
-                  <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 shrink-0 select-none">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 shrink-0 select-none">
                     <User className="w-4 h-4" />
                   </div>
                 </>
@@ -319,16 +366,17 @@ export default function StaffLayoutClient({
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="rounded-full border-zinc-200 h-10 w-10 shrink-0 bg-white hover:bg-zinc-50 cursor-pointer shadow-none"
+              onClick={toggleSidebar}
+              className="hidden md:inline-flex rounded-full border-zinc-200 h-10 w-10 shrink-0 bg-white hover:bg-zinc-50 cursor-pointer shadow-none"
             >
               <Menu className="w-5 h-5 text-[#2A2A2A]" />
             </Button>
           </div>
         </header>
 
-        {/* ОСНОВНАЯ ЗОНА СТРАНИЦЫ */}
-        <main className="flex-1 p-6 md:p-10">{children}</main>
+        <main className="flex-1 p-3 sm:p-4 md:p-10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {children}
+        </main>
       </div>
     </div>
   );

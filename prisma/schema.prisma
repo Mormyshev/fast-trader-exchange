@@ -106,6 +106,8 @@ model Orders {
   tx_hash         String?
   payment_details String?
   receipt_url     String?
+  operator_receipt_url String?
+  operator_pseudonym_snapshot String?
 
   user            Profiles?   @relation("UserOrders", fields: [user_id], references: [id], onDelete: SetNull)
   operator        Profiles?   @relation("OperatorOrders", fields: [operator_id], references: [id], onDelete: SetNull)

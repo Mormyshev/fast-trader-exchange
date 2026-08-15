@@ -17,6 +17,7 @@ import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
 import { OrderTtlBadge, useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
 import { isOrderExpiredByTtl, ORDER_TTL_STATUSES } from "@/src/utils/orders/ttl";
 
 type OrderStatus =
@@ -42,6 +43,7 @@ interface Order {
   payment_details: string | null;
   receipt_url: string | null;
   operator_receipt_url: string | null;
+  operator_pseudonym_snapshot?: string | null;
 }
 
 function statusLabel(status: OrderStatus) {
@@ -326,7 +328,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 text-zinc-900 font-sans">
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 text-zinc-900 font-sans">
       <Link
         href="/operator/dashboard"
         className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
@@ -334,16 +336,16 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
         <ArrowLeft className="w-4 h-4" />К дашборду оператора
       </Link>
 
-      <div className="rounded-[32px] border border-zinc-200 bg-white p-6 md:p-8 space-y-6 shadow-none">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-zinc-100 pb-5">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">
+      <div className="rounded-[24px] sm:rounded-[32px] border border-zinc-200 bg-white p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 shadow-none">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-zinc-100 pb-4 sm:pb-5">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">
               Заявка оператора
             </h1>
-            <p className="text-xs font-mono font-semibold text-zinc-400 mt-1 break-all">
+            <p className="text-[11px] sm:text-xs font-mono font-semibold text-zinc-400 mt-1 break-all">
               ID: {order.id}
             </p>
-            <p className="text-xs font-medium text-zinc-500 mt-1">
+            <p className="text-[11px] sm:text-xs font-medium text-zinc-500 mt-1">
               Создана{" "}
               {new Date(order.created_at).toLocaleString("ru-RU", {
                 day: "numeric",
@@ -354,12 +356,13 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               })}
             </p>
           </div>
-          <div className="flex flex-col items-start sm:items-end gap-2">
+          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 flex-wrap">
             <span
               className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border ${statusClass(order.status)}`}
             >
               {statusLabel(order.status)}
             </span>
+            <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
             <OrderTtlBadge
               createdAt={order.created_at}
               status={order.status}

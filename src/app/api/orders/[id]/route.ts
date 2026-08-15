@@ -9,6 +9,10 @@ import {
 } from "@/src/utils/supabase/broadcast";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
 import { expireOrderIfNeeded } from "@/src/utils/orders/expire-orders";
+import {
+  fetchOperatorPseudonym,
+  stripOrderInternalFields,
+} from "@/src/utils/orders/operator-snapshot";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -67,7 +71,10 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     const fresh = await expireOrderIfNeeded(actor.admin, order);
-    return NextResponse.json({ order: fresh });
+    const payload = actor.isStaff
+      ? fresh
+      : stripOrderInternalFields(fresh as Record<string, unknown>);
+    return NextResponse.json({ order: payload });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });
@@ -156,6 +163,27 @@ export async function PATCH(request: Request, context: RouteContext) {
         }
         patch.operator_id = body.operator_id;
       }
+
+      const nextOperatorId =
+        typeof patch.operator_id === "string"
+          ? patch.operator_id
+          : typeof body.operator_id === "string"
+            ? body.operator_id
+            : null;
+
+      if (
+        nextOperatorId &&
+        !(current as { operator_pseudonym_snapshot?: string | null })
+          .operator_pseudonym_snapshot
+      ) {
+        const pseudonym = await fetchOperatorPseudonym(
+          actor.admin,
+          nextOperatorId,
+        );
+        if (pseudonym) {
+          patch.operator_pseudonym_snapshot = pseudonym;
+        }
+      }
     }
 
     if (isOwner) {
@@ -200,7 +228,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       void broadcastOrderEvent(ORDER_UPDATED_EVENT, updated);
     }
 
-    return NextResponse.json({ order: updated });
+    const payload = actor.isStaff
+      ? updated
+      : updated
+        ? stripOrderInternalFields(updated as Record<string, unknown>)
+        : updated;
+
+    return NextResponse.json({ order: payload });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

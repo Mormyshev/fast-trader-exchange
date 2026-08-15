@@ -7,7 +7,7 @@ import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
 const IN_PROGRESS = ["processing", "awaiting_payment", "paid"] as const;
 
 const ORDER_FIELDS =
-  "id, created_at, status, user_id, operator_id, currency_from, currency_to, amount_from, amount_to, wallet_from, wallet_to, tx_hash, payment_details, receipt_url";
+  "id, created_at, status, user_id, operator_id, operator_pseudonym_snapshot, currency_from, currency_to, amount_from, amount_to, wallet_from, wallet_to, tx_hash, payment_details, receipt_url, operator_receipt_url";
 
 export async function GET() {
   try {
@@ -29,7 +29,21 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const isAdmin = profile.role === "admin";
+
     await cancelExpiredOrders(admin);
+
+    const completedQuery = admin
+      .from("orders")
+      .select(ORDER_FIELDS)
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    const completedCountQuery = admin
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "completed");
 
     const [pendingRes, mineRes, completedRes, completedCountRes, cancelledRes] =
       await Promise.all([
@@ -44,18 +58,12 @@ export async function GET() {
           .in("status", [...IN_PROGRESS])
           .eq("operator_id", user.id)
           .order("created_at", { ascending: false }),
-        admin
-          .from("orders")
-          .select(ORDER_FIELDS)
-          .eq("status", "completed")
-          .eq("operator_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(50),
-        admin
-          .from("orders")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "completed")
-          .eq("operator_id", user.id),
+        isAdmin
+          ? completedQuery
+          : completedQuery.eq("operator_id", user.id),
+        isAdmin
+          ? completedCountQuery
+          : completedCountQuery.eq("operator_id", user.id),
         admin
           .from("orders")
           .select(ORDER_FIELDS)

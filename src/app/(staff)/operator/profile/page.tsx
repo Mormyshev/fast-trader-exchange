@@ -72,7 +72,7 @@ export default function OperatorProfilePage() {
 
   return (
     <div className="max-w-xl">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 md:p-8 space-y-6">
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
         <div>
           <h2 className="text-lg font-bold text-zinc-900">
             Профиль оператора
@@ -130,7 +130,7 @@ export default function OperatorProfilePage() {
         <Button
           onClick={() => void handleSave()}
           disabled={saving || !pseudonym.trim()}
-          className="rounded-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 font-bold px-8"
+          className="w-full sm:w-auto rounded-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 font-bold px-8"
         >
           {saving ? (
             <>

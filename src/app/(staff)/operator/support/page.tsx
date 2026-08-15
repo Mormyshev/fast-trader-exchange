@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, Loader2 } from "lucide-react";
+import { Bell, Loader2, ArrowLeft } from "lucide-react";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeSupportInbox } from "@/src/utils/supabase/support-inbox";
 import type { ChatConversation } from "@/src/utils/chat/types";
@@ -117,9 +117,9 @@ export default function OperatorSupportPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {notice && (
-        <div className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 sm:px-4 py-3 text-sm font-medium text-amber-900">
           <Bell className="w-4 h-4 shrink-0" />
           {notice}
           <Button
@@ -133,8 +133,12 @@ export default function OperatorSupportPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 h-[calc(100vh-12rem)] min-h-[520px]">
-        <div className="rounded-2xl border border-amber-200/70 bg-[#FFFDE7] overflow-hidden flex flex-col min-h-[280px] shadow-[0_4px_16px_rgba(255,221,45,0.06)]">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_1fr] gap-3 sm:gap-4 min-h-[calc(100dvh-11rem)] lg:min-h-[calc(100vh-12rem)]">
+        <div
+          className={`rounded-2xl border border-amber-200/70 bg-[#FFFDE7] overflow-hidden flex flex-col min-h-[240px] lg:min-h-[520px] shadow-[0_4px_16px_rgba(255,221,45,0.06)] ${
+            selectedId ? "hidden lg:flex" : "flex"
+          }`}
+        >
           <div className="px-4 py-3 border-b border-amber-200/60 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] font-bold text-zinc-900">
             Чаты поддержки
           </div>
@@ -235,20 +239,34 @@ export default function OperatorSupportPage() {
           </div>
         </div>
 
-        <div className="min-h-[420px]">
+        <div
+          className={`min-h-[360px] lg:min-h-[420px] flex flex-col ${
+            selectedId ? "flex" : "hidden lg:flex"
+          }`}
+        >
           {selectedId && selectedConversation ? (
-            <ChatPanel
-              conversationId={selectedId}
-              mode="operator"
-              conversation={selectedConversation}
-              onConversationChange={setSelectedConversation}
-              showClaimButton={selectedConversation.operator_id !== user?.id}
-              onClaim={handleClaim}
-              canReply={hasPseudonym}
-              currentOperatorId={user?.id ?? null}
-            />
+            <>
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="lg:hidden mb-2 inline-flex items-center gap-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                К списку чатов
+              </button>
+              <ChatPanel
+                conversationId={selectedId}
+                mode="operator"
+                conversation={selectedConversation}
+                onConversationChange={setSelectedConversation}
+                showClaimButton={selectedConversation.operator_id !== user?.id}
+                onClaim={handleClaim}
+                canReply={hasPseudonym}
+                currentOperatorId={user?.id ?? null}
+              />
+            </>
           ) : (
-            <div className="h-full rounded-2xl border border-dashed border-amber-200/70 flex items-center justify-center text-sm text-amber-800/60 bg-[#FFFDE7]">
+            <div className="h-full min-h-[280px] rounded-2xl border border-dashed border-amber-200/70 flex items-center justify-center text-sm text-amber-800/60 bg-[#FFFDE7] px-6 text-center">
               Выберите чат из списка слева
             </div>
           )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
+import Link from "next/link";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
@@ -13,6 +14,9 @@ import {
   hasOrderTtl,
   useNowTick,
 } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
+import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
+import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
 import { isOrderExpiredByTtl } from "@/src/utils/orders/ttl";
 
 interface Order {
@@ -37,9 +41,10 @@ interface Order {
   payment_details: string | null;
   receipt_url: string | null;
   operator_receipt_url?: string | null;
+  operator_pseudonym_snapshot?: string | null;
 }
 
-type TabId = "new" | "in_work" | "awaiting" | "review" | "cancelled";
+type TabId = "new" | "in_work" | "awaiting" | "review" | "completed" | "cancelled";
 
 function formatCreatedAt(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", {
@@ -58,6 +63,7 @@ export default function OperatorOrdersPage() {
   const [newOrders, setNewOrders] = useState<Order[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
+  const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("new");
   const [detailsInput, setDetailsInput] = useState<{ [key: string]: string }>(
@@ -112,6 +118,7 @@ export default function OperatorOrdersPage() {
         setNewOrders((json.pending || []) as Order[]);
         setMyOrders((json.mine || []) as Order[]);
         setCancelledOrders((json.cancelled || []) as Order[]);
+        setCompletedOrders((json.completed || []) as Order[]);
       } catch (err) {
         console.error("Ошибка:", err);
       } finally {
@@ -126,6 +133,7 @@ export default function OperatorOrdersPage() {
     setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
     setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
     setCancelledOrders((prev) => prev.filter((o) => o.id !== updated.id));
+    setCompletedOrders((prev) => prev.filter((o) => o.id !== updated.id));
 
     if (updated.status === "pending") {
       setNewOrders((prev) => [updated, ...prev]);
@@ -137,6 +145,14 @@ export default function OperatorOrdersPage() {
       updated.operator_id === userIdRef.current
     ) {
       setMyOrders((prev) => [updated, ...prev]);
+      return;
+    }
+
+    if (
+      updated.status === "completed" &&
+      updated.operator_id === userIdRef.current
+    ) {
+      setCompletedOrders((prev) => [updated, ...prev].slice(0, 50));
       return;
     }
 
@@ -192,6 +208,9 @@ export default function OperatorOrdersPage() {
                 prev.filter((o) => o.id !== payload.old.id),
               );
               setCancelledOrders((prev) =>
+                prev.filter((o) => o.id !== payload.old.id),
+              );
+              setCompletedOrders((prev) =>
                 prev.filter((o) => o.id !== payload.old.id),
               );
             }
@@ -325,7 +344,7 @@ export default function OperatorOrdersPage() {
           ]);
         }
       }
-      setActiveTab(status === "cancelled" ? "cancelled" : "new");
+      setActiveTab(status === "cancelled" ? "cancelled" : "completed");
     } catch (err) {
       console.error(err);
       alert("Произошла системная ошибка.");
@@ -381,6 +400,7 @@ export default function OperatorOrdersPage() {
     { id: "in_work", label: "В работе", count: inWorkOrders.length },
     { id: "awaiting", label: "Ожидают оплаты", count: awaitingOrders.length },
     { id: "review", label: "На проверке", count: reviewOrders.length },
+    { id: "completed", label: "Выполненные", count: completedOrders.length },
     { id: "cancelled", label: "Отменённые", count: cancelledOrders.length },
   ];
 
@@ -393,7 +413,7 @@ export default function OperatorOrdersPage() {
   const renderMyOrderCard = (order: Order) => (
     <div
       key={order.id}
-      className={`p-6 bg-white rounded-[32px] border-2 shadow-none grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6 items-center transition-all ${
+      className={`p-4 sm:p-6 bg-white rounded-[24px] sm:rounded-[32px] border-2 shadow-none grid grid-cols-1 xl:grid-cols-[1fr_350px] gap-4 sm:gap-6 items-start xl:items-center transition-all ${
         order.status === "paid"
           ? "border-emerald-400 bg-emerald-50/20"
           : order.status === "processing"
@@ -592,17 +612,13 @@ export default function OperatorOrdersPage() {
   );
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-6 text-zinc-900 font-sans antialiased">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
-          Активные ордера
-        </h1>
-        <p className="text-sm font-medium text-zinc-400 mt-1">
-          Очередь и ваши заявки по этапам
-        </p>
-      </div>
+    <div className="w-full max-w-7xl mx-auto space-y-4 sm:space-y-6 text-zinc-900 font-sans antialiased">
+      <StaffPageHeader
+        title="Активные ордера"
+        description="Очередь и ваши заявки по этапам"
+      />
 
-      <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl w-fit">
+      <StaffScrollTabs>
         {tabs.map((tab) => (
           <Button
             key={tab.id}
@@ -610,7 +626,7 @@ export default function OperatorOrdersPage() {
             variant="ghost"
             size="sm"
             onClick={() => setActiveTab(tab.id)}
-            className={`text-xs font-bold rounded-xl h-9 px-4 transition-all cursor-pointer ${
+            className={`text-xs font-bold rounded-xl h-9 px-3 sm:px-4 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === tab.id
                 ? "bg-white text-zinc-900 shadow-xs hover:bg-white"
                 : "text-zinc-400 hover:text-zinc-600"
@@ -630,7 +646,7 @@ export default function OperatorOrdersPage() {
             </span>
           </Button>
         ))}
-      </div>
+      </StaffScrollTabs>
 
       {activeTab === "new" && (
         <div className="space-y-4">
@@ -643,7 +659,7 @@ export default function OperatorOrdersPage() {
                 {newOrders.map((order) => (
                   <div
                     key={order.id}
-                    className="p-6 bg-white rounded-[32px] border border-zinc-200 shadow-none flex flex-col justify-between gap-4"
+                    className="p-4 sm:p-6 bg-white rounded-[24px] sm:rounded-[32px] border border-zinc-200 shadow-none flex flex-col justify-between gap-4"
                   >
                     <div>
                       <div className="flex justify-between items-start gap-3">
@@ -723,6 +739,58 @@ export default function OperatorOrdersPage() {
         </div>
       )}
 
+      {activeTab === "completed" && (
+        <div className="space-y-4">
+          {completedOrders.length === 0
+            ? renderEmpty("Нет выполненных заявок.")
+            : completedOrders.map((order) => (
+                <div
+                  key={order.id}
+                  className="p-4 sm:p-6 bg-white rounded-[24px] sm:rounded-[32px] border border-emerald-200 shadow-none space-y-3"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                    <span className="text-sm font-mono font-bold text-zinc-400 break-all">
+                      ID: {order.id}
+                    </span>
+                    <span className="text-xs font-semibold text-zinc-500">
+                      {formatCreatedAt(order.created_at)}
+                    </span>
+                    <span className="text-xs font-bold px-3 py-1 rounded-full w-fit bg-emerald-50 text-emerald-700 border border-emerald-100">
+                      Выполнена
+                    </span>
+                    <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-[20px] text-sm">
+                    <div>
+                      <span className="text-zinc-400 block text-xs font-bold mb-1">
+                        КЛИЕНТ ОТДАЕТ:
+                      </span>
+                      <span className="font-black text-zinc-900 text-base">
+                        {Number(order.amount_from || 0).toLocaleString("ru-RU")}{" "}
+                        {order.currency_from}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-400 block text-xs font-bold mb-1">
+                        КЛИЕНТ ПОЛУЧИЛ:
+                      </span>
+                      <span className="font-black text-zinc-800 text-base">
+                        {Number(order.amount_to || 0).toFixed(4)}{" "}
+                        {order.currency_to}
+                      </span>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/operator/orders/${order.id}`}
+                    className="inline-flex text-xs font-bold text-zinc-600 hover:text-zinc-900 underline-offset-2 hover:underline"
+                  >
+                    Открыть заявку
+                  </Link>
+                </div>
+              ))}
+        </div>
+      )}
+
       {activeTab === "cancelled" && (
         <div className="space-y-4">
           {cancelledOrders.length === 0
@@ -732,7 +800,7 @@ export default function OperatorOrdersPage() {
             : cancelledOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="p-6 bg-white rounded-[32px] border border-rose-200 shadow-none space-y-3"
+                  className="p-4 sm:p-6 bg-white rounded-[24px] sm:rounded-[32px] border border-rose-200 shadow-none space-y-3"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                     <span className="text-sm font-mono font-bold text-zinc-400 break-all">
