@@ -1,11 +1,27 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createClient } from "@/src/utils/supabase/server";
+import { verifyTurnstileToken } from "@/src/utils/captcha/verify-turnstile";
 
-export async function loginAndGetRoute(email: string, password: string) {
+export async function loginAndGetRoute(
+  email: string,
+  password: string,
+  captchaToken: string,
+) {
+  const requestHeaders = await headers();
+  const ip =
+    requestHeaders.get("cf-connecting-ip") ||
+    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    null;
+
+  const captchaOk = await verifyTurnstileToken(captchaToken, ip);
+  if (!captchaOk) {
+    return { error: "Подтвердите, что вы не робот" };
+  }
+
   const supabase = await createClient();
 
-  // 1. Авторизуем на сервере
   const { data: authData, error: authError } =
     await supabase.auth.signInWithPassword({
       email,

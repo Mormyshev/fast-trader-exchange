@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
-import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
+import { startPolling, subscribeWithAuth } from "@/src/utils/supabase/realtime";
 
 type OrderStatus =
   | "pending"
@@ -222,8 +222,11 @@ export default function UserOrdersPage() {
       await subscribeWithAuth(supabase, channel);
     })();
 
+    const stopPoll = startPolling(() => void loadOrders(), 5000);
+
     return () => {
       cancelled = true;
+      stopPoll();
       if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id, isAuthLoading, activeTab]);

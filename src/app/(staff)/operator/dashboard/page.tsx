@@ -234,7 +234,7 @@ export default function OperatorDashboard() {
       });
     };
 
-    const inboxChannel = subscribeOrdersInbox(supabase, (order) => {
+    const inbox = subscribeOrdersInbox(supabase, (order) => {
       applyLiveOrder(order as Order);
     });
 
@@ -267,7 +267,7 @@ export default function OperatorDashboard() {
     })();
 
     return () => {
-      supabase.removeChannel(inboxChannel);
+      inbox.unsubscribe();
       if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id, supabase]);

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/src/utils/supabase/client";
-import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
+import { startPolling, subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
 import { OrderTtlBadge, useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
@@ -164,8 +164,11 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       await subscribeWithAuth(supabase, channel);
     })();
 
+    const stopPoll = startPolling(() => void load(), 4000);
+
     return () => {
       cancelled = true;
+      stopPoll();
       if (channel) supabase.removeChannel(channel);
     };
   }, [orderId, user?.id, isAuthLoading, supabase]);

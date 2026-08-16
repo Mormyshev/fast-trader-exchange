@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircle, X } from "lucide-react";
 import { createClient } from "@/src/utils/supabase/client";
+import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
 import type { ChatConversation } from "@/src/utils/chat/types";
 import ChatPanel from "./ChatPanel";
@@ -20,9 +21,12 @@ export default function ChatWidget() {
     null,
   );
   const [loading, setLoading] = useState(false);
+  const conversationRef = useRef<ChatConversation | null>(null);
+  conversationRef.current = conversation;
 
   const loadConversation = useCallback(async () => {
-    setLoading(true);
+    const isFirstLoad = !conversationRef.current;
+    if (isFirstLoad) setLoading(true);
     try {
       const res = await fetch("/api/chat/conversations");
       const data = await res.json();
@@ -30,7 +34,7 @@ export default function ChatWidget() {
         setConversation(data.conversation);
       }
     } finally {
-      setLoading(false);
+      if (isFirstLoad) setLoading(false);
     }
   }, []);
 
@@ -59,7 +63,7 @@ export default function ChatWidget() {
         },
       );
 
-    channel.subscribe();
+    void subscribeWithAuth(supabase, channel);
     return () => {
       void supabase.removeChannel(channel);
     };

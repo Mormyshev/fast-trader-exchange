@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Paperclip, Send } from "lucide-react";
 import { createClient } from "@/src/utils/supabase/client";
-import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
+import { subscribeWithAuth, startPolling } from "@/src/utils/supabase/realtime";
+import { subscribeSupportInbox } from "@/src/utils/supabase/support-inbox";
 import type { ChatConversation, ChatMessage } from "@/src/utils/chat/types";
 import { MAX_CHAT_ATTACHMENT_BYTES } from "@/src/utils/chat/types";
 import OperatorAvatar from "./OperatorAvatar";
@@ -102,27 +103,34 @@ export default function ChatPanel({
     ? "Взять диалог на себя"
     : "Взять в работу";
 
+  const onConversationChangeRef = useRef(onConversationChange);
+  onConversationChangeRef.current = onConversationChange;
+
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  const loadMessages = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadMessages = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await fetch(`/api/chat/conversations/${conversationId}/messages`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
       setMessages(data.messages ?? []);
-      if (data.conversation && onConversationChange) {
-        onConversationChange(data.conversation);
+      if (data.conversation) {
+        onConversationChangeRef.current?.(data.conversation);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка загрузки");
+      if (!silent) {
+        setError(err instanceof Error ? err.message : "Ошибка загрузки");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, [conversationId, onConversationChange]);
+  }, [conversationId]);
 
   useEffect(() => {
     void loadMessages();
@@ -134,7 +142,16 @@ export default function ChatPanel({
 
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
+
+    const upsertMessage = (row: ChatMessage | null | undefined) => {
+      if (!row?.id || row.conversation_id !== conversationId) return;
+      setMessages((prev) => {
+        if (prev.some((message) => message.id === row.id)) return prev;
+        return [...prev, row];
+      });
+    };
+
+    const pgChannel = supabase
       .channel(`chat-messages-${conversationId}`)
       .on(
         "postgres_changes",
@@ -144,17 +161,37 @@ export default function ChatPanel({
           table: "chat_messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
-        () => {
-          void loadMessages();
+        (payload) => {
+          upsertMessage(payload.new as ChatMessage);
         },
       );
 
-    void subscribeWithAuth(supabase, channel);
+    void subscribeWithAuth(supabase, pgChannel);
+
+    const inbox =
+      mode === "operator"
+        ? subscribeSupportInbox(supabase, {
+            onMessage: (payload) => {
+              if (payload.conversationId !== conversationId) return;
+              upsertMessage(payload.message as ChatMessage);
+            },
+            onConversation: (payload) => {
+              const next = payload.conversation as ChatConversation | undefined;
+              if (next?.id === conversationId) {
+                onConversationChangeRef.current?.(next);
+              }
+            },
+          })
+        : null;
+
+    const stopPoll = startPolling(() => void loadMessages(true), 5000);
 
     return () => {
-      void supabase.removeChannel(channel);
+      stopPoll();
+      inbox?.unsubscribe();
+      void supabase.removeChannel(pgChannel);
     };
-  }, [conversationId, loadMessages]);
+  }, [conversationId, loadMessages, mode]);
 
   const sendText = async () => {
     const body = text.trim();

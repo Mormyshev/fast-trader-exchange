@@ -27,8 +27,8 @@ export default function OperatorSupportPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [hasPseudonym, setHasPseudonym] = useState(false);
 
-  const loadConversations = useCallback(async () => {
-    setLoading(true);
+  const loadConversations = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch("/api/chat/conversations");
       const data = await res.json();
@@ -36,7 +36,7 @@ export default function OperatorSupportPage() {
         setConversations(data.conversations ?? []);
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -60,18 +60,18 @@ export default function OperatorSupportPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    const channel = subscribeSupportInbox(supabase, {
+    const inbox = subscribeSupportInbox(supabase, {
       onMessage: () => {
         setNotice("Новое сообщение в чате");
-        void loadConversations();
+        void loadConversations(true);
       },
       onConversation: () => {
-        void loadConversations();
+        void loadConversations(true);
       },
     });
 
     return () => {
-      void supabase.removeChannel(channel);
+      inbox.unsubscribe();
     };
   }, [loadConversations]);
 

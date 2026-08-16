@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/src/utils/supabase/client";
-import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
+import { startPolling, subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import {
   Loader2,
   CheckCircle2,
@@ -124,8 +124,11 @@ export default function OrderStatusClient({
       await subscribeWithAuth(client, channel);
     })();
 
+    const stopPoll = startPolling(() => void refreshOrder(), 4000);
+
     return () => {
       cancelled = true;
+      stopPoll();
       if (channel) client.removeChannel(channel);
     };
   }, [order.id]);

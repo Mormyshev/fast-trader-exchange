@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, RefreshCw } from "lucide-react";
+import { X } from "lucide-react";
 import { useLenis } from "lenis/react";
 import { loginAndGetRoute } from "@/src/app/actions/auth";
 import { validateEmail, validatePassword } from "@/src/utils/validation";
+import TurnstileCaptcha from "@/src/components/TurnstileCaptcha/TurnstileCaptcha";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -22,27 +23,24 @@ export default function AuthModal({
 
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const [num1, setNum1] = useState(6);
-  const [num2, setNum2] = useState(6);
-
   const lenis = useLenis();
 
-  const generateCaptcha = () => {
-    setNum1(Math.floor(Math.random() * 10) + 1);
-    setNum2(Math.floor(Math.random() * 10) + 1);
-    setCaptchaAnswer("");
+  const resetCaptcha = () => {
+    setCaptchaToken(null);
+    setCaptchaReset((n) => n + 1);
   };
 
   useEffect(() => {
     if (isOpen) {
       setError("");
       setIsLoading(false);
-      generateCaptcha();
+      resetCaptcha();
       setShouldRender(true);
       if (lenis) lenis.stop();
       document.body.style.overflow = "hidden";
@@ -65,9 +63,8 @@ export default function AuthModal({
     e.preventDefault();
     setError("");
 
-    if (parseInt(captchaAnswer) !== num1 + num2) {
-      setError("Неверный ответ на капчу");
-      generateCaptcha();
+    if (!captchaToken) {
+      setError("Подтвердите, что вы не робот");
       return;
     }
 
@@ -85,19 +82,22 @@ export default function AuthModal({
 
     setIsLoading(true);
 
-    const result = await loginAndGetRoute(emailCheck.value, passwordCheck.value);
+    const result = await loginAndGetRoute(
+      emailCheck.value,
+      passwordCheck.value,
+      captchaToken,
+    );
 
     if (result.error) {
       setIsLoading(false);
       setError(result.error);
-      generateCaptcha();
+      resetCaptcha();
     } else if (result.route) {
       setLogin("");
       setPassword("");
       setIsLoading(false);
       onClose();
 
-      // Жесткий редирект для очистки сетевых очередей браузера
       window.location.href = result.route;
     }
   };
@@ -163,32 +163,15 @@ export default function AuthModal({
             />
           </div>
 
-          <div className="flex items-center space-x-4 pt-2">
-            <div className="flex items-center bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2 font-bold text-lg text-zinc-700 select-none">
-              {num1} + {num2} =
-            </div>
-            <input
-              type="number"
-              value={captchaAnswer}
-              onChange={(e) => setCaptchaAnswer(e.target.value)}
-              className="w-16 h-12 bg-white border border-zinc-200 rounded-full text-center font-bold focus:outline-hidden focus:border-[#FFDD2D]"
-              required
-              disabled={isLoading}
-            />
-            <button
-              type="button"
-              onClick={generateCaptcha}
-              className="p-2 text-amber-400 hover:text-amber-500 transition-colors"
-              disabled={isLoading}
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
+          <TurnstileCaptcha
+            onToken={setCaptchaToken}
+            resetSignal={captchaReset}
+          />
 
           <div className="pt-4">
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !captchaToken}
               className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-3.5 rounded-full shadow-xs transition-all flex items-center justify-center"
             >
               {isLoading ? "Вход..." : "Войти"}
@@ -196,7 +179,6 @@ export default function AuthModal({
           </div>
         </form>
 
-        {/* Кнопка быстрого перехода на регистрацию */}
         <div className="mt-6 text-center text-xs font-semibold">
           <span className="text-zinc-400">Ещё нет аккаунта? </span>
           <button

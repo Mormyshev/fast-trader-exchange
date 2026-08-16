@@ -205,7 +205,7 @@ export default function OperatorOrdersPage() {
 
     let pgChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    const inboxChannel = subscribeOrdersInbox(supabase, (order, event) => {
+    const inbox = subscribeOrdersInbox(supabase, (order, event) => {
       if (event === "created" && order.status === "pending") {
         setNewOrders((prev) => {
           if (prev.some((o) => o.id === order.id)) return prev;
@@ -257,7 +257,7 @@ export default function OperatorOrdersPage() {
     })();
 
     return () => {
-      supabase.removeChannel(inboxChannel);
+      inbox.unsubscribe();
       if (pgChannel) supabase.removeChannel(pgChannel);
     };
   }, [user?.id, supabase]);

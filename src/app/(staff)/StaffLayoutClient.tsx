@@ -117,7 +117,7 @@ export default function StaffLayoutClient({
     void loadPendingChats();
 
     const supabase = createClient();
-    const channel = subscribeSupportInbox(supabase, {
+    const inbox = subscribeSupportInbox(supabase, {
       onMessage: () => void loadPendingChats(),
       onConversation: () => void loadPendingChats(),
     });
@@ -126,7 +126,7 @@ export default function StaffLayoutClient({
 
     return () => {
       clearInterval(interval);
-      void supabase.removeChannel(channel);
+      inbox.unsubscribe();
     };
   }, [loadPendingChats]);
 
