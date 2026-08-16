@@ -37,7 +37,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
   if (window.turnstile) return Promise.resolve(window.turnstile);
   if (scriptPromise) return scriptPromise;
 
-  scriptPromise = new Promise((resolve, reject) => {
+  const promise = new Promise<TurnstileApi>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(
       `script[src="${SCRIPT_SRC}"]`,
     );
@@ -67,12 +67,14 @@ function loadTurnstile(): Promise<TurnstileApi> {
     script.onload = onReady;
     script.onerror = () => reject(new Error("Не удалось загрузить капчу"));
     document.head.appendChild(script);
-  }).catch((err) => {
-    scriptPromise = null;
-    throw err;
   });
 
-  return scriptPromise;
+  scriptPromise = promise;
+  void promise.catch(() => {
+    scriptPromise = null;
+  });
+
+  return promise;
 }
 
 export default function TurnstileCaptcha({
