@@ -8,6 +8,7 @@ import RegisterModal from "../RegisterModal/RegisterModal";
 import { useAuth } from "@/src/app/context/AuthContext";
 
 import { Button } from "@/components/ui/button";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import {
   Sheet,
   SheetContent,
@@ -31,7 +32,19 @@ export default function Header() {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   const { role, logoutUser } = useAuth();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const cabinet = getCabinetLink(role);
+
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: "Выйти из аккаунта?",
+      description: "Текущая сессия будет завершена.",
+      confirmLabel: "Выйти",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    logoutUser();
+  };
 
   const openLoginAndCloseRegister = () => {
     setIsRegisterOpen(false);
@@ -117,7 +130,7 @@ export default function Header() {
                     </>
                   )}
                   <Button
-                    onClick={logoutUser}
+                    onClick={() => void handleLogout()}
                     variant="secondary"
                     className="rounded-full px-6 text-sm font-semibold transition-all cursor-pointer"
                   >
@@ -141,7 +154,7 @@ export default function Header() {
                 </SheetTrigger>
                 <SheetContent
                   side="right"
-                  className="w-full sm:max-w-xs border-l border-gray-100 bg-white/95 backdrop-blur-md p-6 flex flex-col justify-between dark:border-zinc-900"
+                  className="w-full sm:max-w-xs border-l border-gray-100 bg-white/95 backdrop-blur-md p-4 sm:p-6 flex flex-col justify-between overflow-hidden dark:border-zinc-900"
                 >
                   <div>
                     <SheetTitle className="text-left text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500 mb-6">
@@ -153,7 +166,7 @@ export default function Header() {
                         <NextLink
                           href={cabinet.href}
                           onClick={() => setIsOpen(false)}
-                          className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer"
+                          className="block min-w-0 text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer truncate"
                         >
                           {cabinet.label}
                         </NextLink>
@@ -182,56 +195,56 @@ export default function Header() {
 
                   </div>
 
-                  <div className="pt-4 border-t border-gray-100 dark:border-zinc-900">
+                  <div className="pt-4 border-t border-gray-100 dark:border-zinc-900 shrink-0">
                     {role === "guest" ? (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-3">
                         <Button
                           variant="outline"
                           onClick={() => {
                             setIsOpen(false);
                             setIsRegisterOpen(true);
                           }}
-                          className="border-gray-200 text-gray-700 dark:border-zinc-800 dark:text-zinc-300 rounded-xl py-5 text-xs font-semibold bg-white"
+                          className="w-full min-w-0 h-12 border-gray-200 text-gray-700 dark:border-zinc-800 dark:text-zinc-300 rounded-xl text-sm font-semibold bg-white flex items-center justify-center gap-2 px-4"
                         >
-                          <UserPlus className="w-4 h-4 mr-1.5 text-gray-500" />
-                          Регистрация
+                          <UserPlus className="w-4 h-4 shrink-0 text-gray-500" />
+                          <span className="truncate">Регистрация</span>
                         </Button>
                         <Button
                           onClick={() => {
                             setIsOpen(false);
                             setIsAuthOpen(true);
                           }}
-                          className="bg-[#FFDD2D] hover:bg-[#e6c625] text-black rounded-xl py-5 text-xs font-semibold border-none shadow-none"
+                          className="w-full min-w-0 h-12 bg-[#FFDD2D] hover:bg-[#e6c625] text-black rounded-xl text-sm font-semibold border-none shadow-none flex items-center justify-center gap-2 px-4"
                         >
-                          <LogIn className="w-4 h-4 mr-1.5 text-black" />
-                          Войти
+                          <LogIn className="w-4 h-4 shrink-0 text-black" />
+                          <span className="truncate">Войти</span>
                         </Button>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-3">
                         <NextLink
                           href={cabinet.href}
                           onClick={() => setIsOpen(false)}
-                          className="w-full"
+                          className="w-full min-w-0"
                         >
                           <Button
                             variant="outline"
-                            className="w-full border-gray-200 dark:border-zinc-800 rounded-xl py-5 text-xs font-semibold bg-white"
+                            className="w-full min-w-0 h-12 border-gray-200 dark:border-zinc-800 rounded-xl text-sm font-semibold bg-white flex items-center justify-center gap-2 px-4"
                           >
-                            <User className="w-4 h-4 mr-1.5" />
-                            {cabinet.label}
+                            <User className="w-4 h-4 shrink-0" />
+                            <span className="truncate">{cabinet.label}</span>
                           </Button>
                         </NextLink>
                         <Button
                           onClick={() => {
                             setIsOpen(false);
-                            logoutUser();
+                            void handleLogout();
                           }}
                           variant="destructive"
-                          className="rounded-xl py-5 text-xs font-semibold"
+                          className="w-full min-w-0 h-12 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 px-4"
                         >
-                          <LogOut className="w-4 h-4 mr-1.5" />
-                          Выйти
+                          <LogOut className="w-4 h-4 shrink-0" />
+                          <span className="truncate">Выйти</span>
                         </Button>
                       </div>
                     )}
@@ -253,6 +266,7 @@ export default function Header() {
         onClose={() => setIsRegisterOpen(false)}
         onSwitchToLogin={openLoginAndCloseRegister}
       />
+      <ConfirmDialogHost />
     </>
   );
 }

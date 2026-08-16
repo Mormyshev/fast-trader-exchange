@@ -52,20 +52,6 @@ export const FIAT_CURRENCIES: ExchangeCurrency[] = [
     },
   },
   {
-    id: "rub_cash",
-    name: "Наличные RUB",
-    code: "RUB",
-    orderCode: "RUB_CASH",
-    iconSrc: "/icons/cash.svg",
-    network: {
-      id: "cash",
-      label: "Наличные",
-      shortLabel: "Наличные",
-      description: "Выдача наличных в выбранном городе.",
-      addressHint: "Город получения",
-    },
-  },
-  {
     id: "rub_sber",
     name: "Сбербанк RUB",
     code: "RUB",
@@ -177,6 +163,30 @@ export const CRYPTO_ASSETS: CryptoAsset[] = [
           description:
             "USDT в сети TON (Jetton). Не используйте TRON, Ethereum или BSC.",
           addressHint: "EQ… или UQ… (сеть TON)",
+        },
+      },
+      {
+        id: "usdt_sol",
+        orderCode: "USDT_SOL",
+        network: {
+          id: "solana-spl",
+          label: "Solana (SPL)",
+          shortLabel: "SOL",
+          description:
+            "USDT в сети Solana (SPL). Не используйте TRON, Ethereum, BSC или TON.",
+          addressHint: "Base58, 32–44 символа (Solana)",
+        },
+      },
+      {
+        id: "usdt_arbitrum",
+        orderCode: "USDT_ARBITRUM",
+        network: {
+          id: "arbitrum-one",
+          label: "Arbitrum One",
+          shortLabel: "ARB1",
+          description:
+            "USDT в сети Arbitrum One. Не используйте Ethereum (ERC20), BSC (BEP20) или TRON.",
+          addressHint: "0x… (42 символа, Arbitrum One)",
         },
       },
     ],

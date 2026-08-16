@@ -3,6 +3,7 @@ import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
+import { attachClientsToOrders } from "@/src/utils/orders/attach-client";
 
 const IN_PROGRESS = ["processing", "awaiting_payment", "paid"] as const;
 
@@ -84,12 +85,19 @@ export async function GET() {
       return NextResponse.json({ error: firstError.message }, { status: 500 });
     }
 
+    const [pending, mine, completed, cancelled] = await Promise.all([
+      attachClientsToOrders(admin, pendingRes.data ?? []),
+      attachClientsToOrders(admin, mineRes.data ?? []),
+      attachClientsToOrders(admin, completedRes.data ?? []),
+      attachClientsToOrders(admin, cancelledRes.data ?? []),
+    ]);
+
     return NextResponse.json({
-      pending: pendingRes.data ?? [],
-      mine: mineRes.data ?? [],
-      completed: completedRes.data ?? [],
+      pending,
+      mine,
+      completed,
       completedCount: completedCountRes.count ?? 0,
-      cancelled: cancelledRes.data ?? [],
+      cancelled,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";

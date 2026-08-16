@@ -22,11 +22,13 @@ import {
   type VerificationStatus,
 } from "@/src/utils/verification";
 import {
+  formatPhoneInput,
   formatTelegramInput,
   validateProfileFormField,
   validateProfileFormFields,
   type ProfileFormErrors,
 } from "@/src/utils/validation";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 
 function inputClass(hasError: boolean, base: string) {
   return hasError
@@ -43,6 +45,7 @@ const supabase = createClient();
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [verificationStatus, setVerificationStatus] =
     useState<VerificationStatus>("not_started");
@@ -59,6 +62,7 @@ export default function ProfilePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ProfileFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [rejectionComment, setRejectionComment] = useState<string | null>(null);
 
   const editable = canEditVerification(verificationStatus);
 
@@ -81,10 +85,15 @@ export default function ProfilePage() {
         setLastName(data.last_name || "");
         setFirstName(data.first_name || "");
         setMiddleName(data.middle_name || "");
-        setPhone(data.phone || "");
+        setPhone(formatPhoneInput(data.phone || ""));
         setTelegram(data.telegram || "");
         setVerificationStatus(
           normalizeVerificationStatus(data.verification),
+        );
+        setRejectionComment(
+          typeof data.verification_rejection_comment === "string"
+            ? data.verification_rejection_comment
+            : null,
         );
         if (data.passport_url) setPreviewUrl(data.passport_url);
       } catch (err) {
@@ -113,6 +122,11 @@ export default function ProfilePage() {
               normalizeVerificationStatus(String(updatedProfile.verification)),
             );
           }
+          if (typeof updatedProfile.verification_rejection_comment === "string") {
+            setRejectionComment(updatedProfile.verification_rejection_comment);
+          } else if (updatedProfile.verification_rejection_comment === null) {
+            setRejectionComment(null);
+          }
           // Подтягиваем поля с сервера, не затирая их пустыми значениями
           if (typeof updatedProfile.last_name === "string") {
             setLastName(updatedProfile.last_name);
@@ -127,7 +141,7 @@ export default function ProfilePage() {
             setMiddleName("");
           }
           if (typeof updatedProfile.phone === "string") {
-            setPhone(updatedProfile.phone);
+            setPhone(formatPhoneInput(updatedProfile.phone));
           }
           if (typeof updatedProfile.telegram === "string") {
             setTelegram(updatedProfile.telegram);
@@ -180,7 +194,15 @@ export default function ProfilePage() {
     }
   };
 
-  const removeFile = () => {
+  const removeFile = async () => {
+    const ok = await confirm({
+      title: "Удалить фото паспорта?",
+      description: "Документ нужно будет загрузить заново перед отправкой.",
+      confirmLabel: "Удалить",
+      variant: "destructive",
+    });
+    if (!ok) return;
+
     setPassportFile(null);
     if (previewUrl && !previewUrl.startsWith("http")) {
       URL.revokeObjectURL(previewUrl);
@@ -209,6 +231,18 @@ export default function ProfilePage() {
 
     setFieldErrors({});
     setFormError(null);
+
+    const ok = await confirm({
+      title:
+        verificationStatus === "rejected"
+          ? "Отправить исправленную анкету?"
+          : "Отправить анкету на проверку?",
+      description:
+        "После отправки форма будет заблокирована до решения оператора. Проверьте, что все данные совпадают с документом.",
+      confirmLabel: "Отправить",
+    });
+    if (!ok) return;
+
     setIsSubmitting(true);
     const prevStatus = verificationStatus;
 
@@ -243,11 +277,16 @@ export default function ProfilePage() {
         setLastName(profile.last_name || lastName);
         setFirstName(profile.first_name || firstName);
         setMiddleName(profile.middle_name || middleName);
-        setPhone(profile.phone || phone);
+        setPhone(formatPhoneInput(profile.phone || phone));
         setTelegram(profile.telegram || telegram);
         if (profile.passport_url) setPreviewUrl(profile.passport_url);
         setVerificationStatus(
           normalizeVerificationStatus(profile.verification),
+        );
+        setRejectionComment(
+          typeof profile.verification_rejection_comment === "string"
+            ? profile.verification_rejection_comment
+            : null,
         );
       }
       setPassportFile(null);
@@ -279,7 +318,7 @@ export default function ProfilePage() {
               <Clock className="h-6 w-6 animate-pulse" />
             </div>
             <h2 className="mt-4 text-lg font-semibold">
-              Данные отправлены оператору
+              Данные отправлены администратору
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400 max-w-md mx-auto">
               Форма заблокирована и находится на проверке. Обычно это занимает
@@ -298,6 +337,14 @@ export default function ProfilePage() {
               Проверьте данные и фото паспорта, при необходимости исправьте и
               отправьте анкету повторно. Ранее введённые поля сохранены.
             </p>
+            {rejectionComment && (
+              <div className="mt-4 mx-auto max-w-md rounded-xl border border-rose-200 bg-white/80 px-4 py-3 text-left text-sm text-rose-800 dark:bg-zinc-900/50 dark:text-rose-300">
+                <p className="text-xs font-bold uppercase tracking-wide text-rose-500 mb-1">
+                  Комментарий администратора
+                </p>
+                {rejectionComment}
+              </div>
+            )}
           </div>
         )}
 
@@ -419,11 +466,13 @@ export default function ProfilePage() {
                 <Phone className="absolute left-4 top-3.5 h-4 w-4 text-gray-400" />
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   required
                   disabled={!editable}
                   value={phone}
                   onChange={(e) => {
-                    setPhone(e.target.value);
+                    setPhone(formatPhoneInput(e.target.value));
                     if (fieldErrors.phone) {
                       setFieldErrors((prev) => ({ ...prev, phone: undefined }));
                     }
@@ -508,7 +557,7 @@ export default function ProfilePage() {
                         </div>
                         <button
                           type="button"
-                          onClick={removeFile}
+                          onClick={() => void removeFile()}
                           className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                         >
                           <X className="h-4 w-4" />
@@ -572,6 +621,7 @@ export default function ProfilePage() {
           </form>
         </div>
       </div>
+      <ConfirmDialogHost />
     </div>
   );
 }

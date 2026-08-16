@@ -13,6 +13,7 @@ import {
   fetchOperatorPseudonym,
   stripOrderInternalFields,
 } from "@/src/utils/orders/operator-snapshot";
+import { attachClientToOrder } from "@/src/utils/orders/attach-client";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -72,7 +73,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const fresh = await expireOrderIfNeeded(actor.admin, order);
     const payload = actor.isStaff
-      ? fresh
+      ? await attachClientToOrder(actor.admin, fresh)
       : stripOrderInternalFields(fresh as Record<string, unknown>);
     return NextResponse.json({ order: payload });
   } catch (err) {
@@ -225,11 +226,18 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     if (updated) {
-      void broadcastOrderEvent(ORDER_UPDATED_EVENT, updated);
+      void attachClientToOrder(actor.admin, updated).then((withClient) => {
+        void broadcastOrderEvent(
+          ORDER_UPDATED_EVENT,
+          withClient as Record<string, unknown>,
+        );
+      });
     }
 
     const payload = actor.isStaff
       ? updated
+        ? await attachClientToOrder(actor.admin, updated)
+        : updated
       : updated
         ? stripOrderInternalFields(updated as Record<string, unknown>)
         : updated;

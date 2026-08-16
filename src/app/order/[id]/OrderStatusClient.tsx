@@ -18,6 +18,8 @@ import {
   isOrderExpiredByTtl,
   ORDER_TTL_STATUSES,
 } from "@/src/utils/orders/ttl";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
+import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
 
 interface OrderStatusClientProps {
   initialOrder: any;
@@ -37,6 +39,7 @@ export default function OrderStatusClient({
     Boolean(initialOrder?.receipt_url),
   );
   const cancelInFlight = useRef(false);
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const canCancel = (ORDER_TTL_STATUSES as readonly string[]).includes(
     order.status,
@@ -145,14 +148,14 @@ export default function OrderStatusClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cancel only when timer hits zero
   }, [order.status, order.created_at, order.id]);
 
-  const handleCancelClick = () => {
-    if (
-      !confirm(
-        "Отменить заявку? Это действие нельзя будет отменить.",
-      )
-    ) {
-      return;
-    }
+  const handleCancelClick = async () => {
+    const ok = await confirm({
+      title: "Отменить заявку?",
+      description: "Это действие нельзя будет отменить.",
+      confirmLabel: "Отменить заявку",
+      variant: "destructive",
+    });
+    if (!ok) return;
     void cancelOrder("manual");
   };
 
@@ -202,6 +205,14 @@ export default function OrderStatusClient({
       alert("Пожалуйста, сначала прикрепите PDF-чек об оплате!");
       return;
     }
+
+    const ok = await confirm({
+      title: "Подтвердить оплату?",
+      description:
+        "Заявка будет отправлена оператору на проверку чека. Убедитесь, что перевод уже выполнен.",
+      confirmLabel: "Да, я оплатил",
+    });
+    if (!ok) return;
 
     setIsConfirming(true);
     // мгновенный UI, не ждём Realtime
@@ -365,9 +376,9 @@ export default function OrderStatusClient({
                 <span className="block text-[11px] font-black uppercase text-purple-500 tracking-wider">
                   Инструкция и реквизиты мерчанта:
                 </span>
-                <p className="text-sm font-mono whitespace-pre-wrap font-bold text-zinc-900 dark:text-zinc-50 leading-relaxed bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                  {order.payment_details}
-                </p>
+                <div className="bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                  <PaymentRequisitesView value={order.payment_details} />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -415,7 +426,7 @@ export default function OrderStatusClient({
 
               <div className="pt-2 flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={handleConfirmPayment}
+                  onClick={() => void handleConfirmPayment()}
                   disabled={isUploading || isConfirming || isCancelling}
                   className="w-full sm:max-w-xs bg-purple-500 hover:bg-purple-600 disabled:bg-zinc-200 text-white font-bold py-4 rounded-full shadow-md transition-all text-sm cursor-pointer tracking-wide uppercase text-center inline-flex items-center justify-center gap-2"
                 >
@@ -426,7 +437,7 @@ export default function OrderStatusClient({
                 </button>
                 <button
                   type="button"
-                  onClick={handleCancelClick}
+                  onClick={() => void handleCancelClick()}
                   disabled={isUploading || isConfirming || isCancelling}
                   className="w-full sm:w-auto px-6 py-4 rounded-full border border-rose-300 text-rose-600 hover:bg-rose-50 font-bold text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                 >
@@ -443,7 +454,7 @@ export default function OrderStatusClient({
             <div className="flex justify-center pt-2">
               <button
                 type="button"
-                onClick={handleCancelClick}
+                onClick={() => void handleCancelClick()}
                 disabled={isCancelling}
                 className="px-6 py-3 rounded-full border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
@@ -500,6 +511,7 @@ export default function OrderStatusClient({
           </div>
         )}
       </div>
+      <ConfirmDialogHost />
     </div>
   );
 }

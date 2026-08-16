@@ -5,6 +5,7 @@ export {
   validateEmail,
   validatePhone,
   normalizePhoneDigits,
+  formatPhoneInput,
   validateTelegram,
   formatTelegramInput,
   validateCoupon,

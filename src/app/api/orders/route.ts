@@ -6,6 +6,7 @@ import {
   broadcastOrderEvent,
   ORDER_CREATED_EVENT,
 } from "@/src/utils/supabase/broadcast";
+import { attachClientToOrder } from "@/src/utils/orders/attach-client";
 import {
   isCryptoOrderCode,
   orderCodeToCurrencyId,
@@ -115,8 +116,12 @@ export async function POST(request: Request) {
 
     const order = data?.[0] ?? null;
     if (order) {
-      // не блокируем ответ клиенту на broadcast
-      void broadcastOrderEvent(ORDER_CREATED_EVENT, order);
+      void attachClientToOrder(admin, order).then((withClient) => {
+        void broadcastOrderEvent(
+          ORDER_CREATED_EVENT,
+          withClient as Record<string, unknown>,
+        );
+      });
     }
 
     return NextResponse.json({ order });

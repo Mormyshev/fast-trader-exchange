@@ -57,6 +57,7 @@ function detectWrongNetwork(
   if (
     currencyId === "usdt_erc20" ||
     currencyId === "usdt_bep20" ||
+    currencyId === "usdt_arbitrum" ||
     currencyId === "eth"
   ) {
     if (address.startsWith("T")) {
@@ -81,7 +82,10 @@ function detectWrongNetwork(
     return "Адрес не относится к сети TON.";
   }
 
-  if (currencyId === "sol" && (address.startsWith("0x") || address.startsWith("T"))) {
+  if (
+    (currencyId === "sol" || currencyId === "usdt_sol") &&
+    (address.startsWith("0x") || address.startsWith("T"))
+  ) {
     return "Адрес не относится к сети Solana.";
   }
 
@@ -100,7 +104,8 @@ export function formatWalletInput(value: string, currencyId: string): string {
   if (
     currencyId === "eth" ||
     currencyId === "usdt_erc20" ||
-    currencyId === "usdt_bep20"
+    currencyId === "usdt_bep20" ||
+    currencyId === "usdt_arbitrum"
   ) {
     const cleaned = value.replace(/\s/g, "");
     if (!cleaned) return "";
@@ -155,6 +160,20 @@ export function validateCryptoWallet(
       if (!TON_FRIENDLY.test(trimmed)) {
         return validationError(
           `USDT TON: адрес Jetton — EQ или UQ (${network})`,
+        );
+      }
+      break;
+    case "usdt_sol":
+      if (!BASE58.test(trimmed) || trimmed.length < 32 || trimmed.length > 44) {
+        return validationError(
+          `USDT SOL: адрес Solana — Base58, 32–44 символа (${network})`,
+        );
+      }
+      break;
+    case "usdt_arbitrum":
+      if (!ETH_ADDRESS.test(trimmed)) {
+        return validationError(
+          `USDT Arbitrum One: адрес — 0x и 40 hex-символов (${network})`,
         );
       }
       break;

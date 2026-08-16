@@ -43,6 +43,7 @@ model Profiles {
   phone        String?
   telegram     String?
   passport_url String?
+  verification_rejection_comment String?
   operator_pseudonym String?
 
   orders_as_user     Orders[]     @relation("UserOrders")

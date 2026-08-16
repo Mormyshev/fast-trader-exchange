@@ -72,6 +72,45 @@ export function normalizePhoneDigits(value: string): string {
   return digits;
 }
 
+/** Маска ввода: +7 (999) 123-45-67 */
+export function formatPhoneInput(value: string): string {
+  if (!value.trim()) return "";
+
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("8")) {
+    digits = `7${digits.slice(1)}`;
+  } else if (!digits.startsWith("7") && digits.length > 0) {
+    digits = `7${digits}`;
+  }
+
+  digits = digits.slice(0, 11);
+
+  if (digits.length === 0) return "";
+  if (digits.length === 1) return "+7";
+
+  const rest = digits.slice(1);
+  let out = "+7";
+
+  if (rest.length > 0) {
+    out += ` (${rest.slice(0, 3)}`;
+  }
+  if (rest.length >= 3) {
+    out += ")";
+  }
+  if (rest.length > 3) {
+    out += ` ${rest.slice(3, 6)}`;
+  }
+  if (rest.length > 6) {
+    out += `-${rest.slice(6, 8)}`;
+  }
+  if (rest.length > 8) {
+    out += `-${rest.slice(8, 10)}`;
+  }
+
+  return out;
+}
+
 export function validatePhone(value: string): ValidationResult {
   const trimmed = value.trim();
   if (!trimmed) {

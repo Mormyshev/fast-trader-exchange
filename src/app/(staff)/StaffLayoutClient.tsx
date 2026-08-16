@@ -23,13 +23,14 @@ import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeSupportInbox } from "@/src/utils/supabase/support-inbox";
 import type { ChatConversation } from "@/src/utils/chat/types";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 
 const pageTitles: { [key: string]: string } = {
   "/operator/dashboard": "Дашборд статистики",
   "/operator/orders": "Активные ордера",
-  "/operator/verification": "Проверка анкет",
   "/operator/support": "Чат поддержки",
   "/operator/profile": "Профиль оператора",
+  "/admin/verification": "Верификация аккаунтов",
   "/admin/manage-operators": "Управление персоналом",
   "/admin/settings": "Настройки системы",
 };
@@ -60,6 +61,7 @@ export default function StaffLayoutClient({
   );
   const pathname = usePathname();
   const { logoutUser } = useAuth();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const loadPendingChats = useCallback(async () => {
     try {
@@ -141,8 +143,19 @@ export default function StaffLayoutClient({
     setSidebarOpen((open) => !open);
   };
 
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: "Выйти из системы?",
+      description: "Текущая сессия оператора будет завершена.",
+      confirmLabel: "Выйти",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    logoutUser();
+  };
+
   return (
-    <div className="flex min-h-screen bg-zinc-50/50 text-zinc-900 font-sans antialiased overflow-x-hidden">
+    <div className="flex h-dvh bg-zinc-50/50 text-zinc-900 font-sans antialiased overflow-hidden">
       {!isDesktop && sidebarOpen && (
         <button
           type="button"
@@ -181,7 +194,7 @@ export default function StaffLayoutClient({
           <nav className="space-y-1 pt-4 overflow-y-auto flex-1 min-h-0 pb-2 [scrollbar-width:thin]">
             <Link
               href="/operator/dashboard"
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+              className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
                 pathname === "/operator/dashboard"
                   ? "bg-[#FFDD2D] text-zinc-900"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
@@ -189,12 +202,12 @@ export default function StaffLayoutClient({
               onClick={handleNavClick}
             >
               <LayoutDashboard className="w-4 h-4 shrink-0" />
-              <span className="truncate">Дашборд</span>
+              <span className="min-w-0 flex-1 truncate">Дашборд</span>
             </Link>
 
             <Link
               href="/operator/orders"
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+              className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
                 pathname === "/operator/orders"
                   ? "bg-[#FFDD2D] text-zinc-900"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
@@ -202,25 +215,12 @@ export default function StaffLayoutClient({
               onClick={handleNavClick}
             >
               <ClipboardList className="w-4 h-4 shrink-0" />
-              <span className="truncate">Активные ордера</span>
-            </Link>
-
-            <Link
-              href="/operator/verification"
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-                pathname === "/operator/verification"
-                  ? "bg-[#FFDD2D] text-zinc-900"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-              }`}
-              onClick={handleNavClick}
-            >
-              <UserCheck className="w-4 h-4 shrink-0" />
-              <span className="truncate">Проверка анкет</span>
+              <span className="min-w-0 flex-1 truncate">Активные ордера</span>
             </Link>
 
             <Link
               href="/operator/support"
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer relative ${
+              className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer relative ${
                 pathname === "/operator/support"
                   ? "bg-[#FFDD2D] text-zinc-900"
                   : pendingChats > 0
@@ -235,7 +235,7 @@ export default function StaffLayoutClient({
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white animate-pulse" />
                 )}
               </span>
-              <span className="flex-1 truncate">Чат поддержки</span>
+              <span className="min-w-0 flex-1 truncate">Чат поддержки</span>
               {pendingChats > 0 && (
                 <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
                   {pendingChats}
@@ -245,7 +245,7 @@ export default function StaffLayoutClient({
 
             <Link
               href="/operator/profile"
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+              className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
                 pathname === "/operator/profile"
                   ? "bg-[#FFDD2D] text-zinc-900"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
@@ -253,7 +253,7 @@ export default function StaffLayoutClient({
               onClick={handleNavClick}
             >
               <UserCog className="w-4 h-4 shrink-0" />
-              <span className="truncate">Профиль</span>
+              <span className="min-w-0 flex-1 truncate">Профиль</span>
             </Link>
 
             {/* АДМИНСКИЙ БЛОК */}
@@ -263,59 +263,78 @@ export default function StaffLayoutClient({
                   Администрирование
                 </span>
                 <Link
+                  href="/admin/verification"
+                  className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                    pathname === "/admin/verification"
+                      ? "bg-[#FFDD2D] text-zinc-900"
+                      : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+                  }`}
+                  onClick={handleNavClick}
+                >
+                  <UserCheck className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Верификация аккаунтов
+                  </span>
+                </Link>
+                <Link
                   href="/admin/manage-operators"
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                  className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
                     pathname === "/admin/manage-operators"
                       ? "bg-[#FFDD2D] text-zinc-900"
                       : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
                   }`}
                   onClick={handleNavClick}
                 >
-                  <Users className="w-4 h-4" />
-                  Управление персоналом
+                  <Users className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Управление персоналом
+                  </span>
                 </Link>
                 <Link
                   href="/admin/settings"
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                  className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
                     pathname === "/admin/settings"
                       ? "bg-[#FFDD2D] text-zinc-900"
                       : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
                   }`}
                   onClick={handleNavClick}
                 >
-                  <Settings className="w-4 h-4" />
-                  Настройки системы
+                  <Settings className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Настройки системы
+                  </span>
                 </Link>
               </div>
             )}
           </nav>
         </div>
 
-        <div className="border-t border-zinc-100 pt-4 px-1 space-y-1">
+        <div className="border-t border-zinc-100 pt-4 px-1 space-y-1 shrink-0">
           <Link
             href="/"
             onClick={handleNavClick}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
+            className="w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
           >
-            <ExternalLink className="w-4 h-4" />
-            На сайт
+            <ExternalLink className="w-4 h-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">На сайт</span>
           </Link>
           <button
-            onClick={logoutUser}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+            type="button"
+            onClick={() => void handleLogout()}
+            className="w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
           >
-            <LogOut className="w-4 h-4" />
-            Выйти из системы
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">Выйти из системы</span>
           </button>
         </div>
       </aside>
 
       <div
-        className={`flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-300 ease-in-out ${
+        className={`flex-1 flex flex-col h-dvh min-h-0 min-w-0 transition-all duration-300 ease-in-out ${
           sidebarOpen ? "md:pl-64" : "md:pl-0"
         }`}
       >
-        <header className="h-14 sm:h-16 md:h-20 bg-white border-b border-zinc-200 px-3 sm:px-4 md:px-10 flex items-center justify-between gap-2 sticky top-0 z-30 safe-area-inset-top">
+        <header className="h-14 sm:h-16 md:h-20 bg-white border-b border-zinc-200 px-3 sm:px-4 md:px-10 flex items-center justify-between gap-2 shrink-0 z-30 safe-area-inset-top">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <Button
               variant="outline"
@@ -374,10 +393,11 @@ export default function StaffLayoutClient({
           </div>
         </header>
 
-        <main className="flex-1 p-3 sm:p-4 md:p-10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <main className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 md:p-10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {children}
         </main>
       </div>
+      <ConfirmDialogHost />
     </div>
   );
 }

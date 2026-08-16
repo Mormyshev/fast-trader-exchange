@@ -15,9 +15,18 @@ import {
   useNowTick,
 } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
+import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
 import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
 import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
 import { isOrderExpiredByTtl } from "@/src/utils/orders/ttl";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
+import type { OrderClient } from "@/src/utils/orders/client-info";
+import {
+  serializePaymentDetails,
+  validatePaymentRequisites,
+} from "@/src/utils/orders/payment-details";
+import PaymentRequisitesForm from "@/src/components/PaymentRequisites/PaymentRequisitesForm";
+import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
 
 interface Order {
   id: string;
@@ -42,9 +51,27 @@ interface Order {
   receipt_url: string | null;
   operator_receipt_url?: string | null;
   operator_pseudonym_snapshot?: string | null;
+  client?: OrderClient | null;
 }
 
 type TabId = "new" | "in_work" | "awaiting" | "review" | "completed" | "cancelled";
+
+function OpenOrderLink({
+  id,
+  className = "",
+}: {
+  id: string;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={`/operator/orders/${id}`}
+      className={`inline-flex items-center justify-center text-xs font-bold text-zinc-700 hover:text-zinc-950 underline-offset-2 hover:underline ${className}`}
+    >
+      Открыть заявку
+    </Link>
+  );
+}
 
 function formatCreatedAt(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", {
@@ -59,6 +86,7 @@ function formatCreatedAt(iso: string) {
 export default function OperatorOrdersPage() {
   const supabase = createClient();
   const { user, isLoading: isAuthLoading } = useAuth();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [newOrders, setNewOrders] = useState<Order[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
@@ -66,9 +94,9 @@ export default function OperatorOrdersPage() {
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("new");
-  const [detailsInput, setDetailsInput] = useState<{ [key: string]: string }>(
-    {},
-  );
+  const [detailsInput, setDetailsInput] = useState<{
+    [key: string]: { card: string; phone: string };
+  }>({});
 
   const userIdRef = useRef<string | null>(null);
   if (user?.id) {
@@ -130,37 +158,45 @@ export default function OperatorOrdersPage() {
   }, [user?.id, isAuthLoading]);
 
   const applyOrderUpdate = (updated: Order) => {
-    setNewOrders((prev) => prev.filter((o) => o.id !== updated.id));
-    setMyOrders((prev) => prev.filter((o) => o.id !== updated.id));
-    setCancelledOrders((prev) => prev.filter((o) => o.id !== updated.id));
-    setCompletedOrders((prev) => prev.filter((o) => o.id !== updated.id));
+    const existingClient =
+      updated.client ??
+      [...newOrders, ...myOrders, ...cancelledOrders, ...completedOrders].find(
+        (order) => order.id === updated.id,
+      )?.client;
 
-    if (updated.status === "pending") {
-      setNewOrders((prev) => [updated, ...prev]);
+    const next = { ...updated, client: existingClient ?? null };
+
+    setNewOrders((prev) => prev.filter((o) => o.id !== next.id));
+    setMyOrders((prev) => prev.filter((o) => o.id !== next.id));
+    setCancelledOrders((prev) => prev.filter((o) => o.id !== next.id));
+    setCompletedOrders((prev) => prev.filter((o) => o.id !== next.id));
+
+    if (next.status === "pending") {
+      setNewOrders((prev) => [next, ...prev]);
       return;
     }
 
     if (
-      ["processing", "awaiting_payment", "paid"].includes(updated.status) &&
-      updated.operator_id === userIdRef.current
+      ["processing", "awaiting_payment", "paid"].includes(next.status) &&
+      next.operator_id === userIdRef.current
     ) {
-      setMyOrders((prev) => [updated, ...prev]);
+      setMyOrders((prev) => [next, ...prev]);
       return;
     }
 
     if (
-      updated.status === "completed" &&
-      updated.operator_id === userIdRef.current
+      next.status === "completed" &&
+      next.operator_id === userIdRef.current
     ) {
-      setCompletedOrders((prev) => [updated, ...prev].slice(0, 50));
+      setCompletedOrders((prev) => [next, ...prev].slice(0, 50));
       return;
     }
 
     if (
-      updated.status === "cancelled" &&
-      (updated.operator_id === userIdRef.current || updated.operator_id == null)
+      next.status === "cancelled" &&
+      (next.operator_id === userIdRef.current || next.operator_id == null)
     ) {
-      setCancelledOrders((prev) => [updated, ...prev].slice(0, 100));
+      setCancelledOrders((prev) => [next, ...prev].slice(0, 100));
     }
   };
 
@@ -242,6 +278,14 @@ export default function OperatorOrdersPage() {
   const handleClaimOrder = async (orderId: string) => {
     if (!user?.id) return;
 
+    const ok = await confirm({
+      title: "Взять заявку в работу?",
+      description:
+        "Заявка будет закреплена за вами. Клиент получит уведомление о начале обработки.",
+      confirmLabel: "Взять в работу",
+    });
+    if (!ok) return;
+
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
@@ -270,18 +314,26 @@ export default function OperatorOrdersPage() {
   };
 
   const handleSendDetails = async (orderId: string) => {
-    const details = detailsInput[orderId];
-    if (!details || details.trim() === "") {
-      alert("Введите реквизиты для оплаты!");
+    const current = detailsInput[orderId] ?? { card: "", phone: "" };
+    const check = validatePaymentRequisites(current.card, current.phone);
+    if (!check.ok) {
+      alert(check.error);
       return;
     }
+
+    const ok = await confirm({
+      title: "Отправить реквизиты клиенту?",
+      description: `Карта ${check.card}, телефон ${check.phone}. Клиент увидит эти реквизиты и сможет оплатить заявку.`,
+      confirmLabel: "Отправить",
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          payment_details: details,
+          payment_details: serializePaymentDetails(check.card, check.phone),
           status: "awaiting_payment",
         }),
       });
@@ -291,7 +343,11 @@ export default function OperatorOrdersPage() {
         return;
       }
       if (json.order) applyOrderUpdate(json.order as Order);
-      setDetailsInput((prev) => ({ ...prev, [orderId]: "" }));
+      setDetailsInput((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
       setActiveTab("awaiting");
     } catch (err) {
       console.error(err);
@@ -314,10 +370,20 @@ export default function OperatorOrdersPage() {
       return;
     }
 
-    const ok = confirm(
+    const ok = await confirm(
       status === "completed"
-        ? "Вы подтверждаете получение и закрываете заявку как Успешную?"
-        : "Отклонить заявку? (Деньги не пришли / фейк чек)",
+        ? {
+            title: "Закрыть заявку как успешную?",
+            description:
+              "Вы подтверждаете получение средств и завершение обмена.",
+            confirmLabel: "Завершить",
+          }
+        : {
+            title: "Отклонить заявку?",
+            description: "Деньги не пришли или чек недействителен.",
+            confirmLabel: "Отклонить",
+            variant: "destructive",
+          },
     );
     if (!ok) return;
 
@@ -470,10 +536,15 @@ export default function OperatorOrdersPage() {
           </div>
         </div>
 
+        <StaffClientInfo client={order.client} compact />
+        <OpenOrderLink id={order.id} />
+
         {order.payment_details && (
-          <div className="text-xs font-medium text-zinc-500">
-            Выданные реквизиты:{" "}
-            <span className="font-mono text-zinc-800">{order.payment_details}</span>
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-zinc-500">
+              Выданные реквизиты
+            </span>
+            <PaymentRequisitesView value={order.payment_details} compact />
           </div>
         )}
 
@@ -495,16 +566,27 @@ export default function OperatorOrdersPage() {
             <label className="block text-xs font-bold text-zinc-500 uppercase pl-1">
               Реквизиты для оплаты клиенту:
             </label>
-            <textarea
-              value={detailsInput[order.id] || ""}
-              onChange={(e) =>
-                setDetailsInput({
-                  ...detailsInput,
-                  [order.id]: e.target.value,
-                })
+            <PaymentRequisitesForm
+              card={detailsInput[order.id]?.card ?? ""}
+              phone={detailsInput[order.id]?.phone ?? ""}
+              onCardChange={(card) =>
+                setDetailsInput((prev) => ({
+                  ...prev,
+                  [order.id]: {
+                    card,
+                    phone: prev[order.id]?.phone ?? "",
+                  },
+                }))
               }
-              placeholder="Например: Сбербанк 2202..."
-              className="w-full h-20 p-3 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-hidden focus:border-[#FFDD2D] text-zinc-900 resize-none"
+              onPhoneChange={(phone) =>
+                setDetailsInput((prev) => ({
+                  ...prev,
+                  [order.id]: {
+                    card: prev[order.id]?.card ?? "",
+                    phone,
+                  },
+                }))
+              }
             />
             <button
               onClick={() => handleSendDetails(order.id)}
@@ -698,14 +780,25 @@ export default function OperatorOrdersPage() {
                             {order.currency_to}
                           </span>
                         </p>
+                        <div className="pt-2">
+                          <StaffClientInfo client={order.client} compact />
+                        </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleClaimOrder(order.id)}
-                      className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-950 font-bold py-3 rounded-full text-sm cursor-pointer transition-colors shadow-none"
-                    >
-                      Взять в работу
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Link
+                        href={`/operator/orders/${order.id}`}
+                        className="w-full inline-flex items-center justify-center border border-zinc-200 hover:border-zinc-400 text-zinc-800 font-bold py-3 rounded-full text-sm cursor-pointer transition-colors"
+                      >
+                        Открыть
+                      </Link>
+                      <button
+                        onClick={() => handleClaimOrder(order.id)}
+                        className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-950 font-bold py-3 rounded-full text-sm cursor-pointer transition-colors shadow-none"
+                      >
+                        Взять в работу
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -780,12 +873,8 @@ export default function OperatorOrdersPage() {
                       </span>
                     </div>
                   </div>
-                  <Link
-                    href={`/operator/orders/${order.id}`}
-                    className="inline-flex text-xs font-bold text-zinc-600 hover:text-zinc-900 underline-offset-2 hover:underline"
-                  >
-                    Открыть заявку
-                  </Link>
+                  <StaffClientInfo client={order.client} compact />
+                  <OpenOrderLink id={order.id} />
                 </div>
               ))}
         </div>
@@ -833,10 +922,13 @@ export default function OperatorOrdersPage() {
                       </span>
                     </div>
                   </div>
+                  <StaffClientInfo client={order.client} compact />
+                  <OpenOrderLink id={order.id} />
                 </div>
               ))}
         </div>
       )}
+      <ConfirmDialogHost />
     </div>
   );
 }

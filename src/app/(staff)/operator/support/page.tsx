@@ -117,9 +117,9 @@ export default function OperatorSupportPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4">
+    <div className="flex flex-col gap-3 sm:gap-4 h-full min-h-0 overflow-hidden">
       {notice && (
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 sm:px-4 py-3 text-sm font-medium text-amber-900">
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 sm:px-4 py-3 text-sm font-medium text-amber-900 shrink-0">
           <Bell className="w-4 h-4 shrink-0" />
           {notice}
           <Button
@@ -133,16 +133,16 @@ export default function OperatorSupportPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_1fr] gap-3 sm:gap-4 min-h-[calc(100dvh-11rem)] lg:min-h-[calc(100vh-12rem)]">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_1fr] gap-3 sm:gap-4 flex-1 min-h-0 overflow-hidden">
         <div
-          className={`rounded-2xl border border-amber-200/70 bg-[#FFFDE7] overflow-hidden flex flex-col min-h-[240px] lg:min-h-[520px] shadow-[0_4px_16px_rgba(255,221,45,0.06)] ${
+          className={`rounded-2xl border border-amber-200/70 bg-[#FFFDE7] overflow-hidden flex flex-col h-full min-h-0 shadow-[0_4px_16px_rgba(255,221,45,0.06)] ${
             selectedId ? "hidden lg:flex" : "flex"
           }`}
         >
-          <div className="px-4 py-3 border-b border-amber-200/60 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] font-bold text-zinc-900">
+          <div className="px-4 py-3 border-b border-amber-200/60 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] font-bold text-zinc-900 shrink-0">
             Чаты поддержки
           </div>
-          <div className="flex-1 overflow-y-auto bg-[#FFFEEB]/40">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#FFFEEB]/40">
             {loading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="w-6 h-6 animate-spin text-[#FFDD2D]" />
@@ -240,7 +240,7 @@ export default function OperatorSupportPage() {
         </div>
 
         <div
-          className={`min-h-[360px] lg:min-h-[420px] flex flex-col ${
+          className={`h-full min-h-0 overflow-hidden flex flex-col ${
             selectedId ? "flex" : "hidden lg:flex"
           }`}
         >
@@ -249,24 +249,26 @@ export default function OperatorSupportPage() {
               <button
                 type="button"
                 onClick={() => setSelectedId(null)}
-                className="lg:hidden mb-2 inline-flex items-center gap-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900"
+                className="lg:hidden mb-2 inline-flex items-center gap-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900 shrink-0"
               >
                 <ArrowLeft className="w-4 h-4" />
                 К списку чатов
               </button>
-              <ChatPanel
-                conversationId={selectedId}
-                mode="operator"
-                conversation={selectedConversation}
-                onConversationChange={setSelectedConversation}
-                showClaimButton={selectedConversation.operator_id !== user?.id}
-                onClaim={handleClaim}
-                canReply={hasPseudonym}
-                currentOperatorId={user?.id ?? null}
-              />
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ChatPanel
+                  conversationId={selectedId}
+                  mode="operator"
+                  conversation={selectedConversation}
+                  onConversationChange={setSelectedConversation}
+                  showClaimButton={selectedConversation.operator_id !== user?.id}
+                  onClaim={handleClaim}
+                  canReply={hasPseudonym}
+                  currentOperatorId={user?.id ?? null}
+                />
+              </div>
             </>
           ) : (
-            <div className="h-full min-h-[280px] rounded-2xl border border-dashed border-amber-200/70 flex items-center justify-center text-sm text-amber-800/60 bg-[#FFFDE7] px-6 text-center">
+            <div className="h-full min-h-0 rounded-2xl border border-dashed border-amber-200/70 flex items-center justify-center text-sm text-amber-800/60 bg-[#FFFDE7] px-6 text-center">
               Выберите чат из списка слева
             </div>
           )}

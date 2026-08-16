@@ -28,9 +28,14 @@ import { createClient } from "@/src/utils/supabase/client";
 import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
+import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
 import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
 import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
 import { useAuth } from "@/src/app/context/AuthContext";
+import {
+  formatClientName,
+  type OrderClient,
+} from "@/src/utils/orders/client-info";
 import {
   OrderTtlBadge,
   useNowTick,
@@ -55,6 +60,7 @@ interface Order {
   amount_from: number;
   amount_to: number;
   operator_pseudonym_snapshot?: string | null;
+  client?: OrderClient | null;
 }
 
 type TabId = "all" | "pending" | "in_progress" | "completed" | "cancelled";
@@ -185,34 +191,46 @@ export default function OperatorDashboard() {
       const currentUserId = userIdRef.current;
       if (!currentUserId) return;
 
+      const withClient = (prev: Order[], incoming: Order): Order => ({
+        ...incoming,
+        client:
+          incoming.client ??
+          prev.find((item) => item.id === incoming.id)?.client ??
+          null,
+      });
+
       setPendingOrders((prev) => {
-        const without = prev.filter((o) => o.id !== order.id);
-        return order.status === "pending" ? [order, ...without] : without;
+        const next = withClient(prev, order);
+        const without = prev.filter((o) => o.id !== next.id);
+        return next.status === "pending" ? [next, ...without] : without;
       });
 
       setMyOrders((prev) => {
-        const without = prev.filter((o) => o.id !== order.id);
+        const next = withClient(prev, order);
+        const without = prev.filter((o) => o.id !== next.id);
         const mine =
-          IN_PROGRESS_STATUSES.includes(order.status) &&
-          order.operator_id === currentUserId;
-        return mine ? [order, ...without] : without;
+          IN_PROGRESS_STATUSES.includes(next.status) &&
+          next.operator_id === currentUserId;
+        return mine ? [next, ...without] : without;
       });
 
       setCompletedOrders((prev) => {
-        const without = prev.filter((o) => o.id !== order.id);
+        const next = withClient(prev, order);
+        const without = prev.filter((o) => o.id !== next.id);
         const isAdmin = roleRef.current === "admin";
         const visibleCompleted =
-          order.status === "completed" &&
-          (isAdmin || order.operator_id === currentUserId);
-        return visibleCompleted ? [order, ...without].slice(0, 50) : without;
+          next.status === "completed" &&
+          (isAdmin || next.operator_id === currentUserId);
+        return visibleCompleted ? [next, ...without].slice(0, 50) : without;
       });
 
       setCancelledOrders((prev) => {
-        const without = prev.filter((o) => o.id !== order.id);
+        const next = withClient(prev, order);
+        const without = prev.filter((o) => o.id !== next.id);
         const visible =
-          order.status === "cancelled" &&
-          (order.operator_id === currentUserId || order.operator_id == null);
-        return visible ? [order, ...without].slice(0, 100) : without;
+          next.status === "cancelled" &&
+          (next.operator_id === currentUserId || next.operator_id == null);
+        return visible ? [next, ...without].slice(0, 100) : without;
       });
     };
 
@@ -278,7 +296,22 @@ export default function OperatorDashboard() {
       (activeTab === "completed" && order.status === "completed") ||
       (activeTab === "cancelled" && order.status === "cancelled");
 
-    const matchesSearch = !q || order.id.toLowerCase().includes(q);
+    const matchesSearch =
+      !q ||
+      [
+        order.id,
+        order.client?.email,
+        order.client?.phone,
+        order.client?.telegram,
+        order.client?.first_name,
+        order.client?.last_name,
+        order.client?.middle_name,
+        formatClientName(order.client),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
     return matchesTab && matchesSearch;
   });
 
@@ -410,6 +443,9 @@ export default function OperatorDashboard() {
                     Направление обмена
                   </TableHead>
                   <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
+                    Клиент
+                  </TableHead>
+                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
                     Статус
                   </TableHead>
                   <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
@@ -469,6 +505,10 @@ export default function OperatorDashboard() {
                           </div>
                         </TableCell>
 
+                        <TableCell className="py-4 px-4 align-top">
+                          <StaffClientInfo client={order.client} compact />
+                        </TableCell>
+
                         <TableCell className="py-4 px-4">
                           <span
                             className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${statusClass(order.status)}`}
@@ -495,16 +535,8 @@ export default function OperatorDashboard() {
                             size="sm"
                             className="rounded-full h-9 px-5 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
                           >
-                            <Link
-                              href={
-                                order.status === "pending"
-                                  ? "/operator/orders"
-                                  : `/operator/orders/${order.id}`
-                              }
-                            >
-                              {order.status === "pending"
-                                ? "Взять в работу"
-                                : "Открыть"}
+                            <Link href={`/operator/orders/${order.id}`}>
+                              Открыть
                             </Link>
                           </Button>
                         </TableCell>
@@ -514,7 +546,7 @@ export default function OperatorDashboard() {
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className="h-32 text-center text-zinc-400 font-semibold"
                     >
                       Нет заявок
@@ -564,6 +596,7 @@ export default function OperatorDashboard() {
                     </div>
 
                     <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
+                    <StaffClientInfo client={order.client} compact />
 
                     <div className="bg-white p-3 rounded-xl border border-zinc-100 text-xs font-bold text-zinc-800 space-y-2">
                       <div className="flex items-center justify-between">
@@ -595,16 +628,8 @@ export default function OperatorDashboard() {
                       size="sm"
                       className="w-full rounded-xl h-10 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
                     >
-                      <Link
-                        href={
-                          order.status === "pending"
-                            ? "/operator/orders"
-                            : `/operator/orders/${order.id}`
-                        }
-                      >
-                        {order.status === "pending"
-                          ? "Взять в работу"
-                          : "Открыть заявку"}
+                      <Link href={`/operator/orders/${order.id}`}>
+                        Открыть заявку
                       </Link>
                     </Button>
                   </div>

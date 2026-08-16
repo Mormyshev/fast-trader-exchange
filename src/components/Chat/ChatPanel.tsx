@@ -9,6 +9,7 @@ import type { ChatConversation, ChatMessage } from "@/src/utils/chat/types";
 import { MAX_CHAT_ATTACHMENT_BYTES } from "@/src/utils/chat/types";
 import OperatorAvatar from "./OperatorAvatar";
 import { Button } from "@/components/ui/button";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 
 type ChatPanelProps = {
   conversationId: string;
@@ -24,6 +25,28 @@ type ChatPanelProps = {
 function getOperatorDisplayName(conversation?: ChatConversation | null) {
   const pseudonym = conversation?.operator?.operator_pseudonym?.trim();
   return pseudonym || null;
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function isSameCalendarDay(a: string, b: string) {
+  return startOfDay(new Date(a)) === startOfDay(new Date(b));
+}
+
+function formatDayLabel(iso: string) {
+  const date = new Date(iso);
+  const today = startOfDay(new Date());
+  const that = startOfDay(date);
+  const diffDays = Math.round((today - that) / 86_400_000);
+  if (diffDays === 0) return "Сегодня";
+  if (diffDays === 1) return "Вчера";
+  return date.toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function formatTime(iso: string) {
@@ -52,6 +75,7 @@ export default function ChatPanel({
   const [claiming, setClaiming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const operatorName = getOperatorDisplayName(conversation);
   const isAssignedToMe =
@@ -191,6 +215,25 @@ export default function ChatPanel({
 
   const handleClaim = async () => {
     if (!onClaim || claiming) return;
+
+    const ok = await confirm(
+      conversation?.operator_id
+        ? {
+            title: "Взять диалог на себя?",
+            description: assignedStaffName
+              ? `Диалог сейчас в работе у ${assignedStaffName}. Вы уверены, что хотите перехватить его?`
+              : "Диалог сейчас в работе у другого оператора. Вы уверены, что хотите перехватить его?",
+            confirmLabel: "Взять на себя",
+          }
+        : {
+            title: "Взять диалог в работу?",
+            description:
+              "Клиент увидит вас как оператора поддержки в этом чате.",
+            confirmLabel: "Взять в работу",
+          },
+    );
+    if (!ok) return;
+
     setClaiming(true);
     setError(null);
     try {
@@ -204,7 +247,7 @@ export default function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
+    <div className="flex flex-col h-full min-h-0 max-h-full bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
       <div className="px-4 py-3 border-b border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] dark:from-amber-950/40 dark:to-amber-950/20 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           {mode === "user" ? (
@@ -265,7 +308,7 @@ export default function ChatPanel({
       </div>
 
       {!canReply && mode === "operator" && (
-        <div className="px-4 py-3 bg-amber-100/80 border-b border-amber-200/70 text-sm text-amber-950">
+        <div className="px-4 py-3 bg-amber-100/80 border-b border-amber-200/70 text-sm text-amber-950 shrink-0">
           Заполните{" "}
           <Link
             href="/operator/profile"
@@ -278,7 +321,7 @@ export default function ChatPanel({
       )}
 
       {isAssignedToOther && (
-        <div className="px-4 py-3 bg-zinc-100 border-b border-zinc-200 text-sm text-zinc-700">
+        <div className="px-4 py-3 bg-zinc-100 border-b border-zinc-200 text-sm text-zinc-700 shrink-0">
           {assignedStaffName
             ? `Диалог в работе у ${assignedStaffName}.`
             : "Диалог в работе у другого оператора."}{" "}
@@ -286,7 +329,7 @@ export default function ChatPanel({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0 bg-white dark:bg-zinc-950">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4 space-y-3 bg-white dark:bg-zinc-950">
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-6 h-6 animate-spin text-[#FFDD2D]" />
@@ -298,15 +341,25 @@ export default function ChatPanel({
             </p>
           </div>
         ) : (
-          messages.map((message) => {
+          messages.map((message, index) => {
             const isMine =
               mode === "user"
                 ? message.sender_id === conversation?.user_id
                 : message.sender_id !== conversation?.user_id;
+            const prev = index > 0 ? messages[index - 1] : null;
+            const showDay =
+              !prev || !isSameCalendarDay(prev.created_at, message.created_at);
 
             return (
+              <div key={message.id} className="space-y-3">
+                {showDay && (
+                  <div className="flex justify-center">
+                    <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full">
+                      {formatDayLabel(message.created_at)}
+                    </span>
+                  </div>
+                )}
               <div
-                key={message.id}
                 className={`flex ${isMine ? "justify-end" : "justify-start"}`}
               >
                 <div
@@ -358,6 +411,7 @@ export default function ChatPanel({
                     {formatTime(message.created_at)}
                   </p>
                 </div>
+              </div>
               </div>
             );
           })
@@ -429,6 +483,7 @@ export default function ChatPanel({
           )}
         </Button>
       </div>
+      <ConfirmDialogHost />
     </div>
   );
 }

@@ -85,7 +85,7 @@ export default function ChatWidget() {
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="w-full sm:max-w-md p-0 flex flex-col gap-0 border-l border-zinc-200 bg-white"
+          className="w-full sm:max-w-md p-0 flex flex-col gap-0 border-l border-zinc-200 bg-white h-full max-h-dvh overflow-hidden"
         >
           <SheetHeader className="px-4 py-3 border-b border-amber-200/60 bg-gradient-to-r from-[#FFDD2D] to-[#FFF3B0] flex-row items-center justify-between space-y-0 shrink-0">
             <SheetTitle className="text-base font-bold text-zinc-900">
@@ -101,7 +101,7 @@ export default function ChatWidget() {
             </button>
           </SheetHeader>
 
-          <div className="flex-1 min-h-0 p-3 bg-white">
+          <div className="flex-1 min-h-0 overflow-hidden p-3 bg-white">
             {loading || !conversation ? (
               <div className="h-full flex items-center justify-center text-sm text-zinc-500 rounded-2xl border border-zinc-200 bg-zinc-50">
                 {loading ? "Загрузка..." : "Не удалось открыть чат"}

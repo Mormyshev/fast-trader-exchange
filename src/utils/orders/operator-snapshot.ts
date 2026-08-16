@@ -14,9 +14,10 @@ export async function fetchOperatorPseudonym(
 
 export function stripOrderInternalFields<T extends Record<string, unknown>>(
   order: T,
-): Omit<T, "operator_pseudonym_snapshot"> {
-  const { operator_pseudonym_snapshot: _snapshot, ...rest } = order;
-  return rest as Omit<T, "operator_pseudonym_snapshot">;
+): Omit<T, "operator_pseudonym_snapshot" | "client"> {
+  const { operator_pseudonym_snapshot: _snapshot, client: _client, ...rest } =
+    order;
+  return rest as Omit<T, "operator_pseudonym_snapshot" | "client">;
 }
 
 export function formatStaffOperatorLabel(

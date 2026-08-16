@@ -18,7 +18,16 @@ import { useAuth } from "@/src/app/context/AuthContext";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
 import { OrderTtlBadge, useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
+import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { isOrderExpiredByTtl, ORDER_TTL_STATUSES } from "@/src/utils/orders/ttl";
+import type { OrderClient } from "@/src/utils/orders/client-info";
+import {
+  serializePaymentDetails,
+  validatePaymentRequisites,
+} from "@/src/utils/orders/payment-details";
+import PaymentRequisitesForm from "@/src/components/PaymentRequisites/PaymentRequisitesForm";
+import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
 
 type OrderStatus =
   | "pending"
@@ -44,6 +53,7 @@ interface Order {
   receipt_url: string | null;
   operator_receipt_url: string | null;
   operator_pseudonym_snapshot?: string | null;
+  client?: OrderClient | null;
 }
 
 function statusLabel(status: OrderStatus) {
@@ -87,10 +97,12 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const router = useRouter();
   const supabase = createClient();
   const { user, isLoading: isAuthLoading } = useAuth();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [details, setDetails] = useState("");
+  const [card, setCard] = useState("");
+  const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingPayout, setUploadingPayout] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +154,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             filter: `id=eq.${orderId}`,
           },
           (payload) => {
-            setOrder(payload.new as Order);
+            setOrder((prev) => ({
+              ...(payload.new as Order),
+              client: prev?.client,
+            }));
           },
         );
 
@@ -183,6 +198,15 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleClaim = async () => {
     if (!user?.id || !order) return;
+
+    const ok = await confirm({
+      title: "Взять заявку в работу?",
+      description:
+        "Заявка будет закреплена за вами. Клиент получит уведомление о начале обработки.",
+      confirmLabel: "Взять в работу",
+    });
+    if (!ok) return;
+
     setSaving(true);
     try {
       const res = await fetch(`/api/orders/${order.id}`, {
@@ -210,24 +234,34 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleSendDetails = async () => {
     if (!order) return;
-    if (!details.trim()) {
-      alert("Введите реквизиты для оплаты!");
+    const check = validatePaymentRequisites(card, phone);
+    if (!check.ok) {
+      alert(check.error);
       return;
     }
+
+    const ok = await confirm({
+      title: "Отправить реквизиты клиенту?",
+      description: `Карта ${check.card}, телефон ${check.phone}. Клиент увидит эти реквизиты и сможет оплатить заявку.`,
+      confirmLabel: "Отправить",
+    });
+    if (!ok) return;
+
     setSaving(true);
     try {
       const res = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          payment_details: details.trim(),
+          payment_details: serializePaymentDetails(check.card, check.phone),
           status: "awaiting_payment",
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Не удалось отправить");
       setOrder(json.order);
-      setDetails("");
+      setCard("");
+      setPhone("");
     } catch (err: any) {
       alert(err.message || "Ошибка");
     } finally {
@@ -247,10 +281,20 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
-    const ok = confirm(
+    const ok = await confirm(
       status === "completed"
-        ? "Подтвердить получение и закрыть заявку как успешную?"
-        : "Отклонить заявку?",
+        ? {
+            title: "Закрыть заявку как успешную?",
+            description:
+              "Вы подтверждаете получение средств и завершение обмена.",
+            confirmLabel: "Завершить",
+          }
+        : {
+            title: "Отклонить заявку?",
+            description: "Деньги не пришли или чек недействителен.",
+            confirmLabel: "Отклонить",
+            variant: "destructive",
+          },
     );
     if (!ok) return;
 
@@ -399,13 +443,13 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             </div>
           </div>
 
+          <StaffClientInfo client={order.client} />
+
           <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 space-y-3">
             <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
               Реквизиты для клиента
             </p>
-            <p className="font-mono text-xs font-bold break-all bg-white border border-zinc-200 rounded-xl px-3 py-2 min-h-12">
-              {order.payment_details || "Ещё не выданы"}
-            </p>
+            <PaymentRequisitesView value={order.payment_details} />
             {order.receipt_url && (
               <a
                 href={order.receipt_url}
@@ -445,11 +489,11 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               <label className="block text-xs font-bold text-zinc-500 uppercase">
                 Реквизиты для оплаты клиенту
               </label>
-              <textarea
-                value={details}
-                onChange={(e) => setDetails(e.target.value)}
-                placeholder="Например: Сбербанк 2202..."
-                className="w-full h-28 p-3 text-sm bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-hidden focus:border-[#FFDD2D] text-zinc-900 resize-none"
+              <PaymentRequisitesForm
+                card={card}
+                phone={phone}
+                onCardChange={setCard}
+                onPhoneChange={setPhone}
               />
               <Button
                 disabled={saving}
@@ -579,6 +623,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           )}
         </div>
       </div>
+      <ConfirmDialogHost />
     </div>
   );
 }

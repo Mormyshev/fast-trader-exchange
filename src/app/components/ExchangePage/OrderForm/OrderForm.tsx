@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronDown, Loader2, ShieldAlert } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, Loader2, ShieldAlert } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
@@ -34,11 +34,11 @@ import {
   formatTelegramInput,
   formatWalletInput,
   getWalletPlaceholder,
-  ORDER_CITIES,
   validateOrderFormField,
   validateOrderFormFields,
   type OrderFormErrors,
 } from "@/src/utils/validation";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 
 type RateRow = { symbol: string; exchange_price: number };
 
@@ -153,14 +153,21 @@ function CurrencyPicker({
 export default function OrderForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const MIN_RUB = 1000;
   const MAX_RUB = 15000000;
 
   const initialFrom =
-    findCurrencyById(searchParams.get("from")) ?? FIAT_CURRENCIES[1]; // Наличные
-  const initialTo =
+    findCurrencyById(searchParams.get("from")) ?? FIAT_CURRENCIES[0];
+  const initialToRaw =
     findCurrencyById(searchParams.get("to")) ?? CRYPTO_CURRENCIES[0];
+  const initialTo =
+    isCryptoCurrency(initialFrom) === isCryptoCurrency(initialToRaw)
+      ? isCryptoCurrency(initialFrom)
+        ? FIAT_CURRENCIES[0]
+        : CRYPTO_CURRENCIES[0]
+      : initialToRaw;
   const initialAmount = searchParams.get("amount") || "";
 
   const [selectedSend, setSelectedSend] =
@@ -175,7 +182,6 @@ export default function OrderForm() {
 
   const [fio, setFio] = useState<string>("");
   const [wallet, setWallet] = useState<string>("");
-  const [city, setCity] = useState<string>(ORDER_CITIES[0]);
   const [email, setEmail] = useState<string>("");
   const [telegram, setTelegram] = useState<string>("");
   const [coupon, setCoupon] = useState<string>("");
@@ -194,15 +200,11 @@ export default function OrderForm() {
 
   const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
   const [isReceiveDropdownOpen, setIsReceiveDropdownOpen] = useState(false);
-  const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
   const sendRef = useRef<HTMLDivElement>(null);
   const receiveRef = useRef<HTMLDivElement>(null);
-  const cityRef = useRef<HTMLDivElement>(null);
 
   const isSendCrypto = isCryptoCurrency(selectedSend);
   const isReceiveCrypto = isCryptoCurrency(selectedReceive);
-  const isCashSelected =
-    selectedSend.id === "rub_cash" || selectedReceive.id === "rub_cash";
   const sendAsset = isSendCrypto ? getAssetForCurrency(selectedSend) : null;
   const receiveAsset = isReceiveCrypto ? getAssetForCurrency(selectedReceive) : null;
 
@@ -313,17 +315,10 @@ export default function OrderForm() {
       ) {
         setIsReceiveDropdownOpen(false);
       }
-      if (cityRef.current && !cityRef.current.contains(event.target as Node)) {
-        setIsCityDropdownOpen(false);
-      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    if (!isCashSelected) setIsCityDropdownOpen(false);
-  }, [isCashSelected]);
 
   const rubDealAmount = isSendCrypto
     ? parseFloat(receiveAmount)
@@ -423,25 +418,23 @@ export default function OrderForm() {
     () => ({
       fio,
       wallet,
-      city,
+      city: "",
       email,
       telegram,
       coupon,
       receiveCurrencyId: selectedReceive.id,
       isReceiveCrypto,
-      isCashSelected,
+      isCashSelected: false,
       requireFio: !isSendCrypto,
     }),
     [
       fio,
       wallet,
-      city,
       email,
       telegram,
       coupon,
       selectedReceive.id,
       isReceiveCrypto,
-      isCashSelected,
       isSendCrypto,
     ],
   );
@@ -468,6 +461,40 @@ export default function OrderForm() {
     setTelegram(formatTelegramInput(val));
     if (fieldErrors.telegram) {
       setFieldErrors((prev) => ({ ...prev, telegram: undefined }));
+    }
+  };
+
+  const handleSwap = () => {
+    const cryptoAmount = isSendCrypto ? sendAmount : receiveAmount;
+    const nextSend = selectedReceive;
+    const nextReceive = selectedSend;
+    const nextSendIsCrypto = isReceiveCrypto;
+    const nextRate = getPairRate(rates, nextSend, nextReceive);
+    const cryptoNum = parseFloat(cryptoAmount);
+
+    setSelectedSend(nextSend);
+    setSelectedReceive(nextReceive);
+    setWallet("");
+    setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
+
+    if (nextSendIsCrypto) {
+      setSendAmount(cryptoAmount);
+      setReceiveAmount(
+        !isNaN(cryptoNum) && nextRate > 0
+          ? formatAmount(cryptoNum * nextRate, false)
+          : "",
+      );
+      setIsSendActive(true);
+      syncUrl(nextSend, nextReceive, cryptoAmount);
+    } else {
+      const nextSendAmount =
+        !isNaN(cryptoNum) && nextRate > 0
+          ? formatAmount(cryptoNum / nextRate, false)
+          : "";
+      setReceiveAmount(cryptoAmount);
+      setSendAmount(nextSendAmount);
+      setIsSendActive(false);
+      syncUrl(nextSend, nextReceive, nextSendAmount);
     }
   };
 
@@ -514,6 +541,13 @@ export default function OrderForm() {
 
     setFieldErrors({});
     const payout = validation.values.wallet;
+
+    const ok = await confirm({
+      title: "Создать заявку на обмен?",
+      description: `Отдаёте ${formatAmount(finalSend, isCryptoCurrency(selectedSend))} ${selectedSend.code} → получаете ${formatAmount(finalReceive, isCryptoCurrency(selectedReceive))} ${selectedReceive.code}. После создания заявку нужно будет оплатить в указанный срок.`,
+      confirmLabel: "Создать заявку",
+    });
+    if (!ok) return;
 
     setIsSubmitting(true);
 
@@ -707,7 +741,17 @@ export default function OrderForm() {
             )}
           </div>
 
-          <div className="h-[1px] bg-zinc-100 dark:bg-zinc-800 w-full" />
+          <div className="flex items-center justify-center py-1">
+            <button
+              type="button"
+              onClick={handleSwap}
+              aria-label="Поменять местами крипту и фиат"
+              className="w-10 h-10 rounded-full bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 flex items-center justify-center text-[#FFDD2D] shadow-md hover:scale-105 active:scale-95 transition-all rotate-90 cursor-pointer"
+            >
+              <ArrowLeftRight className="w-5 h-5 stroke-[2.5]" />
+            </button>
+          </div>
+
           {/* ================= СЕКЦИЯ 2: ПОЛУЧАЕТЕ ================= */}
           <div className="space-y-4">
             <h2 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -840,61 +884,6 @@ export default function OrderForm() {
               Персональные данные
             </h2>
 
-            {isCashSelected && (
-              <div className="space-y-2" ref={cityRef}>
-                <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
-                  Ваш город{" "}
-                  <span className="text-red-500 font-bold ml-0.5"> * </span> :
-                </label>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsCityDropdownOpen((v) => !v);
-                      setIsSendDropdownOpen(false);
-                      setIsReceiveDropdownOpen(false);
-                    }}
-                    className="w-full flex items-center justify-between bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full px-6 py-3.5 shadow-[0_0_15px_rgba(255,221,45,0.05)] cursor-pointer hover:border-[#FFDD2D] transition-all text-left"
-                  >
-                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                      {city}
-                    </span>
-                    <ChevronDown
-                      className={`w-4 h-4 text-amber-400 stroke-[2.5] transition-transform ${
-                        isCityDropdownOpen ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-
-                  {isCityDropdownOpen && (
-                    <div className="absolute left-0 top-full mt-2 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-xl z-50 overflow-hidden p-2">
-                      {ORDER_CITIES.map((item) => (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => {
-                            setCity(item);
-                            setIsCityDropdownOpen(false);
-                            if (fieldErrors.city) {
-                              setFieldErrors((prev) => ({ ...prev, city: undefined }));
-                            }
-                          }}
-                          className={`w-full rounded-xl px-4 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ${
-                            city === item
-                              ? "bg-[#FFF3B0] dark:bg-amber-500/20 text-zinc-900 dark:text-zinc-100"
-                              : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
-                          }`}
-                        >
-                          {item}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <FieldError message={fieldErrors.city} />
-              </div>
-            )}
-
             <div className="space-y-2">
               <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
                 E-mail{" "}
@@ -967,13 +956,13 @@ export default function OrderForm() {
           <div className="h-[1px] bg-zinc-100 dark:bg-zinc-800 w-full" />
           {/* ================= ЧЕКБОКСЫ И КНОПКА ОТПРАВКИ ================= */}
           <div className="space-y-6 pt-2">
-            <div className="flex items-start space-x-3 group cursor-pointer select-none">
+            <div className="flex items-start gap-3">
               <input
                 type="checkbox"
                 id="aml"
                 checked={agreeAml}
                 onChange={(e) => setAgreeAml(e.target.checked)}
-                className="mt-1 w-4 h-4 rounded-sm border-zinc-300 text-[#FFDD2D] focus:ring-[#FFDD2D] accent-[#FFDD2D] cursor-pointer"
+                className="mt-0.5 size-4 shrink-0 rounded-sm border-zinc-300 accent-[#FFDD2D] cursor-pointer"
                 required
               />
               <label
@@ -981,30 +970,37 @@ export default function OrderForm() {
                 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 leading-relaxed cursor-pointer"
               >
                 Я принимаю условия{" "}
-                <span className="text-amber-400 hover:underline">
-                  {" "}
-                  AML политики{" "}
-                </span>
+                <Link
+                  href="/legal/aml-kyc"
+                  className="text-amber-500 hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  AML политики
+                </Link>
                 . Согласен (а) с{" "}
-                <span className="underline decoration-zinc-400">
+                <Link
+                  href="/tos"
+                  className="underline decoration-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   возвратом средств в случае приостановки обмена по причине AML
-                </span>
+                </Link>
                 , риск вычета комиссии сети из суммы обмена при возврате
                 осознаю.
               </label>
             </div>
 
-            <div className="flex items-center space-x-3 group cursor-pointer select-none">
+            <div className="flex items-start gap-3">
               <input
                 type="checkbox"
                 id="remember"
                 checked={dontRemember}
                 onChange={(e) => setDontRemember(e.target.checked)}
-                className="w-4 h-4 rounded-sm border-zinc-300 text-[#FFDD2D] focus:ring-[#FFDD2D] accent-[#FFDD2D] cursor-pointer"
+                className="mt-0.5 size-4 shrink-0 rounded-sm border-zinc-300 accent-[#FFDD2D] cursor-pointer"
               />
               <label
                 htmlFor="remember"
-                className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 cursor-pointer"
+                className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 leading-relaxed cursor-pointer"
               >
                 Не запоминать введенные данные
               </label>
@@ -1026,7 +1022,7 @@ export default function OrderForm() {
                     <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
                     <p>
                       {verificationStatus === "pending"
-                        ? "Анкета на проверке. Обмен станет доступен после подтверждения оператором."
+                        ? "Анкета на проверке. Обмен станет доступен после подтверждения администратором."
                         : verificationStatus === "rejected"
                           ? "Анкета отклонена. Исправьте данные в профиле и отправьте повторно."
                           : "Перед обменом необходимо пройти верификацию аккаунта."}
@@ -1063,6 +1059,7 @@ export default function OrderForm() {
           </div>
         </div>
       </form>
+      <ConfirmDialogHost />
     </div>
   );
 }

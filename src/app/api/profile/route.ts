@@ -205,6 +205,7 @@ export async function PATCH(request: Request) {
           telegram,
           passport_url: passportUrl,
           verification: "pending",
+          verification_rejection_comment: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", user.id)

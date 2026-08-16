@@ -5,8 +5,10 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
 import { validateOperatorPseudonym } from "@/src/utils/validation";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 
 export default function OperatorProfilePage() {
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [pseudonym, setPseudonym] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,6 +36,14 @@ export default function OperatorProfilePage() {
       setFieldError(check.error);
       return;
     }
+
+    const ok = await confirm({
+      title: "Сохранить псевдоним?",
+      description:
+        "Новое имя будет отображаться клиентам в чате поддержки.",
+      confirmLabel: "Сохранить",
+    });
+    if (!ok) return;
 
     setSaving(true);
     setError(null);
@@ -142,6 +152,7 @@ export default function OperatorProfilePage() {
           )}
         </Button>
       </div>
+      <ConfirmDialogHost />
     </div>
   );
 }
