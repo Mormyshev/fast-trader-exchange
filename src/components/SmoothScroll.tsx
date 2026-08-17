@@ -15,6 +15,7 @@ export default function SmoothScroll({
     pathname.startsWith("/operator") || pathname.startsWith("/admin");
 
   useEffect(() => {
+    document.body.style.removeProperty("pointer-events");
     if (staffShell) return;
     if (window.innerWidth < 1024) return;
 

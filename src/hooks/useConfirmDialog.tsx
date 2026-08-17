@@ -19,6 +19,64 @@ export type ConfirmDialogOptions = {
   variant?: "default" | "destructive";
 };
 
+function ConfirmDialogView({
+  options,
+  onClose,
+}: {
+  options: ConfirmDialogOptions | null;
+  onClose: (result: boolean) => void;
+}) {
+  if (!options) return null;
+
+  const {
+    title,
+    description,
+    confirmLabel = "Подтвердить",
+    cancelLabel = "Отмена",
+    variant = "default",
+  } = options;
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose(false);
+      }}
+    >
+      <DialogContent showCloseButton={false} className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description ? (
+            <DialogDescription>{description}</DialogDescription>
+          ) : null}
+        </DialogHeader>
+        <DialogFooter className="border-t-0 bg-transparent -mx-4 -mb-4 pt-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onClose(false)}
+            className="rounded-full"
+          >
+            {cancelLabel}
+          </Button>
+          <Button
+            type="button"
+            variant={variant === "destructive" ? "destructive" : "default"}
+            onClick={() => onClose(true)}
+            className={
+              variant === "default"
+                ? "rounded-full bg-[#FFDD2D] hover:bg-[#e6c625] text-black font-bold"
+                : "rounded-full font-bold"
+            }
+          >
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function useConfirmDialog() {
   const [options, setOptions] = useState<ConfirmDialogOptions | null>(null);
   const resolveRef = useRef<((value: boolean) => void) | null>(null);
@@ -37,59 +95,13 @@ export function useConfirmDialog() {
     resolveRef.current?.(result);
     resolveRef.current = null;
     setOptions(null);
+    document.body.style.removeProperty("pointer-events");
   }, []);
 
-  const ConfirmDialogHost = () => {
-    if (!options) return null;
-
-    const {
-      title,
-      description,
-      confirmLabel = "Подтвердить",
-      cancelLabel = "Отмена",
-      variant = "default",
-    } = options;
-
-    return (
-      <Dialog
-        open
-        onOpenChange={(open) => {
-          if (!open) close(false);
-        }}
-      >
-        <DialogContent showCloseButton={false} className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            {description ? (
-              <DialogDescription>{description}</DialogDescription>
-            ) : null}
-          </DialogHeader>
-          <DialogFooter className="border-t-0 bg-transparent -mx-4 -mb-4 pt-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => close(false)}
-              className="rounded-full"
-            >
-              {cancelLabel}
-            </Button>
-            <Button
-              type="button"
-              variant={variant === "destructive" ? "destructive" : "default"}
-              onClick={() => close(true)}
-              className={
-                variant === "default"
-                  ? "rounded-full bg-[#FFDD2D] hover:bg-[#e6c625] text-black font-bold"
-                  : "rounded-full font-bold"
-              }
-            >
-              {confirmLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+  const ConfirmDialogHost = useCallback(
+    () => <ConfirmDialogView options={options} onClose={close} />,
+    [options, close],
+  );
 
   return { confirm, ConfirmDialogHost };
 }

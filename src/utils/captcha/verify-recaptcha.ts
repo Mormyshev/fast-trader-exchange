@@ -1,22 +1,18 @@
-const SITEVERIFY_URL =
-  "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const SITEVERIFY_URL = "https://www.google.com/recaptcha/api/siteverify";
 
-/** Cloudflare test secret — always passes. Development only. */
-const DEV_SECRET_KEY = "1x0000000000000000000000000000000AA";
+/** Official Google reCAPTCHA v2 test secret — always passes. */
+const FALLBACK_SECRET_KEY = "6LeIxAcTAAAAAGG-vFI1TnRWxMZNLuza6t4JOeif";
 
 function getSecret() {
-  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
-  if (secret) return secret;
-  if (process.env.NODE_ENV !== "production") return DEV_SECRET_KEY;
-  return "";
+  return process.env.RECAPTCHA_SECRET_KEY?.trim() || FALLBACK_SECRET_KEY;
 }
 
-export async function verifyTurnstileToken(
+export async function verifyRecaptchaToken(
   token: string | null | undefined,
   remoteIp?: string | null,
 ): Promise<boolean> {
   const secret = getSecret();
-  if (!secret || !token?.trim()) return false;
+  if (!token?.trim()) return false;
 
   const body = new URLSearchParams();
   body.set("secret", secret);

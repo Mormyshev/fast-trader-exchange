@@ -52,24 +52,23 @@ export default function RegisterModal({
   };
 
   useEffect(() => {
-    if (isOpen) {
-      setError("");
-      setSuccessMessage("");
-      setIsLoading(false);
-      generateCaptcha();
-      setShouldRender(true);
-      lockPageScroll();
-      const timer = setTimeout(() => setIsAnimated(true), 10);
-      return () => {
-        clearTimeout(timer);
-        unlockPageScroll();
-      };
+    if (!isOpen) {
+      setIsAnimated(false);
+      const timer = setTimeout(() => setShouldRender(false), 300);
+      return () => clearTimeout(timer);
     }
 
-    setIsAnimated(false);
-    unlockPageScroll();
-    const timer = setTimeout(() => setShouldRender(false), 300);
-    return () => clearTimeout(timer);
+    setError("");
+    setSuccessMessage("");
+    setIsLoading(false);
+    generateCaptcha();
+    setShouldRender(true);
+    lockPageScroll();
+    const timer = setTimeout(() => setIsAnimated(true), 10);
+    return () => {
+      clearTimeout(timer);
+      unlockPageScroll();
+    };
   }, [isOpen]);
 
   if (!shouldRender) return null;
@@ -168,8 +167,10 @@ export default function RegisterModal({
   return (
     <div
       data-lenis-prevent
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs transition-opacity duration-300 ease-in-out ${
-        isAnimated ? "opacity-100" : "opacity-0"
+      className={`fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs transition-opacity duration-300 ease-in-out ${
+        isOpen && isAnimated
+          ? "opacity-100"
+          : "opacity-0 pointer-events-none"
       }`}
     >
       <div className="absolute inset-0" onClick={onClose} />

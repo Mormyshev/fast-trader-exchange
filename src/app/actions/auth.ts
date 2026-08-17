@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { createClient } from "@/src/utils/supabase/server";
-import { verifyTurnstileToken } from "@/src/utils/captcha/verify-turnstile";
+import { verifyRecaptchaToken } from "@/src/utils/captcha/verify-recaptcha";
 
 export async function loginAndGetRoute(
   email: string,
@@ -15,7 +15,7 @@ export async function loginAndGetRoute(
     requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     null;
 
-  const captchaOk = await verifyTurnstileToken(captchaToken, ip);
+  const captchaOk = await verifyRecaptchaToken(captchaToken, ip);
   if (!captchaOk) {
     return { error: "Подтвердите, что вы не робот" };
   }

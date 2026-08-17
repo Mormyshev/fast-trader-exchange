@@ -1,62 +1,56 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { getTurnstileSiteKey } from "@/src/utils/captcha/site-key";
+import { getRecaptchaSiteKey } from "@/src/utils/captcha/site-key";
 
 const SCRIPT_SRC =
-  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+  "https://www.recaptcha.net/recaptcha/api.js?onload=__onRecaptchaLoad&render=explicit&hl=ru";
 
-type TurnstileApi = {
+type GrecaptchaApi = {
   render: (
     el: HTMLElement,
     options: {
       sitekey: string;
-      callback: (token: string) => void;
+      callback?: (token: string) => void;
       "expired-callback"?: () => void;
       "error-callback"?: () => void;
-      theme?: "light" | "dark" | "auto";
-      language?: string;
+      theme?: "light" | "dark";
     },
-  ) => string;
-  reset: (widgetId: string) => void;
-  remove: (widgetId: string) => void;
+  ) => number;
+  reset: (widgetId?: number) => void;
 };
 
 declare global {
   interface Window {
-    turnstile?: TurnstileApi;
+    grecaptcha?: GrecaptchaApi;
+    __onRecaptchaLoad?: () => void;
   }
 }
 
-let scriptPromise: Promise<TurnstileApi> | null = null;
+let scriptPromise: Promise<GrecaptchaApi> | null = null;
 
-function loadTurnstile(): Promise<TurnstileApi> {
+function loadRecaptcha(): Promise<GrecaptchaApi> {
   if (typeof window === "undefined") {
-    return Promise.reject(new Error("Turnstile is client-only"));
+    return Promise.reject(new Error("reCAPTCHA is client-only"));
   }
-  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (window.grecaptcha?.render) return Promise.resolve(window.grecaptcha);
   if (scriptPromise) return scriptPromise;
 
-  const promise = new Promise<TurnstileApi>((resolve, reject) => {
+  const promise = new Promise<GrecaptchaApi>((resolve, reject) => {
+    const prev = window.__onRecaptchaLoad;
+    window.__onRecaptchaLoad = () => {
+      prev?.();
+      if (window.grecaptcha?.render) resolve(window.grecaptcha);
+      else reject(new Error("reCAPTCHA failed to initialize"));
+    };
+
     const existing = document.querySelector<HTMLScriptElement>(
       `script[src="${SCRIPT_SRC}"]`,
     );
-    const onReady = () => {
-      if (window.turnstile) resolve(window.turnstile);
-      else reject(new Error("Turnstile failed to initialize"));
-    };
-
     if (existing) {
-      if (window.turnstile) {
-        resolve(window.turnstile);
-        return;
+      if (window.grecaptcha?.render) {
+        resolve(window.grecaptcha);
       }
-      existing.addEventListener("load", onReady, { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("Не удалось загрузить капчу")),
-        { once: true },
-      );
       return;
     }
 
@@ -64,7 +58,6 @@ function loadTurnstile(): Promise<TurnstileApi> {
     script.src = SCRIPT_SRC;
     script.async = true;
     script.defer = true;
-    script.onload = onReady;
     script.onerror = () => reject(new Error("Не удалось загрузить капчу"));
     document.head.appendChild(script);
   });
@@ -77,7 +70,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
   return promise;
 }
 
-export default function TurnstileCaptcha({
+export default function RecaptchaCheckbox({
   onToken,
   resetSignal = 0,
 }: {
@@ -85,26 +78,25 @@ export default function TurnstileCaptcha({
   resetSignal?: number;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef = useRef<string | null>(null);
+  const widgetIdRef = useRef<number | null>(null);
   const onTokenRef = useRef(onToken);
   onTokenRef.current = onToken;
 
-  const siteKey = getTurnstileSiteKey();
+  const siteKey = getRecaptchaSiteKey();
 
   useEffect(() => {
-    if (!siteKey || !hostRef.current) return;
+    if (!hostRef.current) return;
 
     let cancelled = false;
     const host = hostRef.current;
 
-    void loadTurnstile()
-      .then((turnstile) => {
+    void loadRecaptcha()
+      .then((grecaptcha) => {
         if (cancelled || !host) return;
         host.innerHTML = "";
-        widgetIdRef.current = turnstile.render(host, {
+        widgetIdRef.current = grecaptcha.render(host, {
           sitekey: siteKey,
           theme: "light",
-          language: "ru",
           callback: (token) => onTokenRef.current(token),
           "expired-callback": () => onTokenRef.current(null),
           "error-callback": () => onTokenRef.current(null),
@@ -118,9 +110,9 @@ export default function TurnstileCaptcha({
       cancelled = true;
       const id = widgetIdRef.current;
       widgetIdRef.current = null;
-      if (id && window.turnstile) {
+      if (id !== null && window.grecaptcha) {
         try {
-          window.turnstile.remove(id);
+          window.grecaptcha.reset(id);
         } catch {
           // ignore
         }
@@ -130,17 +122,8 @@ export default function TurnstileCaptcha({
     };
   }, [siteKey, resetSignal]);
 
-  if (!siteKey) {
-    return (
-      <p className="text-xs font-semibold text-red-500 text-center">
-        Капча не настроена. Добавьте NEXT_PUBLIC_TURNSTILE_SITE_KEY и
-        TURNSTILE_SECRET_KEY.
-      </p>
-    );
-  }
-
   return (
-    <div className="flex justify-center min-h-[65px]">
+    <div className="flex justify-center min-h-[78px]">
       <div ref={hostRef} />
     </div>
   );
