@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { X, RefreshCw } from "lucide-react";
-import { useLenis } from "lenis/react";
 import { createClient } from "@/src/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import {
@@ -11,6 +10,7 @@ import {
   validatePasswordConfirm,
   validateUsername,
 } from "@/src/utils/validation";
+import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -43,7 +43,6 @@ export default function RegisterModal({
   const [num1, setNum1] = useState(3);
   const [num2, setNum2] = useState(4);
 
-  const lenis = useLenis();
   const router = useRouter();
   const supabase = createClient();
   const generateCaptcha = () => {
@@ -59,20 +58,19 @@ export default function RegisterModal({
       setIsLoading(false);
       generateCaptcha();
       setShouldRender(true);
-      if (lenis) lenis.stop();
-      document.body.style.overflow = "hidden";
+      lockPageScroll();
       const timer = setTimeout(() => setIsAnimated(true), 10);
-      return () => clearTimeout(timer);
-    } else {
-      setIsAnimated(false);
-      const timer = setTimeout(() => {
-        setShouldRender(false);
-        if (lenis) lenis.start();
-        document.body.style.overflow = "";
-      }, 300);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        unlockPageScroll();
+      };
     }
-  }, [isOpen, lenis]);
+
+    setIsAnimated(false);
+    unlockPageScroll();
+    const timer = setTimeout(() => setShouldRender(false), 300);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
 
   if (!shouldRender) return null;
   const handleSubmit = async (e: React.FormEvent) => {

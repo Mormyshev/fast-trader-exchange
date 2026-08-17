@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { useLenis } from "lenis/react";
 import { loginAndGetRoute } from "@/src/app/actions/auth";
 import { validateEmail, validatePassword } from "@/src/utils/validation";
 import TurnstileCaptcha from "@/src/components/TurnstileCaptcha/TurnstileCaptcha";
+import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -29,8 +29,6 @@ export default function AuthModal({
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const lenis = useLenis();
-
   const resetCaptcha = () => {
     setCaptchaToken(null);
     setCaptchaReset((n) => n + 1);
@@ -40,22 +38,22 @@ export default function AuthModal({
     if (isOpen) {
       setError("");
       setIsLoading(false);
-      resetCaptcha();
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
       setShouldRender(true);
-      if (lenis) lenis.stop();
-      document.body.style.overflow = "hidden";
+      lockPageScroll();
       const timer = setTimeout(() => setIsAnimated(true), 10);
-      return () => clearTimeout(timer);
-    } else {
-      setIsAnimated(false);
-      const timer = setTimeout(() => {
-        setShouldRender(false);
-        if (lenis) lenis.start();
-        document.body.style.overflow = "";
-      }, 300);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        unlockPageScroll();
+      };
     }
-  }, [isOpen, lenis]);
+
+    setIsAnimated(false);
+    unlockPageScroll();
+    const timer = setTimeout(() => setShouldRender(false), 300);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
 
   if (!shouldRender) return null;
 

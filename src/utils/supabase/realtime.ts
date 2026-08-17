@@ -11,11 +11,7 @@ export async function subscribeWithAuth(
   channel: RealtimeChannel,
   onStatus?: StatusHandler,
 ): Promise<RealtimeChannel> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (token) {
-    await supabase.realtime.setAuth(token);
-  }
+  await supabase.auth.getSession();
 
   return channel.subscribe((status) => {
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {

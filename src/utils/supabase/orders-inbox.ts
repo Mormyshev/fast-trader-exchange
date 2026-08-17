@@ -18,8 +18,18 @@ function fanout(order: unknown, event: "created" | "updated") {
   listeners.forEach((handler) => handler(order, event));
 }
 
+function channelIsLive(ch: RealtimeChannel | null) {
+  if (!ch) return false;
+  const state = (ch as RealtimeChannel & { state?: string }).state;
+  return state === "joined" || state === "joining" || state === undefined;
+}
+
 function ensureChannel(supabase: SupabaseClient) {
-  if (channel) return;
+  if (channelIsLive(channel)) return;
+
+  if (channel && client) {
+    void client.removeChannel(channel);
+  }
 
   client = supabase;
   channel = supabase
@@ -33,6 +43,15 @@ function ensureChannel(supabase: SupabaseClient) {
     .subscribe((status) => {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         console.warn("[realtime]", ORDERS_INBOX_CHANNEL, status);
+        const supabase = client;
+        if (channel && client) {
+          void client.removeChannel(channel);
+        }
+        channel = null;
+        client = null;
+        if (listeners.size > 0 && supabase) {
+          window.setTimeout(() => ensureChannel(supabase), 1000);
+        }
       }
     });
 }

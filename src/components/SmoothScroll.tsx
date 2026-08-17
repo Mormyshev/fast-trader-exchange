@@ -1,37 +1,46 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Lenis from "lenis";
+import { setLenisInstance } from "@/src/utils/lenis-bridge";
 
 export default function SmoothScroll({
-    children,
+  children,
 }: {
-    children: React.ReactNode;
+  children: React.ReactNode;
 }) {
-    useEffect(() => {
-        // Проверяем, что это десктоп (ширина экрана от 1024px)
-        if (window.innerWidth < 1024) return;
+  const pathname = usePathname();
+  const staffShell =
+    pathname.startsWith("/operator") || pathname.startsWith("/admin");
 
-        const lenis = new Lenis({
-            duration: 1.2,
-            easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-            orientation: "vertical",
-            gestureOrientation: "vertical",
-            smoothWheel: true,
-        });
+  useEffect(() => {
+    if (staffShell) return;
+    if (window.innerWidth < 1024) return;
 
-        // Запускаем цикл анимации скролла
-        function raf(time: number) {
-            lenis.raf(time);
-            requestAnimationFrame(raf);
-        }
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      orientation: "vertical",
+      gestureOrientation: "vertical",
+      smoothWheel: true,
+    });
 
-        requestAnimationFrame(raf);
+    setLenisInstance(lenis);
 
-        return () => {
-            lenis.destroy();
-        };
-    }, []);
+    let rafId = 0;
+    const raf = (time: number) => {
+      lenis.raf(time);
+      rafId = requestAnimationFrame(raf);
+    };
+    rafId = requestAnimationFrame(raf);
 
-    return <>{children}</>;
+    return () => {
+      cancelAnimationFrame(rafId);
+      lenis.destroy();
+      setLenisInstance(null);
+    };
+  }, [staffShell]);
+
+  return <>{children}</>;
 }
