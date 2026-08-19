@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { createClient } from "@/src/utils/supabase/server";
 import { verifyRecaptchaToken } from "@/src/utils/captcha/verify-recaptcha";
 
@@ -9,15 +8,9 @@ export async function loginAndGetRoute(
   password: string,
   captchaToken: string,
 ) {
-  const requestHeaders = await headers();
-  const ip =
-    requestHeaders.get("cf-connecting-ip") ||
-    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    null;
-
-  const captchaOk = await verifyRecaptchaToken(captchaToken, ip);
-  if (!captchaOk) {
-    return { error: "Подтвердите, что вы не робот" };
+  const captcha = await verifyRecaptchaToken(captchaToken, "login");
+  if (!captcha.ok) {
+    return { error: captcha.error };
   }
 
   const supabase = await createClient();

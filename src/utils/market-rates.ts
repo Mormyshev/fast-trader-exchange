@@ -52,6 +52,7 @@ async function fetchRapiraRates(): Promise<Partial<MarketRates> & { ok: boolean 
   try {
     const res = await axios.get("https://api.rapira.net/open/market/rates", {
       timeout: 8000,
+      signal: AbortSignal.timeout(8000),
       headers: { Accept: "application/json" },
     });
     const list: RapiraRate[] = Array.isArray(res.data?.data) ? res.data.data : [];
@@ -80,6 +81,7 @@ async function fetchBybitLast(symbol: string): Promise<number | null> {
       "https://api.bybit.com/v5/market/tickers",
       {
         timeout: 8000,
+        signal: AbortSignal.timeout(8000),
         params: { category: "spot", symbol },
       },
     );
@@ -94,6 +96,7 @@ async function fetchBinanceLast(symbol: string): Promise<number | null> {
   try {
     const res = await axios.get("https://api.binance.com/api/v3/ticker/price", {
       timeout: 8000,
+      signal: AbortSignal.timeout(8000),
       params: { symbol },
     });
     const price = parseFloat(res.data?.price ?? "");

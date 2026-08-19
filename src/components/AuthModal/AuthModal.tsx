@@ -4,7 +4,10 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { loginAndGetRoute } from "@/src/app/actions/auth";
 import { validateEmail, validatePassword } from "@/src/utils/validation";
-import RecaptchaCheckbox from "@/src/components/RecaptchaCheckbox/RecaptchaCheckbox";
+import {
+  executeRecaptcha,
+  preloadRecaptcha,
+} from "@/src/utils/captcha/recaptcha-v3";
 import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
 
 interface AuthModalProps {
@@ -23,16 +26,9 @@ export default function AuthModal({
 
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaReset, setCaptchaReset] = useState(0);
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  const resetCaptcha = () => {
-    setCaptchaToken(null);
-    setCaptchaReset((n) => n + 1);
-  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -43,10 +39,9 @@ export default function AuthModal({
 
     setError("");
     setIsLoading(false);
-    setCaptchaToken(null);
-    setCaptchaReset((n) => n + 1);
     setShouldRender(true);
     lockPageScroll();
+    void preloadRecaptcha().catch(() => {});
     const timer = setTimeout(() => setIsAnimated(true), 10);
     return () => {
       clearTimeout(timer);
@@ -59,11 +54,6 @@ export default function AuthModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    if (!captchaToken) {
-      setError("Подтвердите, что вы не робот");
-      return;
-    }
 
     const emailCheck = validateEmail(login);
     if (!emailCheck.ok) {
@@ -79,23 +69,30 @@ export default function AuthModal({
 
     setIsLoading(true);
 
-    const result = await loginAndGetRoute(
-      emailCheck.value,
-      passwordCheck.value,
-      captchaToken,
-    );
+    try {
+      const captchaToken = await executeRecaptcha("login");
+      const result = await loginAndGetRoute(
+        emailCheck.value,
+        passwordCheck.value,
+        captchaToken,
+      );
 
-    if (result.error) {
-      setIsLoading(false);
-      setError(result.error);
-      resetCaptcha();
-    } else if (result.route) {
-      setLogin("");
-      setPassword("");
-      setIsLoading(false);
-      onClose();
+      if (result.error) {
+        setError(result.error);
+        setIsLoading(false);
+        return;
+      }
 
-      window.location.href = result.route;
+      if (result.route) {
+        setLogin("");
+        setPassword("");
+        setIsLoading(false);
+        onClose();
+        window.location.href = result.route;
+      }
+    } catch {
+      setIsLoading(false);
+      setError("Не удалось проверить капчу. Обновите страницу и попробуйте снова.");
     }
   };
 
@@ -162,19 +159,35 @@ export default function AuthModal({
             />
           </div>
 
-          <RecaptchaCheckbox
-            onToken={setCaptchaToken}
-            resetSignal={captchaReset}
-          />
-
           <div className="pt-4">
             <button
               type="submit"
-              disabled={isLoading || !captchaToken}
+              disabled={isLoading}
               className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-3.5 rounded-full shadow-xs transition-all flex items-center justify-center"
             >
               {isLoading ? "Вход..." : "Войти"}
             </button>
+            <p className="mt-3 text-center text-[10px] leading-4 text-zinc-400">
+              Этот сайт защищён reCAPTCHA Google.{" "}
+              <a
+                href="https://policies.google.com/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-zinc-600"
+              >
+                Конфиденциальность
+              </a>{" "}
+              и{" "}
+              <a
+                href="https://policies.google.com/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-zinc-600"
+              >
+                Условия
+              </a>
+              .
+            </p>
           </div>
         </form>
 

@@ -1,6 +1,7 @@
-/** Official Google reCAPTCHA v2 test keys — always pass. Used when real keys are not set. */
-const FALLBACK_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_uXRCLq8";
-
 export function getRecaptchaSiteKey() {
-  return process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim() || FALLBACK_SITE_KEY;
+  const key = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim();
+  if (!key) {
+    throw new Error("NEXT_PUBLIC_RECAPTCHA_SITE_KEY is not set");
+  }
+  return key;
 }
