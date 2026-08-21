@@ -22,10 +22,10 @@ import { isOrderExpiredByTtl } from "@/src/utils/orders/ttl";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import type { OrderClient } from "@/src/utils/orders/client-info";
 import {
-  serializePaymentDetails,
-  validatePaymentRequisites,
+  buildOperatorPaymentDetails,
+  clientPaysWithCrypto,
 } from "@/src/utils/orders/payment-details";
-import PaymentRequisitesForm from "@/src/components/PaymentRequisites/PaymentRequisitesForm";
+import OperatorPayInForm from "@/src/components/PaymentRequisites/OperatorPayInForm";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
 
 interface Order {
@@ -95,7 +95,7 @@ export default function OperatorOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("new");
   const [detailsInput, setDetailsInput] = useState<{
-    [key: string]: { card: string; phone: string };
+    [key: string]: { card: string; phone: string; wallet: string };
   }>({});
 
   const userIdRef = useRef<string | null>(null);
@@ -314,16 +314,25 @@ export default function OperatorOrdersPage() {
   };
 
   const handleSendDetails = async (orderId: string) => {
-    const current = detailsInput[orderId] ?? { card: "", phone: "" };
-    const check = validatePaymentRequisites(current.card, current.phone);
+    const target = myOrders.find((o) => o.id === orderId);
+    if (!target) return;
+    const current = detailsInput[orderId] ?? {
+      card: "",
+      phone: "",
+      wallet: "",
+    };
+    const check = buildOperatorPaymentDetails(target.currency_from, current);
     if (!check.ok) {
       alert(check.error);
       return;
     }
 
+    const paysCrypto = clientPaysWithCrypto(target.currency_from);
     const ok = await confirm({
       title: "Отправить реквизиты клиенту?",
-      description: `Карта ${check.card}, телефон ${check.phone}. Клиент увидит эти реквизиты и сможет оплатить заявку.`,
+      description: paysCrypto
+        ? `Клиент отправит ${target.currency_from.replace(/_/g, " ")} на адрес ${check.summary}.`
+        : `${check.summary}. Клиент увидит эти реквизиты и сможет оплатить заявку.`,
       confirmLabel: "Отправить",
     });
     if (!ok) return;
@@ -333,7 +342,7 @@ export default function OperatorOrdersPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          payment_details: serializePaymentDetails(check.card, check.phone),
+          payment_details: check.payload,
           status: "awaiting_payment",
         }),
       });
@@ -564,17 +573,22 @@ export default function OperatorOrdersPage() {
         {order.status === "processing" && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-zinc-500 uppercase pl-1">
-              Реквизиты для оплаты клиенту:
+              {clientPaysWithCrypto(order.currency_from)
+                ? "Адрес кошелька для оплаты клиенту:"
+                : "Реквизиты для оплаты клиенту:"}
             </label>
-            <PaymentRequisitesForm
+            <OperatorPayInForm
+              currencyFrom={order.currency_from}
               card={detailsInput[order.id]?.card ?? ""}
               phone={detailsInput[order.id]?.phone ?? ""}
+              wallet={detailsInput[order.id]?.wallet ?? ""}
               onCardChange={(card) =>
                 setDetailsInput((prev) => ({
                   ...prev,
                   [order.id]: {
                     card,
                     phone: prev[order.id]?.phone ?? "",
+                    wallet: prev[order.id]?.wallet ?? "",
                   },
                 }))
               }
@@ -584,6 +598,17 @@ export default function OperatorOrdersPage() {
                   [order.id]: {
                     card: prev[order.id]?.card ?? "",
                     phone,
+                    wallet: prev[order.id]?.wallet ?? "",
+                  },
+                }))
+              }
+              onWalletChange={(wallet) =>
+                setDetailsInput((prev) => ({
+                  ...prev,
+                  [order.id]: {
+                    card: prev[order.id]?.card ?? "",
+                    phone: prev[order.id]?.phone ?? "",
+                    wallet,
                   },
                 }))
               }
@@ -643,7 +668,7 @@ export default function OperatorOrdersPage() {
                       Чек выплаты прикреплён
                     </p>
                     <a
-                      href={order.operator_receipt_url}
+                      href={`/api/orders/${order.id}/operator-receipt`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs font-bold text-blue-600 hover:underline"

@@ -110,27 +110,53 @@ export default function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  const loadMessages = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const res = await fetch(`/api/chat/conversations/${conversationId}/messages`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
-      setMessages(data.messages ?? []);
-      if (data.conversation) {
-        onConversationChangeRef.current?.(data.conversation);
-      }
-    } catch (err) {
+  const upsertMessage = useCallback(
+    (row: ChatMessage | null | undefined) => {
+      if (!row?.id || row.conversation_id !== conversationId) return;
+      setMessages((prev) => {
+        if (prev.some((message) => message.id === row.id)) return prev;
+        return [...prev, row];
+      });
+    },
+    [conversationId],
+  );
+
+  const loadMessages = useCallback(
+    async (silent = false) => {
       if (!silent) {
-        setError(err instanceof Error ? err.message : "Ошибка загрузки");
+        setLoading(true);
+        setError(null);
       }
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [conversationId]);
+      try {
+        const res = await fetch(
+          `/api/chat/conversations/${conversationId}/messages`,
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+        const next = (data.messages ?? []) as ChatMessage[];
+        setMessages((prev) => {
+          if (
+            silent &&
+            prev.length === next.length &&
+            prev.every((message, index) => message.id === next[index]?.id)
+          ) {
+            return prev;
+          }
+          return next;
+        });
+        if (data.conversation) {
+          onConversationChangeRef.current?.(data.conversation);
+        }
+      } catch (err) {
+        if (!silent) {
+          setError(err instanceof Error ? err.message : "Ошибка загрузки");
+        }
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [conversationId],
+  );
 
   useEffect(() => {
     void loadMessages();
@@ -142,14 +168,6 @@ export default function ChatPanel({
 
   useEffect(() => {
     const supabase = createClient();
-
-    const upsertMessage = (row: ChatMessage | null | undefined) => {
-      if (!row?.id || row.conversation_id !== conversationId) return;
-      setMessages((prev) => {
-        if (prev.some((message) => message.id === row.id)) return prev;
-        return [...prev, row];
-      });
-    };
 
     const pgChannel = supabase
       .channel(`chat-messages-${conversationId}`)
@@ -191,7 +209,7 @@ export default function ChatPanel({
       inbox?.unsubscribe();
       void supabase.removeChannel(pgChannel);
     };
-  }, [conversationId, loadMessages, mode]);
+  }, [conversationId, loadMessages, mode, upsertMessage]);
 
   const sendText = async () => {
     const body = text.trim();
@@ -211,8 +229,7 @@ export default function ChatPanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Не удалось отправить");
       setText("");
-      setMessages((prev) => [...prev, data.message]);
-      void loadMessages();
+      upsertMessage(data.message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка отправки");
     } finally {
@@ -240,8 +257,7 @@ export default function ChatPanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Не удалось загрузить файл");
       setText("");
-      setMessages((prev) => [...prev, data.message]);
-      void loadMessages();
+      upsertMessage(data.message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка загрузки");
     } finally {
@@ -275,7 +291,7 @@ export default function ChatPanel({
     setError(null);
     try {
       await onClaim();
-      await loadMessages();
+      await loadMessages(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось взять чат");
     } finally {

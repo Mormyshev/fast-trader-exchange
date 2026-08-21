@@ -12,6 +12,7 @@ import {
   Upload,
   Check,
   ArrowLeft,
+  FileText,
 } from "lucide-react";
 import {
   formatOrderTimeLeft,
@@ -20,6 +21,7 @@ import {
 } from "@/src/utils/orders/ttl";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
+import { parsePaymentDetails } from "@/src/utils/orders/payment-details";
 
 interface OrderStatusClientProps {
   initialOrder: any;
@@ -243,6 +245,9 @@ export default function OrderStatusClient({
     }
   };
 
+  const payInIsCrypto =
+    parsePaymentDetails(order.payment_details).kind === "crypto";
+
   return (
     <div className="p-0 md:p-4 w-full transition-all">
       <div className="mb-4">
@@ -357,10 +362,14 @@ export default function OrderStatusClient({
                   </div>
                   <div>
                     <h3 className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                      Заявка ожидает вашей оплаты
+                      {payInIsCrypto
+                        ? "Отправьте крипту на указанный адрес"
+                        : "Заявка ожидает вашей оплаты"}
                     </h3>
                     <p className="text-xs text-zinc-500 font-medium">
-                      Переведите точную сумму по указанным реквизитам.
+                      {payInIsCrypto
+                        ? "Переведите точную сумму на адрес кошелька мерчанта."
+                        : "Переведите точную сумму по указанным реквизитам."}
                     </p>
                   </div>
                 </div>
@@ -480,6 +489,17 @@ export default function OrderStatusClient({
                   Средства были успешно отправлены на указанные вами реквизиты.
                   Спасибо, что выбрали Aurum Swap!
                 </p>
+                {order.operator_receipt_url && (
+                  <a
+                    href={`/api/orders/${order.id}/operator-receipt`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 mt-4 bg-white dark:bg-zinc-800 border border-emerald-300 text-emerald-700 dark:text-emerald-400 font-bold text-sm px-5 py-3 rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Скачать подтверждение перевода (PDF)
+                  </a>
+                )}
               </div>
             </div>
           )}
@@ -511,6 +531,17 @@ export default function OrderStatusClient({
             <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-md">
               Оператор проверяет ваш чек. Статус обновится автоматически.
             </p>
+            {order.operator_receipt_url && (
+              <a
+                href={`/api/orders/${order.id}/operator-receipt`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 bg-white dark:bg-zinc-800 border border-indigo-300 text-indigo-700 dark:text-indigo-300 font-bold text-sm px-5 py-3 rounded-full hover:bg-indigo-50 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                Подтверждение перевода (PDF)
+              </a>
+            )}
           </div>
         )}
       </div>

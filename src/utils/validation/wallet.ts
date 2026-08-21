@@ -3,6 +3,8 @@ import {
   isCryptoCurrency,
   type ExchangeCurrency,
 } from "@/src/utils/exchange-currencies";
+import { formatPhoneInput } from "./common";
+import { validateSbpRequisites } from "./sbp-payout";
 import { validationError, validationOk, type ValidationResult } from "./types";
 
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]+$/;
@@ -93,6 +95,9 @@ function detectWrongNetwork(
 }
 
 export function formatWalletInput(value: string, currencyId: string): string {
+  if (currencyId === "sbp") {
+    return formatPhoneInput(value);
+  }
   if (currencyId === "usdt_trc20") {
     if (value === "") return "";
     const cleaned = value.replace(/\s/g, "");
@@ -229,12 +234,7 @@ export function validateFiatRequisites(
   const digits = digitsOnly(trimmed);
 
   if (currencyId === "sbp") {
-    if (digits.length !== 11 || !digits.startsWith("7")) {
-      return validationError(
-        "СБП: укажите номер телефона +7 (10 цифр после кода страны)",
-      );
-    }
-    return validationOk(`+${digits}`);
+    return validateSbpRequisites(trimmed);
   }
 
   if (currencyId === "rub_cash") {

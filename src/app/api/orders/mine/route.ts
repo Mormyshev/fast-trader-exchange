@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     let query = admin
       .from("orders")
       .select(
-        "id, created_at, status, currency_from, currency_to, amount_from, amount_to, wallet_to, payment_details, receipt_url",
+        "id, created_at, status, currency_from, currency_to, amount_from, amount_to, wallet_to, payment_details, receipt_url, operator_receipt_url",
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });

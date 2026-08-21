@@ -16,6 +16,7 @@ import {
   ExternalLink,
   MessageCircle,
   UserCog,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
@@ -24,6 +25,7 @@ import { createClient } from "@/src/utils/supabase/client";
 import { subscribeSupportInbox } from "@/src/utils/supabase/support-inbox";
 import type { ChatConversation } from "@/src/utils/chat/types";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
+import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 
 const pageTitles: { [key: string]: string } = {
   "/operator/dashboard": "Дашборд статистики",
@@ -42,6 +44,66 @@ function getPageTitle(pathname: string) {
   return pageTitles[pathname] || "Панель управления";
 }
 
+function NavBadge({ count, compact = false }: { count: number; compact?: boolean }) {
+  if (count <= 0) return null;
+  const label = count > 99 ? "99+" : String(count);
+  return (
+    <span
+      className={
+        compact
+          ? "absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold leading-none flex items-center justify-center"
+          : "min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0"
+      }
+    >
+      {label}
+    </span>
+  );
+}
+
+function StaffNavLink({
+  href,
+  icon: Icon,
+  label,
+  active,
+  badge = 0,
+  collapsed,
+  onClick,
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  active: boolean;
+  badge?: number;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      title={collapsed ? label : undefined}
+      onClick={onClick}
+      className={`relative w-full min-w-0 flex items-center rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+        collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"
+      } ${
+        active
+          ? "bg-[#FFDD2D] text-zinc-900"
+          : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+      }`}
+    >
+      <span className="relative shrink-0">
+        <Icon className="w-4 h-4" />
+        {collapsed && <NavBadge count={badge} compact />}
+      </span>
+      {!collapsed && (
+        <>
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          <NavBadge count={badge} />
+        </>
+      )}
+    </Link>
+  );
+}
+
 interface StaffLayoutClientProps {
   children: React.ReactNode;
   role: string;
@@ -56,6 +118,7 @@ export default function StaffLayoutClient({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [pendingChats, setPendingChats] = useState(0);
+  const [activeOrders, setActiveOrders] = useState(0);
   const [operatorPseudonym, setOperatorPseudonym] = useState(
     initialOperatorPseudonym,
   );
@@ -73,6 +136,19 @@ export default function StaffLayoutClient({
         (c) => !c.operator_id,
       ).length;
       setPendingChats(unassigned);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const loadActiveOrders = useCallback(async () => {
+    try {
+      const res = await fetch("/api/orders/staff");
+      const data = await res.json();
+      if (!res.ok) return;
+      const pending = Array.isArray(data.pending) ? data.pending.length : 0;
+      const mine = Array.isArray(data.mine) ? data.mine.length : 0;
+      setActiveOrders(pending + mine);
     } catch {
       // ignore
     }
@@ -115,23 +191,32 @@ export default function StaffLayoutClient({
 
   useEffect(() => {
     void loadPendingChats();
+    void loadActiveOrders();
 
     const supabase = createClient();
     const inbox = subscribeSupportInbox(supabase, {
       onMessage: () => void loadPendingChats(),
       onConversation: () => void loadPendingChats(),
     });
+    const ordersInbox = subscribeOrdersInbox(supabase, () => {
+      void loadActiveOrders();
+    });
 
-    const interval = setInterval(() => void loadPendingChats(), 30_000);
+    const interval = setInterval(() => {
+      void loadPendingChats();
+      void loadActiveOrders();
+    }, 30_000);
 
     return () => {
       clearInterval(interval);
       inbox.unsubscribe();
+      ordersInbox.unsubscribe();
     };
-  }, [loadPendingChats]);
+  }, [loadPendingChats, loadActiveOrders]);
 
   const isAdmin = role === "admin";
   const currentTitle = getPageTitle(pathname);
+  const collapsed = isDesktop && !sidebarOpen;
 
   const handleNavClick = () => {
     if (!isDesktop) {
@@ -166,18 +251,35 @@ export default function StaffLayoutClient({
       )}
 
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 w-[min(100vw-2.5rem,17rem)] md:w-64 bg-white border-r border-zinc-200 transition-transform duration-300 ease-in-out px-3 sm:px-4 py-5 sm:py-6 flex flex-col justify-between ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        className={`fixed top-0 left-0 bottom-0 z-50 bg-white border-r border-zinc-200 transition-all duration-300 ease-in-out flex flex-col justify-between ${
+          isDesktop
+            ? collapsed
+              ? "w-[4.5rem] px-2 py-6 translate-x-0"
+              : "w-64 px-4 py-6 translate-x-0"
+            : `w-[min(100vw-2.5rem,17rem)] px-3 sm:px-4 py-5 sm:py-6 ${
+                sidebarOpen ? "translate-x-0" : "-translate-x-full"
+              }`
         }`}
       >
         <div className="space-y-6 flex-1 min-h-0 overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-1 sm:px-2 gap-2 shrink-0">
+          <div
+            className={`flex items-center gap-2 shrink-0 ${collapsed ? "justify-center px-0" : "justify-between px-1 sm:px-2"}`}
+          >
             <Link
               href="/"
               className="text-base sm:text-lg font-black tracking-tight text-zinc-900 select-none hover:opacity-80 transition-opacity truncate"
               title="На главную сайта"
             >
-              AURUM SWAP<span className="text-[#e6c628] font-medium">.DEMO</span>
+              {collapsed ? (
+                <>
+                  A<span className="text-[#e6c628]">.</span>
+                </>
+              ) : (
+                <>
+                  AURUM SWAP
+                  <span className="text-[#e6c628] font-medium">.DEMO</span>
+                </>
+              )}
             </Link>
             {!isDesktop && (
               <button
@@ -192,146 +294,111 @@ export default function StaffLayoutClient({
           </div>
 
           <nav className="space-y-1 pt-4 overflow-y-auto flex-1 min-h-0 pb-2 [scrollbar-width:thin]">
-            <Link
+            <StaffNavLink
               href="/operator/dashboard"
-              className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-                pathname === "/operator/dashboard"
-                  ? "bg-[#FFDD2D] text-zinc-900"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-              }`}
+              icon={LayoutDashboard}
+              label="Дашборд"
+              active={pathname === "/operator/dashboard"}
+              collapsed={collapsed}
               onClick={handleNavClick}
-            >
-              <LayoutDashboard className="w-4 h-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">Дашборд</span>
-            </Link>
-
-            <Link
+            />
+            <StaffNavLink
               href="/operator/orders"
-              className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-                pathname === "/operator/orders"
-                  ? "bg-[#FFDD2D] text-zinc-900"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-              }`}
+              icon={ClipboardList}
+              label="Активные ордера"
+              active={pathname.startsWith("/operator/orders")}
+              badge={activeOrders}
+              collapsed={collapsed}
               onClick={handleNavClick}
-            >
-              <ClipboardList className="w-4 h-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">Активные ордера</span>
-            </Link>
-
-            <Link
+            />
+            <StaffNavLink
               href="/operator/support"
-              className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer relative ${
-                pathname === "/operator/support"
-                  ? "bg-[#FFDD2D] text-zinc-900"
-                  : pendingChats > 0
-                    ? "bg-amber-50 text-amber-950 border border-amber-200 shadow-[0_0_0_1px_rgba(251,191,36,0.25)]"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-              }`}
+              icon={MessageCircle}
+              label="Чат поддержки"
+              active={pathname.startsWith("/operator/support")}
+              badge={pendingChats}
+              collapsed={collapsed}
               onClick={handleNavClick}
-            >
-              <span className="relative shrink-0">
-                <MessageCircle className="w-4 h-4" />
-                {pendingChats > 0 && pathname !== "/operator/support" && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white animate-pulse" />
-                )}
-              </span>
-              <span className="min-w-0 flex-1 truncate">Чат поддержки</span>
-              {pendingChats > 0 && (
-                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                  {pendingChats}
-                </span>
-              )}
-            </Link>
-
-            <Link
+            />
+            <StaffNavLink
               href="/operator/profile"
-              className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-                pathname === "/operator/profile"
-                  ? "bg-[#FFDD2D] text-zinc-900"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-              }`}
+              icon={UserCog}
+              label="Профиль"
+              active={pathname === "/operator/profile"}
+              collapsed={collapsed}
               onClick={handleNavClick}
-            >
-              <UserCog className="w-4 h-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">Профиль</span>
-            </Link>
+            />
 
-            {/* АДМИНСКИЙ БЛОК */}
             {isAdmin && (
-              <div className="pt-4 mt-4 border-t border-zinc-100 space-y-1">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block pl-3 mb-1">
-                  Администрирование
-                </span>
-                <Link
+              <div
+                className={`pt-4 mt-4 border-t border-zinc-100 space-y-1 ${collapsed ? "px-0" : ""}`}
+              >
+                {!collapsed && (
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block pl-3 mb-1">
+                    Администрирование
+                  </span>
+                )}
+                <StaffNavLink
                   href="/admin/verification"
-                  className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-                    pathname === "/admin/verification"
-                      ? "bg-[#FFDD2D] text-zinc-900"
-                      : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-                  }`}
+                  icon={UserCheck}
+                  label="Верификация аккаунтов"
+                  active={pathname === "/admin/verification"}
+                  collapsed={collapsed}
                   onClick={handleNavClick}
-                >
-                  <UserCheck className="w-4 h-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">
-                    Верификация аккаунтов
-                  </span>
-                </Link>
-                <Link
+                />
+                <StaffNavLink
                   href="/admin/manage-operators"
-                  className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-                    pathname === "/admin/manage-operators"
-                      ? "bg-[#FFDD2D] text-zinc-900"
-                      : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-                  }`}
+                  icon={Users}
+                  label="Управление персоналом"
+                  active={pathname === "/admin/manage-operators"}
+                  collapsed={collapsed}
                   onClick={handleNavClick}
-                >
-                  <Users className="w-4 h-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">
-                    Управление персоналом
-                  </span>
-                </Link>
-                <Link
+                />
+                <StaffNavLink
                   href="/admin/settings"
-                  className={`w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-                    pathname === "/admin/settings"
-                      ? "bg-[#FFDD2D] text-zinc-900"
-                      : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-                  }`}
+                  icon={Settings}
+                  label="Настройки системы"
+                  active={pathname === "/admin/settings"}
+                  collapsed={collapsed}
                   onClick={handleNavClick}
-                >
-                  <Settings className="w-4 h-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">
-                    Настройки системы
-                  </span>
-                </Link>
+                />
               </div>
             )}
           </nav>
         </div>
 
-        <div className="border-t border-zinc-100 pt-4 px-1 space-y-1 shrink-0">
-          <Link
+        <div
+          className={`border-t border-zinc-100 pt-4 space-y-1 shrink-0 ${collapsed ? "px-0" : "px-1"}`}
+        >
+          <StaffNavLink
             href="/"
+            icon={ExternalLink}
+            label="На сайт"
+            active={false}
+            collapsed={collapsed}
             onClick={handleNavClick}
-            className="w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
-          >
-            <ExternalLink className="w-4 h-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">На сайт</span>
-          </Link>
+          />
           <button
             type="button"
+            title={collapsed ? "Выйти из системы" : undefined}
             onClick={() => void handleLogout()}
-            className="w-full min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+            className={`w-full min-w-0 flex items-center rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer ${
+              collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"
+            }`}
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">Выйти из системы</span>
+            {!collapsed && (
+              <span className="min-w-0 flex-1 truncate text-left">
+                Выйти из системы
+              </span>
+            )}
           </button>
         </div>
       </aside>
 
       <div
         className={`flex-1 flex flex-col h-dvh min-h-0 min-w-0 transition-all duration-300 ease-in-out ${
-          sidebarOpen ? "md:pl-64" : "md:pl-0"
+          isDesktop ? (collapsed ? "md:pl-[4.5rem]" : "md:pl-64") : ""
         }`}
       >
         <header className="h-14 sm:h-16 md:h-20 bg-white border-b border-zinc-200 px-3 sm:px-4 md:px-10 flex items-center justify-between gap-2 shrink-0 z-30 safe-area-inset-top">

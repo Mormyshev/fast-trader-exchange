@@ -23,10 +23,10 @@ import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { isOrderExpiredByTtl, ORDER_TTL_STATUSES } from "@/src/utils/orders/ttl";
 import type { OrderClient } from "@/src/utils/orders/client-info";
 import {
-  serializePaymentDetails,
-  validatePaymentRequisites,
+  buildOperatorPaymentDetails,
+  clientPaysWithCrypto,
 } from "@/src/utils/orders/payment-details";
-import PaymentRequisitesForm from "@/src/components/PaymentRequisites/PaymentRequisitesForm";
+import OperatorPayInForm from "@/src/components/PaymentRequisites/OperatorPayInForm";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
 
 type OrderStatus =
@@ -103,6 +103,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const [loading, setLoading] = useState(true);
   const [card, setCard] = useState("");
   const [phone, setPhone] = useState("");
+  const [payWallet, setPayWallet] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingPayout, setUploadingPayout] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,15 +238,22 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleSendDetails = async () => {
     if (!order) return;
-    const check = validatePaymentRequisites(card, phone);
+    const check = buildOperatorPaymentDetails(order.currency_from, {
+      card,
+      phone,
+      wallet: payWallet,
+    });
     if (!check.ok) {
       alert(check.error);
       return;
     }
 
+    const paysCrypto = clientPaysWithCrypto(order.currency_from);
     const ok = await confirm({
       title: "Отправить реквизиты клиенту?",
-      description: `Карта ${check.card}, телефон ${check.phone}. Клиент увидит эти реквизиты и сможет оплатить заявку.`,
+      description: paysCrypto
+        ? `Клиент отправит ${order.currency_from.replace(/_/g, " ")} на адрес ${check.summary}.`
+        : `${check.summary}. Клиент увидит эти реквизиты и сможет оплатить заявку.`,
       confirmLabel: "Отправить",
     });
     if (!ok) return;
@@ -256,7 +264,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          payment_details: serializePaymentDetails(check.card, check.phone),
+          payment_details: check.payload,
           status: "awaiting_payment",
         }),
       });
@@ -265,6 +273,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       setOrder(json.order);
       setCard("");
       setPhone("");
+      setPayWallet("");
     } catch (err: any) {
       alert(err.message || "Ошибка");
     } finally {
@@ -438,7 +447,9 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase text-zinc-400 mb-1">
-                Кошелёк клиента
+                {clientPaysWithCrypto(order.currency_from)
+                  ? "Реквизиты получения клиента"
+                  : "Кошелёк клиента"}
               </p>
               <p className="font-mono text-xs font-bold break-all bg-white border border-zinc-200 rounded-xl px-3 py-2">
                 {order.wallet_to}
@@ -490,13 +501,18 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           {order.status === "processing" && (
             <div className="space-y-3 max-w-xl">
               <label className="block text-xs font-bold text-zinc-500 uppercase">
-                Реквизиты для оплаты клиенту
+                {clientPaysWithCrypto(order.currency_from)
+                  ? "Адрес кошелька для оплаты клиенту"
+                  : "Реквизиты для оплаты клиенту"}
               </label>
-              <PaymentRequisitesForm
+              <OperatorPayInForm
+                currencyFrom={order.currency_from}
                 card={card}
                 phone={phone}
+                wallet={payWallet}
                 onCardChange={setCard}
                 onPhoneChange={setPhone}
+                onWalletChange={setPayWallet}
               />
               <Button
                 disabled={saving}
@@ -563,7 +579,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                         Чек выплаты прикреплён
                       </span>
                       <a
-                        href={order.operator_receipt_url}
+                        href={`/api/orders/${order.id}/operator-receipt`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs font-bold text-blue-600 hover:underline"

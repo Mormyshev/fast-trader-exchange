@@ -16,17 +16,28 @@ export default function PaymentRequisitesView({
     ? "font-mono text-xs font-bold break-all bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-1.5"
     : "font-mono text-sm font-bold break-all bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2";
 
-  if (!parsed.card && !parsed.phone && !parsed.legacy) {
+  if (parsed.kind === "empty") {
     return (
       <p className="text-sm font-medium text-zinc-400">{emptyText}</p>
     );
   }
 
-  if (parsed.legacy) {
+  if (parsed.kind === "legacy" && parsed.legacy) {
     return (
       <p className={`${compact ? "text-xs" : "text-sm"} font-mono whitespace-pre-wrap font-bold text-zinc-900 dark:text-zinc-50 leading-relaxed`}>
         {parsed.legacy}
       </p>
+    );
+  }
+
+  if (parsed.kind === "crypto") {
+    return (
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+          Адрес кошелька
+        </p>
+        <p className={box}>{parsed.wallet || "—"}</p>
+      </div>
     );
   }
 

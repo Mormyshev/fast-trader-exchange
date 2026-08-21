@@ -25,6 +25,7 @@ import {
 } from "@/src/utils/exchange-currencies";
 import CryptoAssetPicker from "@/src/components/Exchange/CryptoAssetPicker";
 import CryptoNetworkSelect from "@/src/components/Exchange/CryptoNetworkSelect";
+import SbpRequisitesFields from "@/src/components/Exchange/SbpRequisitesFields";
 import {
   isVerificationComplete,
   normalizeVerificationStatus,
@@ -34,6 +35,7 @@ import {
   formatTelegramInput,
   formatWalletInput,
   getWalletPlaceholder,
+  serializeSbpRequisites,
   validateOrderFormField,
   validateOrderFormFields,
   type OrderFormErrors,
@@ -182,6 +184,7 @@ export default function OrderForm() {
 
   const [fio, setFio] = useState<string>("");
   const [wallet, setWallet] = useState<string>("");
+  const [sbpBankId, setSbpBankId] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [telegram, setTelegram] = useState<string>("");
   const [coupon, setCoupon] = useState<string>("");
@@ -352,6 +355,7 @@ export default function OrderForm() {
     }
     setIsSendActive(true);
     setWallet("");
+    setSbpBankId("");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(currency, nextReceive, sendAmount);
   };
@@ -390,6 +394,7 @@ export default function OrderForm() {
     setIsReceiveDropdownOpen(false);
     setIsSendActive(true);
     setWallet("");
+    setSbpBankId("");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, next, sendAmount);
   };
@@ -401,6 +406,7 @@ export default function OrderForm() {
     if (!next) return;
     setSelectedReceive(next);
     setWallet("");
+    setSbpBankId("");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, next, sendAmount);
   };
@@ -410,6 +416,7 @@ export default function OrderForm() {
     setIsReceiveDropdownOpen(false);
     setIsSendActive(true);
     setWallet("");
+    setSbpBankId("");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, currency, sendAmount);
   };
@@ -417,7 +424,10 @@ export default function OrderForm() {
   const getFormInput = useCallback(
     () => ({
       fio,
-      wallet,
+      wallet:
+        selectedReceive.id === "sbp"
+          ? serializeSbpRequisites(wallet, sbpBankId)
+          : wallet,
       city: "",
       email,
       telegram,
@@ -430,6 +440,7 @@ export default function OrderForm() {
     [
       fio,
       wallet,
+      sbpBankId,
       email,
       telegram,
       coupon,
@@ -475,6 +486,7 @@ export default function OrderForm() {
     setSelectedSend(nextSend);
     setSelectedReceive(nextReceive);
     setWallet("");
+    setSbpBankId("");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
 
     if (nextSendIsCrypto) {
@@ -584,6 +596,7 @@ export default function OrderForm() {
       if (dontRemember) {
         setFio("");
         setWallet("");
+        setSbpBankId("");
         setTelegram("");
         setEmail("");
       }
@@ -861,18 +874,34 @@ export default function OrderForm() {
                 )}{" "}
                 <span className="text-red-500 font-bold ml-0.5"> * </span> :
               </label>
-              <input
-                type="text"
-                value={wallet}
-                onChange={(e) => handleWalletChange(e.target.value)}
-                onBlur={() => touchField("wallet")}
-                placeholder={getWalletPlaceholder(selectedReceive.id)}
-                className={inputClass(
-                  !!fieldErrors.wallet,
-                  "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all tracking-wide",
-                )}
-                required
-              />
+              {selectedReceive.id === "sbp" ? (
+                <SbpRequisitesFields
+                  phone={wallet}
+                  bankId={sbpBankId}
+                  onPhoneChange={handleWalletChange}
+                  onBankChange={(id) => {
+                    setSbpBankId(id);
+                    if (fieldErrors.wallet) {
+                      setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
+                    }
+                  }}
+                  onBlur={() => touchField("wallet")}
+                  hasError={!!fieldErrors.wallet}
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={wallet}
+                  onChange={(e) => handleWalletChange(e.target.value)}
+                  onBlur={() => touchField("wallet")}
+                  placeholder={getWalletPlaceholder(selectedReceive.id)}
+                  className={inputClass(
+                    !!fieldErrors.wallet,
+                    "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all tracking-wide",
+                  )}
+                  required
+                />
+              )}
               <FieldError message={fieldErrors.wallet} />
             </div>
           </div>

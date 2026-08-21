@@ -9,6 +9,7 @@ import {
   ClipboardList,
   ChevronLeft,
   ChevronRight,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,6 +38,7 @@ interface Order {
   amount_from: number;
   amount_to: number;
   wallet_to: string;
+  operator_receipt_url?: string | null;
 }
 
 const PAGE_SIZE = 10;
@@ -364,6 +366,18 @@ export default function UserOrdersPage() {
                         {order.wallet_to}
                       </span>
                     </p>
+                    {order.status === "completed" &&
+                      order.operator_receipt_url && (
+                        <a
+                          href={`/api/orders/${order.id}/operator-receipt`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:underline"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Подтверждение перевода
+                        </a>
+                      )}
                   </div>
 
                   <div className="flex md:justify-center md:min-w-[11rem]">

@@ -8,10 +8,65 @@ import {
   broadcastOrderEvent,
   ORDER_UPDATED_EVENT,
 } from "@/src/utils/supabase/broadcast";
+import { receiptsObjectPath } from "@/src/utils/orders/receipt-path";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
+
+export async function GET(_request: Request, context: RouteContext) {
+  try {
+    const { id } = await context.params;
+    const supabase = await createClient();
+    const user = await getUserFast(supabase);
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const admin = createAdminClient();
+    const [{ data: order }, { data: profile }] = await Promise.all([
+      admin.from("orders").select("*").eq("id", id).maybeSingle(),
+      admin.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+    ]);
+
+    if (!order) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const isStaff =
+      profile?.role === "operator" || profile?.role === "admin";
+    if (order.user_id !== user.id && !isStaff) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const stored = order.operator_receipt_url as string | null;
+    if (!stored) {
+      return NextResponse.json(
+        { error: "Подтверждение перевода ещё не прикреплено" },
+        { status: 404 },
+      );
+    }
+
+    const path = receiptsObjectPath(stored);
+    if (!path) {
+      return NextResponse.redirect(stored);
+    }
+
+    const signed = await admin.storage
+      .from("receipts")
+      .createSignedUrl(path, 60 * 60);
+
+    if (signed.error || !signed.data?.signedUrl) {
+      return NextResponse.redirect(stored);
+    }
+
+    return NextResponse.redirect(signed.data.signedUrl);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
+}
 
 export async function POST(request: Request, context: RouteContext) {
   try {
