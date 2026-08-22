@@ -11,7 +11,7 @@ export default function Home() {
       <Header />
 
       <main className="main-content w-full flex-grow">
-        <div className="mx-auto w-full max-w-7xl space-y-5 px-4 pt-5 pb-10 sm:space-y-6 sm:px-5 sm:pt-6 sm:pb-12 md:space-y-8 md:px-6 md:pt-8 md:pb-16 lg:px-8">
+        <div className="mx-auto w-full max-w-7xl space-y-8 px-4 pt-5 pb-10 sm:space-y-10 sm:px-5 sm:pt-6 sm:pb-14 md:space-y-12 md:px-6 md:pt-8 md:pb-16 lg:px-8">
           <Features />
           <div id="exchange" className="scroll-mt-24">
             <ExchangeCalculator />

@@ -300,9 +300,5 @@ input[type="number"].no-spin,
   margin-top: 0.5rem;
 }
 
-/* reCAPTCHA v3: бейдж скрыт, текст лицензии — в форме входа */
-.grecaptcha-badge {
-  visibility: hidden !important;
-}
 
 

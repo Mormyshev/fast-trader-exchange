@@ -1,24 +1,26 @@
 import { isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
 
 const SITEVERIFY_URL = "https://www.recaptcha.net/recaptcha/api/siteverify";
-const MIN_SCORE = 0.3;
 
 function getSecret() {
   return process.env.RECAPTCHA_SECRET_KEY?.trim() ?? "";
 }
 
 const ERROR_TEXT: Record<string, string> = {
-  "missing-input-secret": "Секретный ключ капчи не задан. Перезапустите сервер после правки .env.local.",
-  "invalid-input-secret": "Секретный ключ капчи неверный. Проверьте RECAPTCHA_SECRET_KEY.",
+  "missing-input-secret":
+    "Секретный ключ капчи не задан. Перезапустите сервер после правки .env.local.",
+  "invalid-input-secret":
+    "Секретный ключ капчи неверный. Проверьте RECAPTCHA_SECRET_KEY.",
   "missing-input-response": "Токен капчи не получен. Обновите страницу.",
-  "invalid-input-response": "Токен капчи устарел. Попробуйте войти ещё раз.",
-  "timeout-or-duplicate": "Токен капчи уже использован. Попробуйте ещё раз.",
+  "invalid-input-response":
+    "Токен капчи устарел. Отметьте капчу ещё раз.",
+  "timeout-or-duplicate":
+    "Токен капчи уже использован. Отметьте капчу ещё раз.",
   "bad-request": "Google отклонил запрос капчи.",
 };
 
 export async function verifyRecaptchaToken(
   token: string | null | undefined,
-  expectedAction = "login",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isRecaptchaEnabled()) {
     return { ok: true };
@@ -29,11 +31,11 @@ export async function verifyRecaptchaToken(
     return {
       ok: false,
       error:
-        "Секретный ключ капчи не загружен. Перезапустите npm run dev после сохранения .env.local.",
+        "Секретный ключ капчи не загружен. Перезапустите сервер после сохранения ключей.",
     };
   }
   if (!token?.trim()) {
-    return { ok: false, error: "Не удалось получить токен капчи." };
+    return { ok: false, error: "Подтвердите, что вы не робот." };
   }
 
   const body = new URLSearchParams();
@@ -49,8 +51,6 @@ export async function verifyRecaptchaToken(
     });
     const json = (await res.json()) as {
       success?: boolean;
-      score?: number;
-      action?: string;
       "error-codes"?: string[];
     };
 
@@ -61,16 +61,6 @@ export async function verifyRecaptchaToken(
         ok: false,
         error: ERROR_TEXT[code] ?? "Подтвердите, что вы не робот",
       };
-    }
-
-    if (typeof json.score === "number" && json.score < MIN_SCORE) {
-      console.warn("[recaptcha] low score", json.score);
-      return { ok: false, error: "Подтвердите, что вы не робот" };
-    }
-
-    if (json.action && json.action !== expectedAction) {
-      console.warn("[recaptcha] action mismatch", json.action, expectedAction);
-      return { ok: false, error: "Подтвердите, что вы не робот" };
     }
 
     return { ok: true };

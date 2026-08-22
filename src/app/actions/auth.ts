@@ -8,7 +8,7 @@ export async function loginAndGetRoute(
   password: string,
   captchaToken: string,
 ) {
-  const captcha = await verifyRecaptchaToken(captchaToken, "login");
+  const captcha = await verifyRecaptchaToken(captchaToken);
   if (!captcha.ok) {
     return { error: captcha.error };
   }

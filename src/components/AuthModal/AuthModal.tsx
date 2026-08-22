@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { loginAndGetRoute } from "@/src/app/actions/auth";
 import { validateEmail, validatePassword } from "@/src/utils/validation";
 import {
-  executeRecaptcha,
-  preloadRecaptcha,
-} from "@/src/utils/captcha/recaptcha-v3";
+  RecaptchaV2,
+  type RecaptchaV2Handle,
+} from "@/src/utils/captcha/recaptcha-v2";
+import { isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
 import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
 
 interface AuthModalProps {
@@ -29,6 +30,8 @@ export default function AuthModal({
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const recaptchaRef = useRef<RecaptchaV2Handle>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -39,9 +42,10 @@ export default function AuthModal({
 
     setError("");
     setIsLoading(false);
+    setCaptchaToken("");
+    recaptchaRef.current?.reset();
     setShouldRender(true);
     lockPageScroll();
-    void preloadRecaptcha().catch(() => {});
     const timer = setTimeout(() => setIsAnimated(true), 10);
     return () => {
       clearTimeout(timer);
@@ -67,18 +71,25 @@ export default function AuthModal({
       return;
     }
 
+    const token = captchaToken || recaptchaRef.current?.getToken() || "";
+    if (isRecaptchaEnabled() && !token) {
+      setError("Подтвердите, что вы не робот");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const captchaToken = await executeRecaptcha("login");
       const result = await loginAndGetRoute(
         emailCheck.value,
         passwordCheck.value,
-        captchaToken,
+        token,
       );
 
       if (result.error) {
         setError(result.error);
+        setCaptchaToken("");
+        recaptchaRef.current?.reset();
         setIsLoading(false);
         return;
       }
@@ -86,12 +97,16 @@ export default function AuthModal({
       if (result.route) {
         setLogin("");
         setPassword("");
+        setCaptchaToken("");
+        recaptchaRef.current?.reset();
         setIsLoading(false);
         onClose();
         window.location.href = result.route;
       }
     } catch {
       setIsLoading(false);
+      setCaptchaToken("");
+      recaptchaRef.current?.reset();
       setError("Не удалось проверить капчу. Обновите страницу и попробуйте снова.");
     }
   };
@@ -163,7 +178,9 @@ export default function AuthModal({
             />
           </div>
 
-          <div className="pt-4">
+          <RecaptchaV2 ref={recaptchaRef} onChange={setCaptchaToken} />
+
+          <div className="pt-1">
             <button
               type="submit"
               disabled={isLoading}
