@@ -84,7 +84,7 @@ export const FIAT_CURRENCIES: ExchangeCurrency[] = [
     name: "Альфа-Банк RUB",
     code: "RUB",
     orderCode: "RUB_ALFA",
-    iconSrc: "/icons/alfa.png",
+    iconSrc: "/icons/alfa.svg",
     network: {
       id: "alfa",
       label: "Альфа-Банк",

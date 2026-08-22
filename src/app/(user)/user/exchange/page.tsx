@@ -14,8 +14,8 @@ function ExchangeFormFallback() {
 
 export default function ExchangePage() {
   return (
-    <main className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 mb-32 mt-8">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_400px] items-start">
+    <div className="w-full space-y-6 lg:space-y-8">
+      <div className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-[1fr_minmax(280px,400px)] items-start">
         <section
           className="w-full flex flex-col gap-6"
           aria-label="Форма обмена"
@@ -36,6 +36,6 @@ export default function ExchangePage() {
           <Reviews />
         </aside>
       </div>
-    </main>
+    </div>
   );
 }

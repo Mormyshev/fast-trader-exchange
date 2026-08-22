@@ -7,20 +7,12 @@ import {
   CheckCircle2,
   AlertCircle,
   Search,
-  ArrowRightLeft,
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
 } from "lucide-react";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,15 +23,24 @@ import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperato
 import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
 import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
 import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
+import OperatorOrderCard from "@/src/components/staff/OperatorOrderCard";
+import type { OperatorOrderCardTone } from "@/src/components/staff/OperatorOrderCard";
+import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
 import { useAuth } from "@/src/app/context/AuthContext";
 import {
   formatClientName,
+  mergeOrderClient,
   type OrderClient,
 } from "@/src/utils/orders/client-info";
 import {
   OrderTtlBadge,
   useNowTick,
 } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import {
+  orderStatusAccentClass,
+  orderStatusBadgeClass,
+  orderStatusRowClass,
+} from "@/src/utils/orders/status-style";
 
 type OrderStatus =
   | "pending"
@@ -76,19 +77,10 @@ const IN_PROGRESS_STATUSES: OrderStatus[] = [
 function formatCreatedAt(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", {
     day: "numeric",
-    month: "long",
-    year: "numeric",
+    month: "short",
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function formatAmount(value: number, currency: string) {
-  const num = Number(value || 0);
-  const formatted = Number.isInteger(num)
-    ? num.toLocaleString("ru-RU")
-    : num.toLocaleString("ru-RU", { maximumFractionDigits: 8 });
-  return { amount: formatted, currency };
 }
 
 function statusLabel(status: OrderStatus) {
@@ -108,26 +100,33 @@ function statusLabel(status: OrderStatus) {
   }
 }
 
-function statusClass(status: OrderStatus) {
-  switch (status) {
-    case "pending":
-      return "bg-amber-100 text-amber-800";
-    case "processing":
-      return "bg-blue-100 text-blue-800";
-    case "awaiting_payment":
-      return "bg-purple-100 text-purple-800";
-    case "paid":
-      return "bg-emerald-100 text-emerald-800";
-    case "completed":
-      return "bg-zinc-100 text-zinc-700";
-    case "cancelled":
-      return "bg-red-100 text-red-700";
-  }
-}
-
 function shortId(id: string) {
   return id.slice(0, 8);
 }
+
+function dashboardTone(status: OrderStatus): OperatorOrderCardTone {
+  switch (status) {
+    case "pending":
+      return "new";
+    case "processing":
+      return "processing";
+    case "awaiting_payment":
+      return "awaiting";
+    case "paid":
+      return "review";
+    case "completed":
+      return "completed";
+    default:
+      return "cancelled";
+  }
+}
+
+const ACTIVE_STATUSES: OrderStatus[] = [
+  "pending",
+  "processing",
+  "awaiting_payment",
+  "paid",
+];
 
 export default function OperatorDashboard() {
   const supabase = createClient();
@@ -147,10 +146,14 @@ export default function OperatorDashboard() {
 
   const userIdRef = useRef<string | null>(null);
   const roleRef = useRef(role);
+  const clientCacheRef = useRef(new Map<string, OrderClient>());
   if (user?.id) {
     userIdRef.current = user.id;
   }
   roleRef.current = role;
+
+  const rememberClient = (order: Order): Order =>
+    mergeOrderClient(clientCacheRef.current, order);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -165,10 +168,10 @@ export default function OperatorDashboard() {
         const res = await fetch("/api/orders/staff", { cache: "no-store" });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
-        setPendingOrders((json.pending || []) as Order[]);
-        setMyOrders((json.mine || []) as Order[]);
-        setCompletedOrders((json.completed || []) as Order[]);
-        setCancelledOrders((json.cancelled || []) as Order[]);
+        setPendingOrders(((json.pending || []) as Order[]).map(rememberClient));
+        setMyOrders(((json.mine || []) as Order[]).map(rememberClient));
+        setCompletedOrders(((json.completed || []) as Order[]).map(rememberClient));
+        setCancelledOrders(((json.cancelled || []) as Order[]).map(rememberClient));
         setCompletedCount(
           typeof json.completedCount === "number" ? json.completedCount : 0,
         );
@@ -190,23 +193,14 @@ export default function OperatorDashboard() {
     const applyLiveOrder = (order: Order) => {
       const currentUserId = userIdRef.current;
       if (!currentUserId) return;
-
-      const withClient = (prev: Order[], incoming: Order): Order => ({
-        ...incoming,
-        client:
-          incoming.client ??
-          prev.find((item) => item.id === incoming.id)?.client ??
-          null,
-      });
+      const next = rememberClient(order);
 
       setPendingOrders((prev) => {
-        const next = withClient(prev, order);
         const without = prev.filter((o) => o.id !== next.id);
         return next.status === "pending" ? [next, ...without] : without;
       });
 
       setMyOrders((prev) => {
-        const next = withClient(prev, order);
         const without = prev.filter((o) => o.id !== next.id);
         const mine =
           IN_PROGRESS_STATUSES.includes(next.status) &&
@@ -215,7 +209,6 @@ export default function OperatorDashboard() {
       });
 
       setCompletedOrders((prev) => {
-        const next = withClient(prev, order);
         const without = prev.filter((o) => o.id !== next.id);
         const isAdmin = roleRef.current === "admin";
         const visibleCompleted =
@@ -225,7 +218,6 @@ export default function OperatorDashboard() {
       });
 
       setCancelledOrders((prev) => {
-        const next = withClient(prev, order);
         const without = prev.filter((o) => o.id !== next.id);
         const visible =
           next.status === "cancelled" &&
@@ -332,7 +324,7 @@ export default function OperatorDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 text-zinc-900 font-sans">
+    <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6 lg:space-y-8 text-zinc-900 font-sans">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <StaffPageHeader
           title="Панель оператора"
@@ -347,8 +339,8 @@ export default function OperatorDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        <Card className="rounded-[24px] sm:rounded-[32px] border-none bg-[#FFDD2D] p-5 sm:p-6 shadow-none flex flex-col justify-between min-h-[7rem] sm:h-36">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
+        <Card className="rounded-2xl border-none bg-[#FFDD2D] p-4 sm:p-5 lg:p-6 shadow-none flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-zinc-800 uppercase tracking-wide">
               Новые заявки
@@ -360,41 +352,49 @@ export default function OperatorDashboard() {
           </div>
         </Card>
 
-        <Card className="rounded-[24px] sm:rounded-[32px] border border-zinc-200 bg-white p-5 sm:p-6 shadow-none flex flex-col justify-between min-h-[7rem] sm:h-36">
+        <Card className="rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:p-5 lg:p-6 shadow-none flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-zinc-400 uppercase tracking-wide">
+            <span className="text-sm font-bold text-blue-800 uppercase tracking-wide">
               В работе
             </span>
-            <AlertCircle className="w-5 h-5 text-zinc-400" />
+            <AlertCircle className="w-5 h-5 text-blue-600" />
           </div>
-          <div className="text-4xl font-bold text-zinc-900">
+          <div className="text-4xl font-bold text-blue-950">
             {myOrders.length}
           </div>
         </Card>
 
-        <Card className="rounded-[24px] sm:rounded-[32px] border border-zinc-200 bg-white p-5 sm:p-6 shadow-none flex flex-col justify-between min-h-[7rem] sm:h-36 sm:col-span-2 lg:col-span-1">
+        <Card className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5 lg:p-6 shadow-none flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem] sm:col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-zinc-400 uppercase tracking-wide">
+            <span className="text-sm font-bold text-emerald-800 uppercase tracking-wide">
               {role === "admin" ? "Выполнено" : "Выполнено мной"}
             </span>
-            <CheckCircle2 className="w-5 h-5 text-zinc-400" />
+            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
           </div>
-          <div className="text-4xl font-bold text-zinc-900">
+          <div className="text-4xl font-bold text-emerald-950">
             {completedCount}
           </div>
         </Card>
       </div>
 
-      <Card className="rounded-[24px] sm:rounded-[32px] border border-[#FFDD2D] bg-white shadow-none p-3 sm:p-4 md:p-6">
-        <div className="flex flex-col gap-4 pb-4 sm:pb-6 border-b border-zinc-100">
-          <StaffScrollTabs>
+      <Card className="rounded-2xl border border-zinc-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_28px_rgba(15,23,42,0.04)] overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0 p-3 sm:p-4 md:p-5 lg:p-6 pb-3 sm:pb-4 md:pb-5 border-b border-zinc-100">
+          <StaffScrollTabs className="min-w-0 flex-1">
             {(
               [
-                { id: "pending", label: "Новые" },
-                { id: "in_progress", label: "В работе" },
-                { id: "completed", label: "Выполненные" },
-                { id: "cancelled", label: "Отменённые" },
-                { id: "all", label: "Все" },
+                { id: "pending", label: "Новые", count: pendingOrders.length },
+                { id: "in_progress", label: "В работе", count: myOrders.length },
+                {
+                  id: "completed",
+                  label: "Выполненные",
+                  count: completedOrders.length,
+                },
+                {
+                  id: "cancelled",
+                  label: "Отменённые",
+                  count: cancelledOrders.length,
+                },
+                { id: "all", label: "Все", count: allOrders.length },
               ] as const
             ).map((tab) => (
               <Button
@@ -412,71 +412,74 @@ export default function OperatorDashboard() {
                 }`}
               >
                 {tab.label}
+                <span
+                  className={`ml-1.5 tabular-nums ${
+                    activeTab === tab.id ? "text-zinc-500" : "text-zinc-300"
+                  }`}
+                >
+                  {tab.count}
+                </span>
               </Button>
             ))}
           </StaffScrollTabs>
 
-          <div className="relative w-full md:w-80 md:ml-auto">
-            <Search className="absolute left-4 top-3 w-4 h-4 text-zinc-400" />
+          <div className="relative w-[7.5rem] min-[400px]:w-44 sm:w-56 md:w-64 lg:w-72 shrink-0 self-center">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400" />
             <Input
               type="text"
-              placeholder="Поиск по ID заявки..."
+              placeholder="Поиск"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setPage(1);
               }}
-              className="pl-11 h-10 rounded-full bg-zinc-50 border-zinc-200 focus-visible:ring-[#FFDD2D] text-sm font-medium"
+              className="pl-8 sm:pl-11 h-10 rounded-2xl bg-zinc-100/70 border-zinc-200/80 focus-visible:ring-[#FFDD2D] text-sm font-medium"
             />
           </div>
         </div>
 
-        <div className="pt-4">
-          <div className="hidden md:block overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
-                    ID / Дата
-                  </TableHead>
-                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
-                    Направление обмена
-                  </TableHead>
-                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
-                    Клиент
-                  </TableHead>
-                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
-                    Статус
-                  </TableHead>
-                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10">
-                    Оператор
-                  </TableHead>
-                  <TableHead className="font-bold text-xs text-zinc-400 uppercase px-4 h-10 text-right">
-                    Управление
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="text-sm font-medium">
-                {paginatedOrders.length > 0 ? (
-                  paginatedOrders.map((order) => {
-                    const from = formatAmount(
-                      order.amount_from,
-                      order.currency_from,
-                    );
-                    const to = formatAmount(order.amount_to, order.currency_to);
-
+        <div className="hidden md:block">
+          {paginatedOrders.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left">
+                <thead>
+                  <tr className="bg-zinc-50/80 border-b border-zinc-100">
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                      Заявка
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                      Обмен
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                      Клиент
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                      Статус
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 text-right">
+                      Действие
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedOrders.map((order) => {
+                    const active = ACTIVE_STATUSES.includes(order.status);
                     return (
-                      <TableRow
+                      <tr
                         key={order.id}
-                        className="hover:bg-zinc-50/50 border-zinc-100"
+                        className={`border-b border-zinc-100 last:border-0 transition-colors ${orderStatusRowClass(order.status)}`}
                       >
-                        <TableCell className="py-4 px-4">
-                          <div className="font-mono font-bold text-zinc-900">
-                            {shortId(order.id)}
-                          </div>
-                          <div className="text-xs text-zinc-400 font-semibold mt-0.5">
+                        <td className="relative px-5 py-4 align-top whitespace-nowrap">
+                          <span
+                            aria-hidden
+                            className={`absolute inset-y-0 left-0 w-1 ${orderStatusAccentClass(order.status)}`}
+                          />
+                          <p className="font-mono text-[11px] font-semibold text-zinc-400">
+                            #{shortId(order.id)}
+                          </p>
+                          <p className="text-sm font-semibold text-zinc-900 mt-0.5">
                             {formatCreatedAt(order.created_at)}
-                          </div>
+                          </p>
                           <div className="mt-1.5">
                             <OrderTtlBadge
                               createdAt={order.created_at}
@@ -485,165 +488,116 @@ export default function OperatorDashboard() {
                               compact
                             />
                           </div>
-                        </TableCell>
-
-                        <TableCell className="py-4 px-4">
-                          <div className="flex items-center space-x-2 text-zinc-900 font-bold">
-                            <span>
-                              {from.amount}{" "}
-                              <span className="text-xs text-zinc-400 font-semibold">
-                                {from.currency}
-                              </span>
-                            </span>
-                            <ArrowRightLeft className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
-                            <span>
-                              {to.amount}{" "}
-                              <span className="text-xs text-zinc-400 font-semibold">
-                                {to.currency}
-                              </span>
-                            </span>
-                          </div>
-                        </TableCell>
-
-                        <TableCell className="py-4 px-4 align-top">
-                          <StaffClientInfo client={order.client} compact />
-                        </TableCell>
-
-                        <TableCell className="py-4 px-4">
-                          <span
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${statusClass(order.status)}`}
-                          >
-                            {statusLabel(order.status)}
-                          </span>
-                        </TableCell>
-
-                        <TableCell className="py-4 px-4">
-                          <StaffOperatorLabel
-                            snapshot={order.operator_pseudonym_snapshot}
+                        </td>
+                        <td className="px-5 py-4 min-w-[240px]">
+                          <OrderExchangePair
+                            amountFrom={order.amount_from}
+                            amountTo={order.amount_to}
+                            currencyFrom={order.currency_from}
+                            currencyTo={order.currency_to}
+                            compact
                           />
-                          {!order.operator_pseudonym_snapshot &&
-                            order.operator_id && (
-                              <span className="text-[11px] text-zinc-400 font-medium">
-                                Без подписи
-                              </span>
-                            )}
-                        </TableCell>
-
-                        <TableCell className="py-4 px-4 text-right">
+                        </td>
+                        <td className="px-5 py-4 align-top min-w-[180px]">
+                          <StaffClientInfo
+                            client={order.client}
+                            compact
+                            hideLabel
+                          />
+                        </td>
+                        <td className="px-5 py-4 align-top">
+                          <div className="flex flex-col items-start gap-1.5">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${orderStatusBadgeClass(order.status, true)}`}
+                            >
+                              {statusLabel(order.status)}
+                            </span>
+                            <StaffOperatorLabel
+                              snapshot={order.operator_pseudonym_snapshot}
+                            />
+                            {!order.operator_pseudonym_snapshot &&
+                              order.operator_id && (
+                                <span className="text-[11px] text-zinc-400 font-medium">
+                                  Без подписи
+                                </span>
+                              )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-right align-middle">
                           <Button
                             asChild
                             size="sm"
-                            className="rounded-full h-9 px-5 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
+                            className={`rounded-full h-9 px-5 font-bold shadow-none text-xs cursor-pointer ${
+                              active
+                                ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
+                                : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
+                            }`}
                           >
                             <Link href={`/operator/orders/${order.id}`}>
-                              Открыть
+                              {active ? "Открыть" : "Подробнее"}
                             </Link>
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="h-32 text-center text-zinc-400 font-semibold"
-                    >
-                      Нет заявок
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="block md:hidden space-y-4">
-            {paginatedOrders.length > 0 ? (
-              paginatedOrders.map((order) => {
-                const from = formatAmount(
-                  order.amount_from,
-                  order.currency_from,
-                );
-                const to = formatAmount(order.amount_to, order.currency_to);
-
-                return (
-                  <div
-                    key={order.id}
-                    className="p-5 bg-zinc-50/50 rounded-2xl border border-zinc-100 flex flex-col gap-4"
-                  >
-                    <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-                      <div>
-                        <div className="font-mono font-bold text-sm text-zinc-900">
-                          {shortId(order.id)}
-                        </div>
-                        <div className="text-xs text-zinc-400 font-semibold mt-0.5">
-                          {formatCreatedAt(order.created_at)}
-                        </div>
-                        <div className="mt-1.5">
-                          <OrderTtlBadge
-                            createdAt={order.created_at}
-                            status={order.status}
-                            now={now}
-                            compact
-                          />
-                        </div>
-                      </div>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${statusClass(order.status)}`}
-                      >
-                        {statusLabel(order.status)}
-                      </span>
-                    </div>
-
-                    <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
-                    <StaffClientInfo client={order.client} compact />
-
-                    <div className="bg-white p-3 rounded-xl border border-zinc-100 text-xs font-bold text-zinc-800 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400 font-medium text-[11px]">
-                          Отдает:
-                        </span>
-                        <span>
-                          {from.amount}{" "}
-                          <span className="text-[10px] font-semibold text-zinc-400">
-                            {from.currency}
-                          </span>
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-zinc-50 pt-2">
-                        <span className="text-zinc-400 font-medium text-[11px]">
-                          Получает:
-                        </span>
-                        <span>
-                          {to.amount}{" "}
-                          <span className="text-[10px] font-semibold text-zinc-400">
-                            {to.currency}
-                          </span>
-                        </span>
-                      </div>
-                    </div>
-
-                    <Button
-                      asChild
-                      size="sm"
-                      className="w-full rounded-xl h-10 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none text-xs transition-colors cursor-pointer"
-                    >
-                      <Link href={`/operator/orders/${order.id}`}>
-                        Открыть заявку
-                      </Link>
-                    </Button>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="py-12 text-center text-zinc-400 text-xs font-semibold">
-                Нет заявок
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-200 flex items-center justify-center text-zinc-400 mb-3">
+                <ClipboardList className="w-5 h-5" />
               </div>
-            )}
-          </div>
+              <p className="text-sm font-semibold text-zinc-700">Нет заявок</p>
+              <p className="text-xs font-medium text-zinc-400 mt-1">
+                В этой вкладке пока пусто или ничего не нашлось по запросу
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="block md:hidden p-3 sm:p-4 space-y-3">
+          {paginatedOrders.length > 0 ? (
+            paginatedOrders.map((order) => (
+              <OperatorOrderCard
+                key={order.id}
+                order={order}
+                now={now}
+                tone={dashboardTone(order.status)}
+                statusText={statusLabel(order.status)}
+                showWallet={false}
+                showOperator
+                actions={
+                  <Button
+                    asChild
+                    className={`w-full rounded-xl h-10 font-semibold shadow-none text-sm cursor-pointer ${
+                      ACTIVE_STATUSES.includes(order.status)
+                        ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
+                        : "bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-800"
+                    }`}
+                  >
+                    <Link href={`/operator/orders/${order.id}`}>
+                      {ACTIVE_STATUSES.includes(order.status)
+                        ? "Открыть заявку"
+                        : "Подробнее"}
+                    </Link>
+                  </Button>
+                }
+              />
+            ))
+          ) : (
+            <div className="py-12 text-center">
+              <p className="text-sm font-semibold text-zinc-700">Нет заявок</p>
+              <p className="text-xs font-medium text-zinc-400 mt-1">
+                В этой вкладке пока пусто
+              </p>
+            </div>
+          )}
+        </div>
 
           {showPagination && (
-            <div className="mt-6 flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
+            <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-4 sm:px-5 py-4">
               <p className="text-xs font-semibold text-zinc-400">
                 {(currentPage - 1) * PAGE_SIZE + 1}–
                 {Math.min(currentPage * PAGE_SIZE, filteredOrders.length)} из{" "}
@@ -676,7 +630,6 @@ export default function OperatorDashboard() {
               </div>
             </div>
           )}
-        </div>
       </Card>
     </div>
   );

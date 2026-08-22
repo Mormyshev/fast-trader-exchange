@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  ArrowRightLeft,
   CheckCircle2,
   Loader2,
   Upload,
@@ -28,6 +27,11 @@ import {
 } from "@/src/utils/orders/payment-details";
 import OperatorPayInForm from "@/src/components/PaymentRequisites/OperatorPayInForm";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
+import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
+import {
+  orderStatusBadgeClass,
+  orderStatusBannerClass,
+} from "@/src/utils/orders/status-style";
 
 type OrderStatus =
   | "pending"
@@ -75,24 +79,6 @@ function statusLabel(status: OrderStatus) {
   }
 }
 
-function statusClass(status: OrderStatus) {
-  switch (status) {
-    case "pending":
-      return "bg-amber-100 text-amber-800 border-amber-200";
-    case "processing":
-      return "bg-blue-50 text-blue-700 border-blue-100";
-    case "awaiting_payment":
-      return "bg-purple-50 text-purple-700 border-purple-100";
-    case "paid":
-      return "bg-emerald-50 text-emerald-700 border-emerald-100";
-    case "completed":
-      return "bg-zinc-100 text-zinc-700 border-zinc-200";
-    case "cancelled":
-    case "failed":
-      return "bg-rose-50 text-rose-700 border-rose-100";
-  }
-}
-
 export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const router = useRouter();
   const supabase = createClient();
@@ -101,8 +87,8 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [card, setCard] = useState("");
   const [phone, setPhone] = useState("");
+  const [bankId, setBankId] = useState("");
   const [payWallet, setPayWallet] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingPayout, setUploadingPayout] = useState(false);
@@ -239,8 +225,8 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const handleSendDetails = async () => {
     if (!order) return;
     const check = buildOperatorPaymentDetails(order.currency_from, {
-      card,
       phone,
+      bankId,
       wallet: payWallet,
     });
     if (!check.ok) {
@@ -271,7 +257,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Не удалось отправить");
       setOrder(json.order);
-      setCard("");
+      setBankId("");
       setPhone("");
       setPayWallet("");
     } catch (err: any) {
@@ -384,25 +370,25 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 text-zinc-900 font-sans">
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-5 lg:space-y-6 text-zinc-900 font-sans">
       <Link
-        href="/operator/dashboard"
+        href="/operator/orders"
         className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
       >
-        <ArrowLeft className="w-4 h-4" />К дашборду оператора
+        <ArrowLeft className="w-4 h-4" />К активным ордерам
       </Link>
 
-      <div className="rounded-[24px] sm:rounded-[32px] border border-zinc-200 bg-white p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 shadow-none">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-zinc-100 pb-4 sm:pb-5">
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_28px_rgba(15,23,42,0.04)]">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-5 sm:space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-4 sm:pb-5 border-b border-zinc-100">
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">
-              Заявка оператора
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight">
+              Заявка
             </h1>
-            <p className="text-[11px] sm:text-xs font-mono font-semibold text-zinc-400 mt-1 break-all">
-              ID: {order.id}
+            <p className="text-[11px] sm:text-xs font-mono font-semibold text-zinc-400 mt-1">
+              #{order.id.slice(0, 8)}
             </p>
             <p className="text-[11px] sm:text-xs font-medium text-zinc-500 mt-1">
-              Создана{" "}
               {new Date(order.created_at).toLocaleString("ru-RU", {
                 day: "numeric",
                 month: "long",
@@ -414,7 +400,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           </div>
           <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 flex-wrap">
             <span
-              className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border ${statusClass(order.status)}`}
+              className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${orderStatusBadgeClass(order.status, true)}`}
             >
               {statusLabel(order.status)}
             </span>
@@ -427,40 +413,31 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 space-y-3">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-              Обмен
+        <div className="rounded-2xl bg-zinc-100 border border-zinc-200 px-3.5 sm:px-5 py-4">
+          <OrderExchangePair
+            amountFrom={order.amount_from}
+            amountTo={order.amount_to}
+            currencyFrom={order.currency_from}
+            currencyTo={order.currency_to}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          <div className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+              {clientPaysWithCrypto(order.currency_from)
+                ? "Реквизиты получения клиента"
+                : "Кошелёк клиента"}
             </p>
-            <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
-              <span>
-                {Number(order.amount_from || 0).toLocaleString("ru-RU")}{" "}
-                {order.currency_from}
-              </span>
-              <ArrowRightLeft className="w-4 h-4 text-zinc-300" />
-              <span>
-                {Number(order.amount_to || 0).toLocaleString("ru-RU", {
-                  maximumFractionDigits: 8,
-                })}{" "}
-                {order.currency_to.replace(/_/g, " ")}
-              </span>
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase text-zinc-400 mb-1">
-                {clientPaysWithCrypto(order.currency_from)
-                  ? "Реквизиты получения клиента"
-                  : "Кошелёк клиента"}
-              </p>
-              <p className="font-mono text-xs font-bold break-all bg-white border border-zinc-200 rounded-xl px-3 py-2">
-                {order.wallet_to}
-              </p>
-            </div>
+            <p className="font-mono text-xs font-semibold break-all leading-relaxed">
+              {order.wallet_to}
+            </p>
           </div>
 
           <StaffClientInfo client={order.client} />
 
-          <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 space-y-3">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+          <div className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 space-y-3 md:col-span-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
               Реквизиты для клиента
             </p>
             <PaymentRequisitesView value={order.payment_details} />
@@ -469,7 +446,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                 href={order.receipt_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex text-xs font-bold text-emerald-600 hover:underline"
+                className="inline-flex text-xs font-semibold text-emerald-700 hover:underline"
               >
                 Открыть чек клиента (PDF)
               </a>
@@ -503,15 +480,15 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               <label className="block text-xs font-bold text-zinc-500 uppercase">
                 {clientPaysWithCrypto(order.currency_from)
                   ? "Адрес кошелька для оплаты клиенту"
-                  : "Реквизиты для оплаты клиенту"}
+                  : "Реквизиты СБП для оплаты клиенту"}
               </label>
               <OperatorPayInForm
                 currencyFrom={order.currency_from}
-                card={card}
                 phone={phone}
+                bankId={bankId}
                 wallet={payWallet}
-                onCardChange={setCard}
                 onPhoneChange={setPhone}
+                onBankChange={setBankId}
                 onWalletChange={setPayWallet}
               />
               <Button
@@ -525,10 +502,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           )}
 
           {order.status === "awaiting_payment" && (
-            <div className="p-5 bg-purple-50 rounded-2xl border border-purple-200 space-y-2 max-w-xl">
+            <div className="p-5 bg-violet-50 rounded-2xl border border-violet-200 space-y-2 max-w-xl">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-purple-600" />
-                <p className="text-sm font-bold text-purple-700">
+                <CheckCircle2 className="w-4 h-4 text-violet-600" />
+                <p className="text-sm font-bold text-violet-800">
                   Реквизиты отправлены клиенту
                 </p>
               </div>
@@ -546,9 +523,9 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           )}
 
           {order.status === "paid" && (
-            <div className="p-5 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-4 max-w-xl">
+            <div className="p-5 bg-teal-50 rounded-2xl border border-teal-200 space-y-4 max-w-xl">
               <div>
-                <p className="text-sm font-bold text-emerald-700 uppercase tracking-wider">
+                <p className="text-sm font-bold text-teal-800 uppercase tracking-wider">
                   Клиент оплатил — проверьте чек
                 </p>
                 {order.receipt_url ? (
@@ -568,13 +545,13 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               </div>
 
               {isRubPayout(order.currency_to) && (
-                <div className="space-y-2 border-t border-emerald-200 pt-4">
+                <div className="space-y-2 border-t border-teal-200 pt-4">
                   <p className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
                     Чек выплаты RUB клиенту (обязательно)
                   </p>
                   {order.operator_receipt_url ? (
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-800">
                         <Check className="w-3.5 h-3.5" />
                         Чек выплаты прикреплён
                       </span>
@@ -588,7 +565,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                       </a>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-emerald-300 bg-white hover:bg-emerald-50/50 rounded-2xl p-5 text-center cursor-pointer transition-all">
+                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-teal-300 bg-white hover:bg-teal-50/50 rounded-2xl p-5 text-center cursor-pointer transition-all">
                       <input
                         type="file"
                         accept="application/pdf"
@@ -597,10 +574,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                         className="sr-only"
                       />
                       {uploadingPayout ? (
-                        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                        <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
                       ) : (
                         <>
-                          <Upload className="w-6 h-6 text-emerald-600 mb-2" />
+                          <Upload className="w-6 h-6 text-teal-600 mb-2" />
                           <span className="text-xs font-bold text-zinc-700">
                             Прикрепить PDF-чек перевода рублей
                           </span>
@@ -620,7 +597,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                       !order.operator_receipt_url)
                   }
                   onClick={() => handleComplete("completed")}
-                  className="rounded-xl h-10 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none disabled:opacity-50"
+                  className="rounded-xl h-10 font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-none disabled:opacity-50"
                 >
                   Успешно
                 </Button>
@@ -636,10 +613,13 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           )}
 
           {(order.status === "completed" || order.status === "cancelled") && (
-            <div className="p-5 rounded-2xl border border-zinc-200 bg-zinc-50 text-sm font-medium text-zinc-600">
+            <div
+              className={`p-5 rounded-2xl border text-sm font-medium ${orderStatusBannerClass(order.status)}`}
+            >
               Заявка закрыта со статусом «{statusLabel(order.status)}».
             </div>
           )}
+        </div>
         </div>
       </div>
       <ConfirmDialogHost />

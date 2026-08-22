@@ -14,3 +14,14 @@ export function formatClientName(client: OrderClient | null | undefined): string
     .join(" ");
   return name || client.email || "—";
 }
+
+export function mergeOrderClient<T extends { id: string; client?: OrderClient | null }>(
+  cache: Map<string, OrderClient>,
+  order: T,
+): T & { client: OrderClient | null } {
+  if (order.client) cache.set(order.id, order.client);
+  return {
+    ...order,
+    client: order.client ?? cache.get(order.id) ?? null,
+  };
+}

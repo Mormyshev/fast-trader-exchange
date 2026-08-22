@@ -11,11 +11,11 @@ export default function Footer() {
 
   return (
     <footer className="w-full bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-900 pt-12 pb-10 md:pt-16 md:pb-12 transition-colors duration-200 relative">
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50">
         <ChatWidget />
       </div>
 
-      <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-8 md:gap-6 pb-10 border-b border-gray-100 dark:border-zinc-900/60 w-full">
           <div className="flex flex-col items-start text-left space-y-1.5 shrink-0 w-full md:w-auto">
             <Link href="/" className="flex items-center space-x-3 group">

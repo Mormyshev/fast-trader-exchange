@@ -35,7 +35,16 @@ export type ChatConversation = {
   } | null;
   last_message?: ChatMessage | null;
   unread?: boolean;
+  /** Consecutive latest messages from the client (newest first). */
+  client_message_tail?: { id: string; created_at: string }[];
 };
+
+/** Client wrote last — staff has not replied yet. */
+export function isUnansweredConversation(conversation: ChatConversation): boolean {
+  const last = conversation.last_message;
+  if (!last) return false;
+  return last.sender_id === conversation.user_id;
+}
 
 export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 

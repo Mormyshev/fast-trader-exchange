@@ -59,8 +59,8 @@ export default function Header() {
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md transition-colors duration-200 dark:border-zinc-900">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-20 items-center justify-between">
+        <div className="mx-auto max-w-7xl px-4 sm:px-5 md:px-6 lg:px-8">
+          <div className="flex h-16 md:h-20 items-center justify-between">
             <NextLink href="/" className="flex items-center space-x-3 group">
               <div className="relative h-10 w-10 flex items-center justify-center shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

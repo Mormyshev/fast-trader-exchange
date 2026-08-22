@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeftRight, Clock, CheckCircle2 } from "lucide-react";
 import ExchangeCalculator from "@/src/components/ExchangeCalculator/ExchangeCalculator";
 import { Button } from "@/components/ui/button";
+import { orderStatusBadgeClass } from "@/src/utils/orders/status-style";
 
 type ActiveOrder = {
   id: string;
@@ -44,25 +45,25 @@ export default function ClientDashboard({
       <div className="grid gap-4 sm:grid-cols-3">
         <Link
           href="/user/orders"
-          className="rounded-xl border border-zinc-200 bg-white p-5 flex items-center gap-4 hover:border-[#FFDD2D] transition-colors"
+          className="rounded-xl border border-amber-200 bg-amber-50 p-5 flex items-center gap-4 hover:border-amber-300 transition-colors"
         >
-          <div className="p-3 rounded-lg bg-amber-50 text-amber-600">
+          <div className="p-3 rounded-lg bg-amber-100 text-amber-700">
             <Clock className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Мои заявки</p>
-            <p className="text-xl font-bold text-zinc-900">
+            <p className="text-xs text-amber-800 font-medium">Мои заявки</p>
+            <p className="text-xl font-bold text-amber-950">
               {activeOrders.length}
             </p>
           </div>
         </Link>
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-emerald-50 text-emerald-600">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 flex items-center gap-4">
+          <div className="p-3 rounded-lg bg-emerald-100 text-emerald-700">
             <CheckCircle2 className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Успешные обмены</p>
-            <p className="text-xl font-bold text-zinc-900">
+            <p className="text-xs text-emerald-800 font-medium">Успешные обмены</p>
+            <p className="text-xl font-bold text-emerald-950">
               {completedCount}
             </p>
           </div>
@@ -120,7 +121,11 @@ export default function ClientDashboard({
                       })}
                     </span>
                     <span>·</span>
-                    <span>{statusLabel(order.status)}</span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${orderStatusBadgeClass(order.status)}`}
+                    >
+                      {statusLabel(order.status)}
+                    </span>
                   </div>
                   <p className="text-sm font-bold text-zinc-900 truncate">
                     {Number(order.amount_from || 0).toLocaleString("ru-RU")}{" "}

@@ -1,3 +1,5 @@
+import { isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
+
 const SITEVERIFY_URL = "https://www.recaptcha.net/recaptcha/api/siteverify";
 const MIN_SCORE = 0.3;
 
@@ -18,6 +20,10 @@ export async function verifyRecaptchaToken(
   token: string | null | undefined,
   expectedAction = "login",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isRecaptchaEnabled()) {
+    return { ok: true };
+  }
+
   const secret = getSecret();
   if (!secret) {
     return {

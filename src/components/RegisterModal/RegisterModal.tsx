@@ -167,7 +167,7 @@ export default function RegisterModal({
   return (
     <div
       data-lenis-prevent
-      className={`fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs transition-opacity duration-300 ease-in-out ${
+      className={`fixed inset-0 z-[80] flex items-center justify-center p-4 bg-zinc-950/45 backdrop-blur-[3px] transition-opacity duration-300 ease-in-out ${
         isOpen && isAnimated
           ? "opacity-100"
           : "opacity-0 pointer-events-none"
@@ -175,18 +175,22 @@ export default function RegisterModal({
     >
       <div className="absolute inset-0" onClick={onClose} />
       <div
-        className={`relative w-full max-w-[480px] bg-white text-zinc-900 rounded-[32px] p-8 md:p-10 shadow-2xl z-10 border border-zinc-100 transform transition-all duration-300 ease-in-out max-h-[90vh] overflow-y-auto scrollbar-none ${
+        className={`relative w-full max-w-[480px] flex flex-col overflow-hidden bg-white text-zinc-900 rounded-[32px] shadow-[0_24px_80px_rgba(24,24,27,0.2)] z-10 border border-zinc-200 transform transition-all duration-300 ease-in-out max-h-[90vh] ${
           isAnimated ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-[#FFDD2D] z-10"
+        />
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 text-zinc-400 hover:text-zinc-600 transition-colors"
+          className="absolute top-5 right-5 size-9 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 flex items-center justify-center transition-colors z-10"
           disabled={isLoading}
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
-
+        <div className="overflow-y-auto scrollbar-none p-8 md:p-10">
         <h2 className="text-xl md:text-2xl font-bold text-center text-[#2A2A2A] mb-6">
           Регистрация
         </h2>
@@ -324,6 +328,7 @@ export default function RegisterModal({
           >
             Войти
           </button>
+        </div>
         </div>
       </div>
     </div>

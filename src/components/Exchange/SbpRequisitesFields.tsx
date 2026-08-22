@@ -14,6 +14,7 @@ export default function SbpRequisitesFields({
   onBankChange,
   onBlur,
   hasError,
+  variant = "default",
 }: {
   phone: string;
   bankId: string;
@@ -21,10 +22,12 @@ export default function SbpRequisitesFields({
   onBankChange: (bankId: string) => void;
   onBlur?: () => void;
   hasError?: boolean;
+  variant?: "default" | "staff";
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = findSbpBank(bankId);
+  const staff = variant === "staff";
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -38,16 +41,27 @@ export default function SbpRequisitesFields({
 
   const fieldClass = hasError
     ? "border-red-400 focus:border-red-500 focus:ring-red-200"
-    : "border-zinc-200/80 dark:border-zinc-700 focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)]";
+    : staff
+      ? "border-zinc-200 focus:border-[#FFDD2D]"
+      : "border-zinc-200/80 dark:border-zinc-700 focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)]";
+
+  const triggerClass = staff
+    ? `w-full flex items-center justify-between gap-3 bg-zinc-50 border rounded-xl px-3 py-3 cursor-pointer hover:border-zinc-300 transition-colors text-left overflow-hidden ${fieldClass}`
+    : `w-full flex items-center justify-between gap-3 bg-white dark:bg-zinc-800 border rounded-full px-5 py-3.5 shadow-[0_0_15px_rgba(255,221,45,0.06)] cursor-pointer hover:border-zinc-300 transition-colors text-left overflow-hidden ${fieldClass}`;
+
+  const phoneClass = staff
+    ? `w-full p-3 text-sm font-mono bg-zinc-50 border rounded-xl focus:outline-hidden text-zinc-900 ${fieldClass}`
+    : `w-full bg-white border rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden transition-all tracking-wide ${fieldClass}`;
 
   return (
     <div className="space-y-3" ref={rootRef}>
+      {staff && (
+        <p className="text-[11px] font-bold text-zinc-500 uppercase pl-1 -mb-1">
+          Банк СБП
+        </p>
+      )}
       <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className={`w-full flex items-center justify-between gap-3 bg-white dark:bg-zinc-800 border rounded-full px-5 py-3.5 shadow-[0_0_15px_rgba(255,221,45,0.06)] cursor-pointer hover:border-zinc-300 transition-colors text-left overflow-hidden ${fieldClass}`}
-        >
+        <button type="button" onClick={() => setOpen((v) => !v)} className={triggerClass}>
           <div className="flex items-center gap-3 min-w-0">
             {selected ? (
               <>
@@ -62,7 +76,13 @@ export default function SbpRequisitesFields({
               </span>
             )}
           </div>
-          <div className="w-7 h-7 rounded-full bg-[#FFDD2D] flex items-center justify-center text-zinc-950 shrink-0">
+          <div
+            className={`flex items-center justify-center shrink-0 ${
+              staff
+                ? "w-7 h-7 rounded-lg bg-white border border-zinc-200 text-zinc-600"
+                : "w-7 h-7 rounded-full bg-[#FFDD2D] text-zinc-950"
+            }`}
+          >
             <ChevronDown
               className={`w-4 h-4 stroke-[2.5] transition-transform ${open ? "rotate-180" : ""}`}
             />
@@ -99,6 +119,11 @@ export default function SbpRequisitesFields({
         )}
       </div>
 
+      {staff && (
+        <p className="text-[11px] font-bold text-zinc-500 uppercase pl-1 -mb-1">
+          Номер телефона
+        </p>
+      )}
       <input
         type="tel"
         inputMode="tel"
@@ -107,8 +132,8 @@ export default function SbpRequisitesFields({
         onChange={(e) => onPhoneChange(formatPhoneInput(e.target.value))}
         onBlur={onBlur}
         placeholder="+7 (999) 000-00-00"
-        className={`w-full bg-white border rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden transition-all tracking-wide ${fieldClass}`}
-        required
+        className={phoneClass}
+        required={!staff}
       />
     </div>
   );

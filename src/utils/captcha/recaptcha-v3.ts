@@ -1,6 +1,6 @@
 "use client";
 
-import { getRecaptchaSiteKey } from "@/src/utils/captcha/site-key";
+import { getRecaptchaSiteKey, isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
 
 type GrecaptchaV3 = {
   ready: (cb: () => void) => void;
@@ -20,6 +20,10 @@ function scriptSrc(siteKey: string) {
 }
 
 export function preloadRecaptcha(): Promise<GrecaptchaV3> {
+  if (!isRecaptchaEnabled()) {
+    return Promise.reject(new Error("reCAPTCHA is disabled"));
+  }
+
   if (typeof window === "undefined") {
     return Promise.reject(new Error("reCAPTCHA is client-only"));
   }
@@ -73,6 +77,10 @@ export function preloadRecaptcha(): Promise<GrecaptchaV3> {
 }
 
 export async function executeRecaptcha(action: string): Promise<string> {
+  if (!isRecaptchaEnabled()) {
+    return "";
+  }
+
   const siteKey = getRecaptchaSiteKey();
   const api = await preloadRecaptcha();
 

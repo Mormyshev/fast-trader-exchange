@@ -4,27 +4,36 @@ import {
   orderCodeToCurrencyId,
   validateCryptoWallet,
 } from "@/src/utils/validation/wallet";
+import { findSbpBank } from "@/src/utils/banks/sbp-banks";
 
 export type PaymentRequisites = {
-  kind: "fiat" | "crypto" | "legacy" | "empty";
+  kind: "sbp" | "fiat" | "crypto" | "legacy" | "empty";
   card: string;
   phone: string;
   wallet: string;
+  bankId: string;
+  bankName: string;
   legacy?: string;
 };
 
-export function formatCardInput(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 19);
-  return digits.replace(/(.{4})/g, "$1 ").trim();
-}
+const emptyRequisites = (): PaymentRequisites => ({
+  kind: "empty",
+  card: "",
+  phone: "",
+  wallet: "",
+  bankId: "",
+  bankName: "",
+});
 
-export function validatePaymentRequisites(
-  card: string,
+export function validateSbpPaymentRequisites(
   phone: string,
-): { ok: true; card: string; phone: string } | { ok: false; error: string } {
-  const cardDigits = card.replace(/\D/g, "");
-  if (cardDigits.length < 16 || cardDigits.length > 19) {
-    return { ok: false, error: "Укажите номер карты банка (16–19 цифр)" };
+  bankId: string,
+):
+  | { ok: true; phone: string; bankId: string; bankName: string }
+  | { ok: false; error: string } {
+  const bank = findSbpBank(bankId);
+  if (!bank) {
+    return { ok: false, error: "Выберите банк СБП" };
   }
 
   const phoneCheck = validatePhone(phone);
@@ -34,17 +43,23 @@ export function validatePaymentRequisites(
 
   return {
     ok: true,
-    card: formatCardInput(cardDigits),
     phone: phoneCheck.value,
+    bankId: bank.id,
+    bankName: bank.name,
   };
 }
 
-export function serializePaymentDetails(card: string, phone: string): string {
+export function serializeSbpPaymentDetails(
+  phone: string,
+  bankId: string,
+): string {
+  const bank = findSbpBank(bankId);
   return JSON.stringify({
     v: 2,
-    kind: "fiat",
-    card: card.trim(),
+    kind: "sbp",
     phone: phone.trim(),
+    bankId,
+    bankName: bank?.name ?? "",
   });
 }
 
@@ -59,12 +74,7 @@ export function serializeCryptoPaymentDetails(wallet: string): string {
 export function parsePaymentDetails(
   raw: string | null | undefined,
 ): PaymentRequisites {
-  const empty: PaymentRequisites = {
-    kind: "empty",
-    card: "",
-    phone: "",
-    wallet: "",
-  };
+  const empty = emptyRequisites();
   if (!raw?.trim()) return empty;
 
   try {
@@ -72,21 +82,35 @@ export function parsePaymentDetails(
     if (parsed && typeof parsed === "object") {
       if (parsed.kind === "crypto" && typeof parsed.wallet === "string") {
         return {
+          ...empty,
           kind: "crypto",
-          card: "",
-          phone: "",
           wallet: parsed.wallet,
         };
       }
+
+      if (parsed.kind === "sbp") {
+        const bankId = typeof parsed.bankId === "string" ? parsed.bankId : "";
+        const bank = findSbpBank(bankId);
+        return {
+          ...empty,
+          kind: "sbp",
+          phone: typeof parsed.phone === "string" ? parsed.phone : "",
+          bankId,
+          bankName:
+            bank?.name ||
+            (typeof parsed.bankName === "string" ? parsed.bankName : ""),
+        };
+      }
+
       if (
         (parsed.v === 1 || parsed.v === 2 || parsed.kind === "fiat") &&
         typeof parsed.card === "string"
       ) {
         return {
+          ...empty,
           kind: "fiat",
           card: parsed.card,
           phone: typeof parsed.phone === "string" ? parsed.phone : "",
-          wallet: "",
         };
       }
     }
@@ -94,7 +118,7 @@ export function parsePaymentDetails(
     // old free-text requisites
   }
 
-  return { kind: "legacy", card: "", phone: "", wallet: "", legacy: raw };
+  return { ...empty, kind: "legacy", legacy: raw };
 }
 
 export function hasPaymentRequisites(
@@ -102,7 +126,11 @@ export function hasPaymentRequisites(
 ): boolean {
   const parsed = parsePaymentDetails(raw);
   return Boolean(
-    parsed.card || parsed.phone || parsed.wallet || parsed.legacy,
+    parsed.card ||
+      parsed.phone ||
+      parsed.wallet ||
+      parsed.bankId ||
+      parsed.legacy,
   );
 }
 
@@ -112,7 +140,7 @@ export function clientPaysWithCrypto(currencyFrom: string): boolean {
 
 export function buildOperatorPaymentDetails(
   currencyFrom: string,
-  input: { card: string; phone: string; wallet: string },
+  input: { phone: string; wallet: string; bankId: string },
 ): { ok: true; payload: string; summary: string } | { ok: false; error: string } {
   if (clientPaysWithCrypto(currencyFrom)) {
     const walletCheck = validateCryptoWallet(
@@ -127,11 +155,11 @@ export function buildOperatorPaymentDetails(
     };
   }
 
-  const fiat = validatePaymentRequisites(input.card, input.phone);
-  if (!fiat.ok) return { ok: false, error: fiat.error };
+  const sbp = validateSbpPaymentRequisites(input.phone, input.bankId);
+  if (!sbp.ok) return { ok: false, error: sbp.error };
   return {
     ok: true,
-    payload: serializePaymentDetails(fiat.card, fiat.phone),
-    summary: `Карта ${fiat.card}, телефон ${fiat.phone}`,
+    payload: serializeSbpPaymentDetails(sbp.phone, sbp.bankId),
+    summary: `СБП ${sbp.bankName}, ${sbp.phone}`,
   };
 }

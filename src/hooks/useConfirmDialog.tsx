@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { AlertTriangle, HelpCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,8 @@ function ConfirmDialogView({
     variant = "default",
   } = options;
 
+  const isDestructive = variant === "destructive";
+
   return (
     <Dialog
       open
@@ -43,30 +46,44 @@ function ConfirmDialogView({
         if (!open) onClose(false);
       }}
     >
-      <DialogContent showCloseButton={false} className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description ? (
-            <DialogDescription>{description}</DialogDescription>
-          ) : null}
-        </DialogHeader>
-        <DialogFooter className="border-t-0 bg-transparent -mx-4 -mb-4 pt-2 sm:flex-row sm:justify-end">
+      <DialogContent showCloseButton={false} className="sm:max-w-[420px]">
+        <div className="flex items-start gap-3.5">
+          <div
+            className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${
+              isDestructive
+                ? "bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400"
+                : "bg-[#FFDD2D]/50 text-zinc-900"
+            }`}
+          >
+            {isDestructive ? (
+              <AlertTriangle className="size-5" />
+            ) : (
+              <HelpCircle className="size-5" />
+            )}
+          </div>
+          <DialogHeader className="flex-1 gap-1.5 pr-0">
+            <DialogTitle>{title}</DialogTitle>
+            {description ? (
+              <DialogDescription>{description}</DialogDescription>
+            ) : null}
+          </DialogHeader>
+        </div>
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"
             onClick={() => onClose(false)}
-            className="rounded-full"
+            className="h-11 rounded-full border-zinc-200 px-5 font-bold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200"
           >
             {cancelLabel}
           </Button>
           <Button
             type="button"
-            variant={variant === "destructive" ? "destructive" : "default"}
             onClick={() => onClose(true)}
             className={
-              variant === "default"
-                ? "rounded-full bg-[#FFDD2D] hover:bg-[#e6c625] text-black font-bold"
-                : "rounded-full font-bold"
+              isDestructive
+                ? "h-11 rounded-full bg-rose-600 px-5 font-bold text-white shadow-none hover:bg-rose-700"
+                : "h-11 rounded-full bg-[#FFDD2D] px-5 font-bold text-zinc-900 shadow-none hover:bg-[#e6c628]"
             }
           >
             {confirmLabel}

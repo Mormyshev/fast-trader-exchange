@@ -46,9 +46,9 @@ export default async function OrderPage({ params }: OrderPageProps) {
   const fresh = await expireOrderIfNeeded(admin, order);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-zinc-950">
+    <div className="flex flex-col min-h-screen bg-gray-50/50 dark:bg-zinc-950">
       <Header />
-      <main className="flex-grow w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 mb-16 mt-8 antialiased">
+      <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 xl:px-10 mb-12 sm:mb-16 mt-4 sm:mt-6 md:mt-8 antialiased">
         <OrderStatusClient initialOrder={fresh} />
       </main>
       <Footer />

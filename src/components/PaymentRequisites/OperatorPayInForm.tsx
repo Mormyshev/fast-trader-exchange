@@ -6,23 +6,23 @@ import {
   isCryptoOrderCode,
   orderCodeToCurrencyId,
 } from "@/src/utils/validation";
-import PaymentRequisitesForm from "@/src/components/PaymentRequisites/PaymentRequisitesForm";
+import SbpRequisitesFields from "@/src/components/Exchange/SbpRequisitesFields";
 
 export default function OperatorPayInForm({
   currencyFrom,
-  card,
   phone,
+  bankId,
   wallet,
-  onCardChange,
   onPhoneChange,
+  onBankChange,
   onWalletChange,
 }: {
   currencyFrom: string;
-  card: string;
   phone: string;
+  bankId: string;
   wallet: string;
-  onCardChange: (value: string) => void;
   onPhoneChange: (value: string) => void;
+  onBankChange: (value: string) => void;
   onWalletChange: (value: string) => void;
 }) {
   if (isCryptoOrderCode(currencyFrom)) {
@@ -52,11 +52,17 @@ export default function OperatorPayInForm({
   }
 
   return (
-    <PaymentRequisitesForm
-      card={card}
-      phone={phone}
-      onCardChange={onCardChange}
-      onPhoneChange={onPhoneChange}
-    />
+    <div>
+      <SbpRequisitesFields
+        variant="staff"
+        phone={phone}
+        bankId={bankId}
+        onPhoneChange={onPhoneChange}
+        onBankChange={onBankChange}
+      />
+      <p className="text-[11px] text-zinc-400 font-medium pl-1 mt-1.5">
+        Клиент оплатит заявку переводом СБП на этот номер
+      </p>
+    </div>
   );
 }

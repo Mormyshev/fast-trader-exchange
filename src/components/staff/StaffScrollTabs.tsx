@@ -9,9 +9,9 @@ export default function StaffScrollTabs({
 }) {
   return (
     <div
-      className={`-mx-1 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${className}`}
+      className={`overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${className}`}
     >
-      <div className="inline-flex min-w-full sm:min-w-0 flex-nowrap gap-1 bg-zinc-100/70 p-1 rounded-2xl">
+      <div className="inline-flex h-10 min-w-full sm:min-w-0 flex-nowrap items-center gap-1 bg-zinc-100/70 p-1 rounded-2xl">
         {children}
       </div>
     </div>

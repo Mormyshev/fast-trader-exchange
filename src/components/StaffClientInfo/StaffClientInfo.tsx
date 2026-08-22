@@ -9,28 +9,50 @@ import {
 export default function StaffClientInfo({
   client,
   compact = false,
+  hideLabel = false,
 }: {
   client: OrderClient | null | undefined;
   compact?: boolean;
+  hideLabel?: boolean;
 }) {
   const name = formatClientName(client);
 
   if (compact) {
+    const initials = name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || "К";
+    const contacts = [client?.phone, client?.telegram, client?.email]
+      .filter(Boolean)
+      .join(" · ");
+
     return (
-      <div className="rounded-xl bg-white border border-zinc-200 px-3 py-2.5 space-y-1">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-          Клиент
-        </p>
-        <p className="text-xs font-bold text-zinc-900 break-words">{name}</p>
-        <p className="text-xs text-zinc-600 truncate">{client?.email || "—"}</p>
-        <p className="text-xs text-zinc-600">{client?.phone || "—"}</p>
-        <p className="text-xs text-zinc-600 truncate">{client?.telegram || "—"}</p>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="w-8 h-8 rounded-full bg-zinc-200 text-[10px] font-bold text-zinc-700 flex items-center justify-center shrink-0">
+          {initials}
+        </span>
+        <div className="min-w-0">
+          {!hideLabel && (
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Клиент
+            </p>
+          )}
+          <p className="text-sm font-semibold text-zinc-900 break-words">
+            {name}
+          </p>
+          <p className="text-[11px] text-zinc-600 break-all">
+            {contacts || "Нет контактов"}
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 space-y-3">
+    <div className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 space-y-3">
       <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
         Клиент
       </p>
@@ -41,15 +63,15 @@ export default function StaffClientInfo({
       <div className="space-y-1.5 text-xs text-zinc-600">
         <div className="flex items-center gap-2 min-w-0">
           <Mail className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-          <span className="truncate">{client?.email || "—"}</span>
+          <span className="break-all">{client?.email || "—"}</span>
         </div>
         <div className="flex items-center gap-2 min-w-0">
           <Phone className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-          <span>{client?.phone || "—"}</span>
+          <span className="break-all">{client?.phone || "—"}</span>
         </div>
         <div className="flex items-center gap-2 min-w-0">
           <Send className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-          <span className="truncate">{client?.telegram || "—"}</span>
+          <span className="break-all">{client?.telegram || "—"}</span>
         </div>
       </div>
     </div>

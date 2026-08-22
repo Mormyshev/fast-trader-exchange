@@ -16,6 +16,10 @@ import { Card } from "@/components/ui/card";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
 import { startPolling, subscribeWithAuth } from "@/src/utils/supabase/realtime";
+import {
+  orderStatusBadgeClass,
+  orderStatusCardClass,
+} from "@/src/utils/orders/status-style";
 
 type OrderStatus =
   | "pending"
@@ -65,24 +69,6 @@ function statusLabel(status: OrderStatus) {
       return "Отменена";
     case "failed":
       return "Ошибка";
-  }
-}
-
-function statusClass(status: OrderStatus) {
-  switch (status) {
-    case "pending":
-      return "bg-amber-100 text-amber-800";
-    case "processing":
-      return "bg-blue-100 text-blue-800";
-    case "awaiting_payment":
-      return "bg-purple-100 text-purple-800";
-    case "paid":
-      return "bg-indigo-100 text-indigo-800";
-    case "completed":
-      return "bg-emerald-100 text-emerald-800";
-    case "cancelled":
-    case "failed":
-      return "bg-rose-100 text-rose-800";
   }
 }
 
@@ -251,7 +237,7 @@ export default function UserOrdersPage() {
   }
 
   return (
-    <div className="w-full space-y-8 pb-16 text-zinc-900 font-sans">
+    <div className="w-full space-y-5 sm:space-y-6 lg:space-y-8 pb-8 sm:pb-12 text-zinc-900 font-sans">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
@@ -339,7 +325,7 @@ export default function UserOrdersPage() {
             return (
               <Card
                 key={order.id}
-                className="rounded-[28px] border border-zinc-200 bg-white shadow-none p-5 md:p-6"
+                className={`rounded-[28px] border shadow-none p-4 sm:p-5 md:p-6 ${orderStatusCardClass(order.status)}`}
               >
                 <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center gap-4 md:gap-6">
                   <div className="space-y-3 min-w-0">
@@ -360,7 +346,7 @@ export default function UserOrdersPage() {
                       </span>
                     </div>
 
-                    <p className="text-xs font-medium text-zinc-400 truncate">
+                    <p className="text-xs font-medium text-zinc-400 break-all">
                       Кошелёк:{" "}
                       <span className="font-mono text-zinc-600">
                         {order.wallet_to}
@@ -382,7 +368,7 @@ export default function UserOrdersPage() {
 
                   <div className="flex md:justify-center md:min-w-[11rem]">
                     <span
-                      className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${statusClass(order.status)}`}
+                      className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${orderStatusBadgeClass(order.status)}`}
                     >
                       {statusLabel(order.status)}
                     </span>
@@ -394,7 +380,12 @@ export default function UserOrdersPage() {
                       className={`rounded-full h-11 px-6 font-bold shadow-none w-full md:w-auto cursor-pointer ${
                         isActive
                           ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
-                          : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
+                          : order.status === "completed"
+                            ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-900"
+                            : order.status === "cancelled" ||
+                                order.status === "failed"
+                              ? "bg-rose-100 hover:bg-rose-200 text-rose-900"
+                              : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
                       }`}
                     >
                       <Link href={`/order/${order.id}`}>

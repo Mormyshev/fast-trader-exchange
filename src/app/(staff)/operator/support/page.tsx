@@ -8,6 +8,12 @@ import type { ChatConversation } from "@/src/utils/chat/types";
 import ChatPanel from "@/src/components/Chat/ChatPanel";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/src/app/context/AuthContext";
+import {
+  countUnreadClientMessages,
+  getClientMessagePreview,
+  loadStaffChatReadMap,
+  markStaffChatRead,
+} from "@/src/utils/chat/staff-inbox";
 
 function getUserLabel(conversation: ChatConversation) {
   const user = conversation.user;
@@ -15,6 +21,53 @@ function getUserLabel(conversation: ChatConversation) {
     return [user.last_name, user.first_name].filter(Boolean).join(" ");
   }
   return user?.email ?? "Клиент";
+}
+
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+function ConversationRow({
+  conversation,
+  selected,
+  preview,
+  unread,
+  subtitleClassName,
+  onSelect,
+}: {
+  conversation: ChatConversation;
+  selected: boolean;
+  preview: string;
+  unread: number;
+  subtitleClassName: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(conversation.id)}
+      className={`w-full text-left px-4 py-3 border-b border-amber-100/60 hover:bg-[#FFF3B0]/50 transition-colors flex items-center gap-3 ${
+        selected
+          ? "bg-[#FFF3B0] border-l-4 border-l-[#FFDD2D]"
+          : "border-l-4 border-l-transparent"
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-zinc-900 truncate">
+          {getUserLabel(conversation)}
+        </p>
+        <p className={`text-xs mt-0.5 truncate ${subtitleClassName}`}>
+          {preview}
+        </p>
+      </div>
+      <UnreadBadge count={unread} />
+    </button>
+  );
 }
 
 export default function OperatorSupportPage() {
@@ -26,6 +79,11 @@ export default function OperatorSupportPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [hasPseudonym, setHasPseudonym] = useState(false);
+  const [readAtById, setReadAtById] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setReadAtById(loadStaffChatReadMap());
+  }, []);
 
   const loadConversations = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -82,6 +140,12 @@ export default function OperatorSupportPage() {
     }
     const found = conversations.find((c) => c.id === selectedId) ?? null;
     setSelectedConversation(found);
+
+    if (!found) return;
+    const at = markStaffChatRead(found.id, found.last_message?.created_at);
+    setReadAtById((prev) =>
+      prev[found.id] === at ? prev : { ...prev, [found.id]: at },
+    );
   }, [selectedId, conversations]);
 
   const handleClaim = async () => {
@@ -116,8 +180,24 @@ export default function OperatorSupportPage() {
     return staffName ? `У оператора: ${staffName}` : "У другого оператора";
   }
 
+  function getPreview(conversation: ChatConversation) {
+    return getClientMessagePreview(conversation) ?? getAssignmentLabel(conversation);
+  }
+
+  function getUnread(conversation: ChatConversation) {
+    return countUnreadClientMessages(
+      conversation,
+      readAtById[conversation.id] ?? null,
+    );
+  }
+
+  const selectConversation = (id: string) => {
+    setSelectedId(id);
+    setNotice(null);
+  };
+
   return (
-    <div className="flex flex-col gap-3 sm:gap-4 h-full min-h-0 overflow-hidden">
+    <div className="flex flex-col gap-3 sm:gap-4 lg:gap-5 h-full min-h-0 overflow-hidden">
       {notice && (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 sm:px-4 py-3 text-sm font-medium text-amber-900 shrink-0">
           <Bell className="w-4 h-4 shrink-0" />
@@ -133,7 +213,7 @@ export default function OperatorSupportPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_1fr] gap-3 sm:gap-4 flex-1 min-h-0 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,18rem)_1fr] xl:grid-cols-[minmax(0,20rem)_1fr] gap-3 sm:gap-4 lg:gap-5 flex-1 min-h-0 overflow-hidden">
         <div
           className={`rounded-2xl border border-amber-200/70 bg-[#FFFDE7] overflow-hidden flex flex-col h-full min-h-0 shadow-[0_4px_16px_rgba(255,221,45,0.06)] ${
             selectedId ? "hidden lg:flex" : "flex"
@@ -157,26 +237,15 @@ export default function OperatorSupportPage() {
                   </div>
                 )}
                 {unassigned.map((conversation) => (
-                  <button
+                  <ConversationRow
                     key={conversation.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(conversation.id);
-                      setNotice(null);
-                    }}
-                    className={`w-full text-left px-4 py-3 border-b border-amber-100/60 hover:bg-[#FFF3B0]/50 transition-colors ${
-                      selectedId === conversation.id
-                        ? "bg-[#FFF3B0] border-l-4 border-l-[#FFDD2D]"
-                        : "border-l-4 border-l-transparent"
-                    }`}
-                  >
-                    <p className="text-sm font-bold text-zinc-900 truncate">
-                      {getUserLabel(conversation)}
-                    </p>
-                    <p className="text-xs text-amber-600 font-medium mt-0.5">
-                      Ожидает оператора
-                    </p>
-                  </button>
+                    conversation={conversation}
+                    selected={selectedId === conversation.id}
+                    preview={getPreview(conversation)}
+                    unread={getUnread(conversation)}
+                    subtitleClassName="text-amber-600 font-medium"
+                    onSelect={selectConversation}
+                  />
                 ))}
 
                 {mine.length > 0 && (
@@ -185,26 +254,15 @@ export default function OperatorSupportPage() {
                   </div>
                 )}
                 {mine.map((conversation) => (
-                  <button
+                  <ConversationRow
                     key={conversation.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(conversation.id);
-                      setNotice(null);
-                    }}
-                    className={`w-full text-left px-4 py-3 border-b border-amber-100/60 hover:bg-white/60 transition-colors ${
-                      selectedId === conversation.id
-                        ? "bg-[#FFF3B0] border-l-4 border-l-[#FFDD2D]"
-                        : "border-l-4 border-l-transparent"
-                    }`}
-                  >
-                    <p className="text-sm font-bold text-zinc-900 truncate">
-                      {getUserLabel(conversation)}
-                    </p>
-                    <p className="text-xs text-emerald-600 mt-0.5 truncate">
-                      {getAssignmentLabel(conversation)}
-                    </p>
-                  </button>
+                    conversation={conversation}
+                    selected={selectedId === conversation.id}
+                    preview={getPreview(conversation)}
+                    unread={getUnread(conversation)}
+                    subtitleClassName="text-emerald-600"
+                    onSelect={selectConversation}
+                  />
                 ))}
 
                 {others.length > 0 && (
@@ -213,26 +271,15 @@ export default function OperatorSupportPage() {
                   </div>
                 )}
                 {others.map((conversation) => (
-                  <button
+                  <ConversationRow
                     key={conversation.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(conversation.id);
-                      setNotice(null);
-                    }}
-                    className={`w-full text-left px-4 py-3 border-b border-amber-100/60 hover:bg-white/60 transition-colors ${
-                      selectedId === conversation.id
-                        ? "bg-[#FFF3B0] border-l-4 border-l-[#FFDD2D]"
-                        : "border-l-4 border-l-transparent"
-                    }`}
-                  >
-                    <p className="text-sm font-bold text-zinc-900 truncate">
-                      {getUserLabel(conversation)}
-                    </p>
-                    <p className="text-xs text-zinc-500 mt-0.5 truncate">
-                      {getAssignmentLabel(conversation)}
-                    </p>
-                  </button>
+                    conversation={conversation}
+                    selected={selectedId === conversation.id}
+                    preview={getPreview(conversation)}
+                    unread={getUnread(conversation)}
+                    subtitleClassName="text-zinc-500"
+                    onSelect={selectConversation}
+                  />
                 ))}
               </>
             )}

@@ -310,8 +310,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 py-12 dark:bg-zinc-950 text-gray-900 dark:text-zinc-50">
-      <div className="mx-auto max-w-4xl w-full px-4 sm:px-6">
+    <div className="w-full max-w-4xl">
         {verificationStatus === "pending" && (
           <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-6 text-center shadow-sm dark:border-blue-900/30 dark:bg-blue-950/20 mb-6">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400">
@@ -620,7 +619,6 @@ export default function ProfilePage() {
             )}
           </form>
         </div>
-      </div>
       <ConfirmDialogHost />
     </div>
   );

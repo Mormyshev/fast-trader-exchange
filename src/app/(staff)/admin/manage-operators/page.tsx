@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 export default function ManageOperators() {
   return (
     <div className="max-w-2xl mx-auto space-y-6 text-zinc-900 font-sans">
-      <div className="rounded-[32px] border border-zinc-200 bg-white p-8 md:p-10 space-y-4">
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6 md:p-8 space-y-4">
         <div className="w-12 h-12 rounded-2xl bg-zinc-100 flex items-center justify-center text-zinc-500">
           <Users className="w-6 h-6" />
         </div>

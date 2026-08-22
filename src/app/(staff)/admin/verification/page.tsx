@@ -52,6 +52,12 @@ const TAB_LABELS: Record<VerificationTab, string> = {
   rejected: "Отменённые",
 };
 
+const TAB_SHELL: Record<VerificationTab, string> = {
+  pending: "border-amber-200",
+  verified: "border-emerald-300",
+  rejected: "border-rose-300",
+};
+
 function formatSubmittedAt(iso: string | null | undefined) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("ru-RU", {
@@ -253,7 +259,7 @@ export default function AdminVerificationPage() {
   const renderActions = (req: ProfileRequest, compact = false) => {
     if (activeTab === "verified") {
       return (
-        <span className="text-xs font-semibold text-emerald-600">
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
           Подтверждена
         </span>
       );
@@ -405,7 +411,7 @@ export default function AdminVerificationPage() {
             {requests.map((req) => (
               <div
                 key={req.id}
-                className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 space-y-3"
+                className={`rounded-2xl border bg-white p-4 shadow-sm dark:bg-zinc-900/50 space-y-3 ${TAB_SHELL[activeTab]}`}
               >
                 <div>
                   <p className="font-bold text-sm text-zinc-900 break-all">
@@ -456,7 +462,7 @@ export default function AdminVerificationPage() {
             ))}
           </div>
 
-          <div className="hidden md:block overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-zinc-900 dark:bg-zinc-900/50">
+          <div className={`hidden md:block overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-zinc-900/50 ${TAB_SHELL[activeTab]}`}>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-zinc-900 dark:text-zinc-400 border-b border-gray-100 dark:border-zinc-800">
@@ -535,14 +541,19 @@ export default function AdminVerificationPage() {
           if (!open) closeRejectDialog();
         }}
       >
-        <DialogContent showCloseButton={false} className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Отклонить анкету</DialogTitle>
-            <DialogDescription>
-              Укажите причину — пользователь увидит комментарий и сможет
-              исправить данные.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent showCloseButton={false} className="sm:max-w-[440px]">
+          <div className="flex items-start gap-3.5">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+              <X className="size-5" />
+            </div>
+            <DialogHeader className="flex-1 gap-1.5 pr-0">
+              <DialogTitle>Отклонить анкету</DialogTitle>
+              <DialogDescription>
+                Укажите причину — пользователь увидит комментарий и сможет
+                исправить данные.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
           <textarea
             value={rejectComment}
             onChange={(e) => {
@@ -552,27 +563,26 @@ export default function AdminVerificationPage() {
             rows={4}
             maxLength={1000}
             placeholder="Например: фото паспорта нечитаемо, исправьте и отправьте снова"
-            className={`mt-2 w-full rounded-xl border px-4 py-3 text-sm outline-none focus:border-[#FFDD2D] ${
-              rejectError ? "border-red-400" : "border-zinc-200"
+            className={`w-full rounded-2xl border bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-800 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#FFDD2D] focus:bg-white ${
+              rejectError ? "border-rose-400" : "border-zinc-200"
             }`}
           />
           {rejectError && (
-            <p className="text-xs font-medium text-red-500">{rejectError}</p>
+            <p className="text-xs font-medium text-rose-600">{rejectError}</p>
           )}
-          <DialogFooter className="border-t-0 bg-transparent -mx-4 -mb-4 pt-2 sm:flex-row sm:justify-end">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={closeRejectDialog}
-              className="rounded-full"
+              className="h-11 rounded-full border-zinc-200 px-5 font-bold text-zinc-700 hover:bg-zinc-50"
             >
               Отмена
             </Button>
             <Button
               type="button"
-              variant="destructive"
               onClick={() => void handleRejectSubmit()}
-              className="rounded-full font-bold"
+              className="h-11 rounded-full bg-rose-600 px-5 font-bold text-white shadow-none hover:bg-rose-700"
             >
               Отклонить
             </Button>
@@ -582,13 +592,17 @@ export default function AdminVerificationPage() {
 
       {selectedPhoto && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/55 backdrop-blur-[3px] p-4"
           onClick={() => setSelectedPhoto(null)}
         >
           <div
-            className="relative max-h-[90vh] max-w-3xl overflow-hidden rounded-2xl bg-white p-2"
+            className="relative max-h-[90vh] max-w-3xl overflow-hidden rounded-[28px] border border-zinc-200 bg-white p-2 shadow-[0_24px_80px_rgba(24,24,27,0.25)]"
             onClick={(e) => e.stopPropagation()}
           >
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-[#FFDD2D]"
+            />
             <Image
               src={selectedPhoto}
               alt="Документ"
@@ -598,11 +612,13 @@ export default function AdminVerificationPage() {
               unoptimized
             />
             <Button
-              variant="secondary"
-              className="absolute top-3 right-3 rounded-full"
+              variant="ghost"
+              size="icon-sm"
+              className="absolute top-4 right-4 size-9 rounded-full bg-white/90 text-zinc-500 hover:bg-white hover:text-zinc-800 shadow-sm"
               onClick={() => setSelectedPhoto(null)}
             >
-              Закрыть
+              <X className="size-4" />
+              <span className="sr-only">Закрыть</span>
             </Button>
           </div>
         </div>

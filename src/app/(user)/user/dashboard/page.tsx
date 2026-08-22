@@ -54,14 +54,10 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-zinc-50/50">
-      <div className="mx-auto max-w-7xl p-6 lg:p-8">
-        <ClientDashboard
-          userEmail={user.email || "Пользователь"}
-          activeOrders={activeRes.data || []}
-          completedCount={completedRes.count || 0}
-        />
-      </div>
-    </div>
+    <ClientDashboard
+      userEmail={user.email || "Пользователь"}
+      activeOrders={activeRes.data || []}
+      completedCount={completedRes.count || 0}
+    />
   );
 }

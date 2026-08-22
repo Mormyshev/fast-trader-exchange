@@ -1,26 +1,21 @@
-"use client";
-
 import ExchangeCalculator from "../components/ExchangeCalculator/ExchangeCalculator";
 import Advantages from "./components/HomePage/Advantages/Advantages";
 import Stats from "./components/HomePage/Stats/Stats";
-
-// Импортируем компоненты публичной обвязки сюда
 import Header from "../components/Header/Header";
 import Footer from "../components/Footer/Footer";
 import Features from "../components/Features/Features";
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 transition-colors duration-200">
+    <div className="flex min-h-screen flex-col bg-gray-50/50 text-zinc-900 transition-colors duration-200 dark:bg-zinc-950 dark:text-zinc-50">
       <Header />
 
-      <main className="main-content flex-grow w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full pt-6 bg-transparent">
+      <main className="main-content w-full flex-grow">
+        <div className="mx-auto w-full max-w-7xl space-y-5 px-4 pt-5 pb-10 sm:space-y-6 sm:px-5 sm:pt-6 sm:pb-12 md:space-y-8 md:px-6 md:pt-8 md:pb-16 lg:px-8">
           <Features />
-        </div>
-
-        <div id="exchange" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 md:space-y-8 scroll-mt-24">
-          <ExchangeCalculator />
+          <div id="exchange" className="scroll-mt-24">
+            <ExchangeCalculator />
+          </div>
           <Advantages />
           <Stats />
         </div>

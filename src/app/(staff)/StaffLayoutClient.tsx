@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -24,6 +24,10 @@ import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeSupportInbox } from "@/src/utils/supabase/support-inbox";
 import type { ChatConversation } from "@/src/utils/chat/types";
+import {
+  countUnreadConversations,
+  STAFF_CHAT_READ_EVENT,
+} from "@/src/utils/chat/staff-inbox";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 
@@ -82,9 +86,7 @@ function StaffNavLink({
       href={href}
       title={collapsed ? label : undefined}
       onClick={onClick}
-      className={`relative w-full min-w-0 flex items-center rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-        collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"
-      } ${
+      className={`relative flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-bold transition-colors cursor-pointer ${
         active
           ? "bg-[#FFDD2D] text-zinc-900"
           : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
@@ -92,14 +94,15 @@ function StaffNavLink({
     >
       <span className="relative shrink-0">
         <Icon className="w-4 h-4" />
-        {collapsed && <NavBadge count={badge} compact />}
+        <NavBadge count={badge} compact />
       </span>
-      {!collapsed && (
-        <>
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          <NavBadge count={badge} />
-        </>
-      )}
+      <span
+        className={`min-w-0 flex-1 truncate whitespace-nowrap transition-opacity duration-200 ${
+          collapsed ? "opacity-0" : "opacity-100 delay-75"
+        }`}
+      >
+        {label}
+      </span>
     </Link>
   );
 }
@@ -126,20 +129,23 @@ export default function StaffLayoutClient({
   const { logoutUser } = useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
+  const conversationsRef = useRef<ChatConversation[]>([]);
+
+  const applyUnreadCount = useCallback((list?: ChatConversation[]) => {
+    if (list) conversationsRef.current = list;
+    setPendingChats(countUnreadConversations(conversationsRef.current));
+  }, []);
+
   const loadPendingChats = useCallback(async () => {
     try {
       const res = await fetch("/api/chat/conversations");
       const data = await res.json();
       if (!res.ok) return;
-
-      const unassigned = ((data.conversations ?? []) as ChatConversation[]).filter(
-        (c) => !c.operator_id,
-      ).length;
-      setPendingChats(unassigned);
+      applyUnreadCount((data.conversations ?? []) as ChatConversation[]);
     } catch {
       // ignore
     }
-  }, []);
+  }, [applyUnreadCount]);
 
   const loadActiveOrders = useCallback(async () => {
     try {
@@ -159,7 +165,7 @@ export default function StaffLayoutClient({
     const syncViewport = () => {
       const desktop = media.matches;
       setIsDesktop(desktop);
-      if (desktop) setSidebarOpen(true);
+      setSidebarOpen(desktop);
     };
 
     syncViewport();
@@ -168,8 +174,10 @@ export default function StaffLayoutClient({
   }, []);
 
   useEffect(() => {
-    if (!isDesktop) setSidebarOpen(false);
-  }, [pathname, isDesktop]);
+    if (!window.matchMedia("(min-width: 768px)").matches) {
+      setSidebarOpen(false);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     setOperatorPseudonym(initialOperatorPseudonym);
@@ -207,12 +215,16 @@ export default function StaffLayoutClient({
       void loadActiveOrders();
     }, 30_000);
 
+    const onChatRead = () => applyUnreadCount();
+    window.addEventListener(STAFF_CHAT_READ_EVENT, onChatRead);
+
     return () => {
       clearInterval(interval);
       inbox.unsubscribe();
       ordersInbox.unsubscribe();
+      window.removeEventListener(STAFF_CHAT_READ_EVENT, onChatRead);
     };
-  }, [loadPendingChats, loadActiveOrders]);
+  }, [loadPendingChats, loadActiveOrders, applyUnreadCount]);
 
   const isAdmin = role === "admin";
   const currentTitle = getPageTitle(pathname);
@@ -241,56 +253,59 @@ export default function StaffLayoutClient({
 
   return (
     <div className="flex h-dvh bg-zinc-50/50 text-zinc-900 font-sans antialiased overflow-hidden">
-      {!isDesktop && sidebarOpen && (
-        <button
-          type="button"
-          aria-label="Закрыть меню"
-          className="fixed inset-0 z-40 bg-zinc-900/45 backdrop-blur-[1px] md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <button
+        type="button"
+        aria-label="Закрыть меню"
+        aria-hidden={!sidebarOpen}
+        tabIndex={-1}
+        className={`fixed inset-0 z-40 bg-zinc-900/45 backdrop-blur-[1px] md:hidden transition-opacity duration-300 ease-out ${
+          sidebarOpen
+            ? "opacity-100"
+            : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => setSidebarOpen(false)}
+      />
 
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 bg-white border-r border-zinc-200 transition-all duration-300 ease-in-out flex flex-col justify-between ${
-          isDesktop
-            ? collapsed
-              ? "w-[4.5rem] px-2 py-6 translate-x-0"
-              : "w-64 px-4 py-6 translate-x-0"
-            : `w-[min(100vw-2.5rem,17rem)] px-3 sm:px-4 py-5 sm:py-6 ${
-                sidebarOpen ? "translate-x-0" : "-translate-x-full"
-              }`
+        className={`fixed top-0 left-0 bottom-0 z-50 overflow-hidden border-r border-zinc-200 bg-white transition-[width,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          collapsed ? "md:w-[4.5rem]" : "md:w-64"
+        } w-[min(100vw-2.5rem,17rem)] ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
-        <div className="space-y-6 flex-1 min-h-0 overflow-hidden flex flex-col">
-          <div
-            className={`flex items-center gap-2 shrink-0 ${collapsed ? "justify-center px-0" : "justify-between px-1 sm:px-2"}`}
-          >
+        <div className="flex h-full w-[min(100vw-2.5rem,17rem)] md:w-64 flex-col justify-between px-3 py-5 sm:px-4 sm:py-6">
+          <div className="flex min-h-0 flex-1 flex-col space-y-6 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 shrink-0 px-1 sm:px-2">
             <Link
               href="/"
-              className="text-base sm:text-lg font-black tracking-tight text-zinc-900 select-none hover:opacity-80 transition-opacity truncate"
+              className="relative h-7 min-w-0 flex-1 text-base sm:text-lg font-black tracking-tight text-zinc-900 select-none hover:opacity-80"
               title="На главную сайта"
             >
-              {collapsed ? (
-                <>
-                  A<span className="text-[#e6c628]">.</span>
-                </>
-              ) : (
-                <>
-                  AURUM SWAP
-                  <span className="text-[#e6c628] font-medium">.DEMO</span>
-                </>
-              )}
-            </Link>
-            {!isDesktop && (
-              <button
-                type="button"
-                aria-label="Закрыть меню"
-                onClick={() => setSidebarOpen(false)}
-                className="md:hidden w-9 h-9 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-500 hover:bg-zinc-50 shrink-0"
+              <span
+                className={`absolute inset-y-0 left-0 flex items-center whitespace-nowrap transition-opacity duration-200 ${
+                  collapsed ? "opacity-0" : "opacity-100 delay-75"
+                }`}
               >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+                AURUM SWAP
+                <span className="text-[#e6c628] font-medium">.DEMO</span>
+              </span>
+              <span
+                aria-hidden
+                className={`absolute inset-y-0 left-0 flex items-center transition-opacity duration-200 ${
+                  collapsed ? "opacity-100 delay-75" : "opacity-0"
+                }`}
+              >
+                A<span className="text-[#e6c628]">.</span>
+              </span>
+            </Link>
+            <button
+              type="button"
+              aria-label="Закрыть меню"
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden w-9 h-9 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-500 hover:bg-zinc-50 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
           <nav className="space-y-1 pt-4 overflow-y-auto flex-1 min-h-0 pb-2 [scrollbar-width:thin]">
@@ -330,14 +345,14 @@ export default function StaffLayoutClient({
             />
 
             {isAdmin && (
-              <div
-                className={`pt-4 mt-4 border-t border-zinc-100 space-y-1 ${collapsed ? "px-0" : ""}`}
-              >
-                {!collapsed && (
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block pl-3 mb-1">
-                    Администрирование
-                  </span>
-                )}
+              <div className="pt-4 mt-4 border-t border-zinc-100 space-y-1">
+                <span
+                  className={`mb-1 block overflow-hidden pl-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 whitespace-nowrap transition-opacity duration-200 ${
+                    collapsed ? "opacity-0" : "opacity-100 delay-75"
+                  }`}
+                >
+                  Администрирование
+                </span>
                 <StaffNavLink
                   href="/admin/verification"
                   icon={UserCheck}
@@ -367,9 +382,7 @@ export default function StaffLayoutClient({
           </nav>
         </div>
 
-        <div
-          className={`border-t border-zinc-100 pt-4 space-y-1 shrink-0 ${collapsed ? "px-0" : "px-1"}`}
-        >
+        <div className="border-t border-zinc-100 pt-4 space-y-1 shrink-0 px-1">
           <StaffNavLink
             href="/"
             icon={ExternalLink}
@@ -382,26 +395,27 @@ export default function StaffLayoutClient({
             type="button"
             title={collapsed ? "Выйти из системы" : undefined}
             onClick={() => void handleLogout()}
-            className={`w-full min-w-0 flex items-center rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer ${
-              collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"
-            }`}
+            className="flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            {!collapsed && (
-              <span className="min-w-0 flex-1 truncate text-left">
-                Выйти из системы
-              </span>
-            )}
+            <span
+              className={`min-w-0 flex-1 truncate text-left whitespace-nowrap transition-opacity duration-200 ${
+                collapsed ? "opacity-0" : "opacity-100 delay-75"
+              }`}
+            >
+              Выйти из системы
+            </span>
           </button>
+        </div>
         </div>
       </aside>
 
       <div
-        className={`flex-1 flex flex-col h-dvh min-h-0 min-w-0 transition-all duration-300 ease-in-out ${
-          isDesktop ? (collapsed ? "md:pl-[4.5rem]" : "md:pl-64") : ""
+        className={`flex min-h-0 min-w-0 flex-1 flex-col h-dvh transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          collapsed ? "md:pl-[4.5rem]" : "md:pl-64"
         }`}
       >
-        <header className="h-14 sm:h-16 md:h-20 bg-white border-b border-zinc-200 px-3 sm:px-4 md:px-10 flex items-center justify-between gap-2 shrink-0 z-30 safe-area-inset-top">
+        <header className="h-14 sm:h-16 lg:h-[4.5rem] bg-white border-b border-zinc-200 px-3.5 sm:px-5 md:px-6 lg:px-8 xl:px-10 flex items-center justify-between gap-2 shrink-0 z-30 safe-area-inset-top">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <Button
               variant="outline"
@@ -460,7 +474,7 @@ export default function StaffLayoutClient({
           </div>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 md:p-10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <main className="flex-1 min-h-0 overflow-y-auto px-3 min-[380px]:px-3.5 sm:px-5 md:px-6 lg:px-8 xl:px-10 py-3.5 sm:py-5 md:py-6 lg:py-8 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {children}
         </main>
       </div>

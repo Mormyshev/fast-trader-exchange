@@ -15,13 +15,55 @@ import {
   FileText,
 } from "lucide-react";
 import {
-  formatOrderTimeLeft,
   isOrderExpiredByTtl,
   ORDER_TTL_STATUSES,
 } from "@/src/utils/orders/ttl";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
-import { parsePaymentDetails } from "@/src/utils/orders/payment-details";
+import {
+  clientPaysWithCrypto,
+  parsePaymentDetails,
+} from "@/src/utils/orders/payment-details";
+import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
+import {
+  OrderTtlBadge,
+  useNowTick,
+} from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import {
+  orderStatusBadgeClass,
+  orderStatusBannerClass,
+} from "@/src/utils/orders/status-style";
+import { Button } from "@/components/ui/button";
+
+type OrderStatus =
+  | "pending"
+  | "processing"
+  | "awaiting_payment"
+  | "paid"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
+function statusLabel(status: string) {
+  switch (status) {
+    case "pending":
+      return "Ожидает оператора";
+    case "processing":
+      return "В обработке";
+    case "awaiting_payment":
+      return "Ожидает оплаты";
+    case "paid":
+      return "Платёж проверяется";
+    case "completed":
+      return "Выполнена";
+    case "cancelled":
+      return "Отменена";
+    case "failed":
+      return "Ошибка";
+    default:
+      return status;
+  }
+}
 
 interface OrderStatusClientProps {
   initialOrder: any;
@@ -31,9 +73,6 @@ export default function OrderStatusClient({
   initialOrder,
 }: OrderStatusClientProps) {
   const [order, setOrder] = useState<any>(initialOrder);
-  const [timeLeft, setTimeLeft] = useState<string>(() =>
-    formatOrderTimeLeft(initialOrder.created_at),
-  );
   const [isUploading, setIsUploading] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -42,6 +81,9 @@ export default function OrderStatusClient({
   );
   const cancelInFlight = useRef(false);
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
+  const now = useNowTick(
+    (ORDER_TTL_STATUSES as readonly string[]).includes(order.status),
+  );
 
   const canCancel = (ORDER_TTL_STATUSES as readonly string[]).includes(
     order.status,
@@ -81,7 +123,6 @@ export default function OrderStatusClient({
     }
   };
 
-  // BFF + Realtime
   useEffect(() => {
     let cancelled = false;
     const client = createClient();
@@ -141,7 +182,6 @@ export default function OrderStatusClient({
     }
 
     const tick = () => {
-      setTimeLeft(formatOrderTimeLeft(order.created_at));
       if (isOrderExpiredByTtl(order.created_at)) {
         void cancelOrder("timeout");
       }
@@ -220,7 +260,6 @@ export default function OrderStatusClient({
     if (!ok) return;
 
     setIsConfirming(true);
-    // мгновенный UI, не ждём Realtime
     setOrder((prev: any) => ({ ...prev, status: "paid" }));
 
     try {
@@ -236,7 +275,6 @@ export default function OrderStatusClient({
       }
 
       if (json.order) setOrder(json.order);
-      alert("Заявка отправлена оператору на проверку! Ожидайте подтверждения.");
     } catch (err: any) {
       console.error("Ошибка смены статуса:", err);
       alert(`Не удалось отправить уведомление: ${err.message}`);
@@ -247,157 +285,135 @@ export default function OrderStatusClient({
 
   const payInIsCrypto =
     parsePaymentDetails(order.payment_details).kind === "crypto";
+  const receiptReady = Boolean(order.receipt_url || uploadSuccess);
+  const status = order.status as OrderStatus;
 
   return (
-    <div className="p-0 md:p-4 w-full transition-all">
-      <div className="mb-4">
-        <Link
-          href="/user/orders"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />К моим заявкам
-        </Link>
-      </div>
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-5 text-zinc-900 dark:text-zinc-50 font-sans">
+      <Link
+        href="/user/orders"
+        className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />К моим заявкам
+      </Link>
 
-      <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-5 md:p-8 space-y-6 shadow-xs border border-zinc-100 dark:border-zinc-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-6">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              Заявка на обмен
-            </h1>
-            <p className="text-xs font-medium text-zinc-400 mt-1">
-              Создана{" "}
-              {new Date(order.created_at).toLocaleString("ru-RU", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_28px_rgba(15,23,42,0.04)] dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-5 sm:space-y-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-4 sm:pb-5 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight">
+                Заявка на обмен
+              </h1>
+              <p className="text-[11px] sm:text-xs font-mono font-semibold text-zinc-400 mt-1">
+                #{order.id.slice(0, 8)}
+              </p>
+              <p className="text-[11px] sm:text-xs font-medium text-zinc-500 mt-1">
+                {new Date(order.created_at).toLocaleString("ru-RU", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
+            </div>
+            <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 flex-wrap">
+              <span
+                className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${orderStatusBadgeClass(status, true)}`}
+              >
+                {statusLabel(status)}
+              </span>
+              <OrderTtlBadge
+                createdAt={order.created_at}
+                status={status}
+                now={now}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-zinc-100 border border-zinc-200 px-3.5 sm:px-5 py-4 dark:bg-zinc-800/70 dark:border-zinc-700">
+            <OrderExchangePair
+              amountFrom={order.amount_from}
+              amountTo={order.amount_to}
+              currencyFrom={order.currency_from}
+              currencyTo={order.currency_to}
+              fromCaption="Отдаёте"
+              toCaption="Получаете"
+            />
+          </div>
+
+          <div className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 space-y-2 dark:bg-zinc-800/70 dark:border-zinc-700">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+              {clientPaysWithCrypto(order.currency_from)
+                ? "Куда зачислим"
+                : "Ваш кошелёк для получения"}
+            </p>
+            <p className="font-mono text-xs font-semibold break-all leading-relaxed">
+              {order.wallet_to}
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-              Статус:
-            </span>
-            <span
-              className={`text-xs font-black uppercase tracking-widest px-4 py-2 rounded-full shadow-xs border ${
-                order.status === "pending"
-                  ? "bg-amber-400 text-zinc-900 border-amber-500"
-                  : order.status === "processing"
-                    ? "bg-blue-500 text-white border-blue-600"
-                    : order.status === "awaiting_payment"
-                      ? "bg-purple-500 text-white border-purple-600"
-                      : order.status === "paid"
-                        ? "bg-indigo-500 text-white border-indigo-600"
-                        : order.status === "completed"
-                          ? "bg-emerald-500 text-white border-emerald-600"
-                          : "bg-rose-500 text-white border-rose-600"
-              }`}
-            >
-              {order.status === "pending" && "В ожидании"}
-              {order.status === "processing" && "В обработке"}
-              {order.status === "awaiting_payment" && "На оплате"}
-              {order.status === "paid" && "Проверка оплаты"}
-              {order.status === "completed" && "Выполнена"}
-              {order.status === "cancelled" && "Отменена"}
-            </span>
-          </div>
-        </div>
-
-        <div className="py-2">
-          {order.status === "pending" && (
-            <div className="flex flex-col items-center text-center space-y-5 bg-amber-400/25 dark:bg-amber-500/15 border border-amber-400/60 p-8 md:p-12 rounded-[24px] shadow-sm">
-              <div className="w-14 h-14 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full flex items-center justify-center shadow-sm animate-pulse border border-amber-300">
-                <Clock className="w-7 h-7 stroke-[2.5]" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                  Ожидаем реквизиты от мерчанта
-                </h3>
-                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 max-w-lg leading-relaxed">
-                  Ваша заявка успешно создана и передана в систему распределения.
-                  Первый освободившийся оператор отправит реквизиты для оплаты.
+          {status === "pending" && (
+            <div className="p-5 rounded-2xl border border-amber-200 bg-amber-50 space-y-3 dark:bg-amber-500/10 dark:border-amber-400/30">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                  Ожидаем реквизиты от оператора
                 </p>
               </div>
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <div className="flex items-center space-x-2.5 text-sm font-bold text-zinc-800 dark:text-zinc-200 bg-white/80 dark:bg-zinc-800/80 px-4 py-2 rounded-full border border-amber-300 shadow-xs">
-                  <Loader2 className="w-4 h-4 animate-spin stroke-[2.5]" />
-                  <span>Обычно это занимает не более 5 минут...</span>
-                </div>
-                <div className="font-mono font-black text-base text-zinc-950 dark:text-zinc-50 bg-white dark:bg-zinc-800 px-4 py-2 rounded-full border border-amber-300">
-                  {timeLeft}
-                </div>
+              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                Заявка в очереди. Первый свободный оператор отправит реквизиты
+                для оплаты — обычно это занимает не больше 5 минут.
+              </p>
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Страница обновляется автоматически
               </div>
             </div>
           )}
 
-          {order.status === "processing" && (
-            <div className="flex flex-col items-center text-center space-y-5 bg-blue-500/15 dark:bg-blue-500/10 border border-blue-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
-              <div className="w-14 h-14 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full flex items-center justify-center shadow-sm border border-blue-300">
-                <Loader2 className="w-7 h-7 animate-spin stroke-[2.5]" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
+          {status === "processing" && (
+            <div className="p-5 rounded-2xl border border-blue-200 bg-blue-50 space-y-3 dark:bg-blue-500/10 dark:border-blue-400/30">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                <p className="text-sm font-bold text-blue-900 dark:text-blue-200">
                   Заявка принята оператором
-                </h3>
-                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 max-w-lg leading-relaxed">
-                  Оператор взял ваш ордер в обработку. Пожалуйста, не закрывайте
-                  страницу, реквизиты появятся здесь в течение 1–2 минут.
-                </p>
-                <p className="font-mono font-black text-lg text-zinc-900 dark:text-zinc-50">
-                  Осталось: {timeLeft}
                 </p>
               </div>
+              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                Оператор готовит реквизиты. Они появятся на этой странице в
+                течение 1–2 минут.
+              </p>
             </div>
           )}
 
-          {order.status === "awaiting_payment" && (
-            <div className="flex flex-col space-y-6 bg-purple-500/15 dark:bg-purple-500/10 border border-purple-400/40 p-6 md:p-10 rounded-[24px] shadow-sm animate-fade-in text-left">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-purple-300/30 pb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-white dark:bg-zinc-800 text-purple-600 rounded-full flex items-center justify-center shadow-xs border border-purple-300">
-                    <Clock className="w-5 h-5 animate-pulse" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                      {payInIsCrypto
-                        ? "Отправьте крипту на указанный адрес"
-                        : "Заявка ожидает вашей оплаты"}
-                    </h3>
-                    <p className="text-xs text-zinc-500 font-medium">
-                      {payInIsCrypto
-                        ? "Переведите точную сумму на адрес кошелька мерчанта."
-                        : "Переведите точную сумму по указанным реквизитам."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-800 px-4 py-2 rounded-2xl border-2 border-purple-400 shadow-sm flex items-center space-x-2 shrink-0 self-start sm:self-center">
-                  <span className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
-                    Осталось:
-                  </span>
-                  <span className="font-mono font-black text-lg text-zinc-950 dark:text-zinc-50 tracking-wide">
-                    {timeLeft}
-                  </span>
-                </div>
+          {status === "awaiting_payment" && (
+            <div className="p-5 rounded-2xl border border-violet-200 bg-violet-50 space-y-4 dark:bg-violet-500/10 dark:border-violet-400/30">
+              <div>
+                <p className="text-sm font-bold text-violet-900 dark:text-violet-200">
+                  {payInIsCrypto
+                    ? "Отправьте крипту на указанный адрес"
+                    : "Оплатите заявку через СБП"}
+                </p>
+                <p className="text-xs font-medium text-zinc-500 mt-1">
+                  {payInIsCrypto
+                    ? "Переведите точную сумму на адрес кошелька мерчанта."
+                    : "Переведите точную сумму на указанный номер телефона в выбранный банк."}
+                </p>
               </div>
 
-              <div className="bg-white dark:bg-zinc-800 p-5 rounded-2xl border border-purple-300 shadow-xs space-y-2">
-                <span className="block text-[11px] font-black uppercase text-purple-500 tracking-wider">
-                  Инструкция и реквизиты мерчанта:
-                </span>
-                <div className="bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                  <PaymentRequisitesView value={order.payment_details} />
-                </div>
+              <div className="rounded-2xl bg-white border border-violet-200 p-4 space-y-2 dark:bg-zinc-900 dark:border-violet-400/30">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                  {payInIsCrypto ? "Реквизиты для оплаты" : "Реквизиты СБП"}
+                </p>
+                <PaymentRequisitesView value={order.payment_details} />
               </div>
 
               <div className="space-y-2">
-                <span className="block text-[11px] font-black uppercase text-purple-500 tracking-wider">
-                  Подтверждение платежа:
-                </span>
-                <label className="relative flex flex-col items-center justify-center border-2 border-dashed border-purple-400/60 bg-white dark:bg-zinc-800 hover:bg-purple-50/50 dark:hover:bg-purple-950/10 rounded-2xl p-6 text-center cursor-pointer transition-all group">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                  Чек об оплате (PDF)
+                </p>
+                <label className="relative flex flex-col items-center justify-center border-2 border-dashed border-violet-300 bg-white hover:bg-violet-50/60 rounded-2xl p-5 text-center cursor-pointer transition-all dark:bg-zinc-900 dark:border-violet-400/40 dark:hover:bg-violet-950/20">
                   <input
                     type="file"
                     accept="application/pdf"
@@ -405,145 +421,138 @@ export default function OrderStatusClient({
                     disabled={isUploading || isConfirming}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                   />
-
                   {isUploading ? (
                     <div className="space-y-2">
-                      <Loader2 className="w-8 h-8 animate-spin text-purple-500 mx-auto" />
-                      <p className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                        Загрузка файла чека в систему...
+                      <Loader2 className="w-6 h-6 animate-spin text-violet-600 mx-auto" />
+                      <p className="text-xs font-semibold text-zinc-600">
+                        Загрузка чека...
                       </p>
                     </div>
-                  ) : order.receipt_url || uploadSuccess ? (
-                    <div className="space-y-2 text-emerald-600 dark:text-emerald-400">
-                      <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto border border-emerald-400">
-                        <Check className="w-5 h-5" />
-                      </div>
-                      <p className="text-xs font-black uppercase tracking-wider">
-                        Чек успешно прикреплен!
-                      </p>
+                  ) : receiptReady ? (
+                    <div className="space-y-1.5 text-emerald-700 dark:text-emerald-400">
+                      <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-50 border border-emerald-200 mx-auto">
+                        <Check className="w-4 h-4" />
+                      </span>
+                      <p className="text-xs font-bold">Чек прикреплён</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      <Upload className="w-8 h-8 text-purple-400 group-hover:text-purple-600 mx-auto transition-colors" />
-                      <p className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
-                        Нажмите, чтобы прикрепить чек оплаты
-                      </p>
-                      <p className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">
-                        Принимаются только файлы в формате PDF
+                    <div className="space-y-1.5">
+                      <Upload className="w-6 h-6 text-violet-500 mx-auto" />
+                      <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                        Нажмите, чтобы прикрепить PDF-чек
                       </p>
                     </div>
                   )}
                 </label>
               </div>
 
-              <div className="pt-2 flex flex-col sm:flex-row gap-3">
-                <button
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
                   onClick={() => void handleConfirmPayment()}
                   disabled={isUploading || isConfirming || isCancelling}
-                  className="w-full sm:max-w-xs bg-purple-500 hover:bg-purple-600 disabled:bg-zinc-200 text-white font-bold py-4 rounded-full shadow-md transition-all text-sm cursor-pointer tracking-wide uppercase text-center inline-flex items-center justify-center gap-2"
+                  className="rounded-full h-11 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none"
                 >
                   {isConfirming && (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   )}
-                  Я оплатил, проверить транзакцию
-                </button>
-                <button
+                  Я оплатил
+                </Button>
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => void handleCancelClick()}
                   disabled={isUploading || isConfirming || isCancelling}
-                  className="w-full sm:w-auto px-6 py-4 rounded-full border border-rose-300 text-rose-600 hover:bg-rose-50 font-bold text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                  className="rounded-full h-11 px-6 font-bold border-rose-200 text-rose-700 hover:bg-rose-50"
                 >
                   {isCancelling && (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   )}
                   Отменить заявку
-                </button>
+                </Button>
               </div>
             </div>
           )}
 
-          {(order.status === "pending" || order.status === "processing") && (
-            <div className="flex justify-center pt-2">
-              <button
+          {status === "paid" && (
+            <div className="p-5 rounded-2xl border border-teal-200 bg-teal-50 space-y-3 dark:bg-teal-500/10 dark:border-teal-400/30">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+                <p className="text-sm font-bold text-teal-900 dark:text-teal-200">
+                  Платёж проверяется
+                </p>
+              </div>
+              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                Оператор проверяет ваш чек. Статус обновится автоматически.
+              </p>
+              {order.operator_receipt_url && (
+                <a
+                  href={`/api/orders/${order.id}/operator-receipt`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-800 hover:underline"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Подтверждение перевода (PDF)
+                </a>
+              )}
+            </div>
+          )}
+
+          {status === "completed" && (
+            <div
+              className={`p-5 rounded-2xl border space-y-3 ${orderStatusBannerClass("completed")}`}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                <p className="text-sm font-bold">Обмен успешно завершён</p>
+              </div>
+              <p className="text-sm font-medium">
+                Средства отправлены на указанные вами реквизиты.
+              </p>
+              {order.operator_receipt_url && (
+                <a
+                  href={`/api/orders/${order.id}/operator-receipt`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:underline"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Скачать подтверждение перевода (PDF)
+                </a>
+              )}
+            </div>
+          )}
+
+          {(status === "cancelled" || status === "failed") && (
+            <div
+              className={`p-5 rounded-2xl border space-y-2 ${orderStatusBannerClass("cancelled")}`}
+            >
+              <div className="flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-rose-700" />
+                <p className="text-sm font-bold">Заявка отменена</p>
+              </div>
+              <p className="text-sm font-medium">
+                Если средства уже были отправлены или остались вопросы —
+                напишите в поддержку.
+              </p>
+            </div>
+          )}
+
+          {(status === "pending" || status === "processing") && (
+            <div className="pt-1">
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => void handleCancelClick()}
                 disabled={isCancelling}
-                className="px-6 py-3 rounded-full border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                className="rounded-full h-11 px-6 font-bold border-rose-200 text-rose-700 hover:bg-rose-50"
               >
                 {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
                 Отменить заявку
-              </button>
-            </div>
-          )}
-
-          {order.status === "completed" && (
-            <div className="flex flex-col items-center text-center space-y-5 bg-emerald-500/15 dark:bg-emerald-500/10 border border-emerald-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
-              <div className="w-14 h-14 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full flex items-center justify-center shadow-sm border border-emerald-300">
-                <CheckCircle2 className="w-7 h-7 stroke-[2.5]" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                  Обмен успешно завершен!
-                </h3>
-                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 max-w-lg leading-relaxed">
-                  Средства были успешно отправлены на указанные вами реквизиты.
-                  Спасибо, что выбрали Aurum Swap!
-                </p>
-                {order.operator_receipt_url && (
-                  <a
-                    href={`/api/orders/${order.id}/operator-receipt`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 mt-4 bg-white dark:bg-zinc-800 border border-emerald-300 text-emerald-700 dark:text-emerald-400 font-bold text-sm px-5 py-3 rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Скачать подтверждение перевода (PDF)
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
-          {order.status === "cancelled" && (
-            <div className="flex flex-col items-center text-center space-y-5 bg-rose-500/15 dark:bg-rose-500/10 border border-rose-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
-              <div className="w-14 h-14 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full flex items-center justify-center shadow-sm border border-rose-300">
-                <XCircle className="w-7 h-7 stroke-[2.5]" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                  Заявка отменена
-                </h3>
-                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 max-w-lg leading-relaxed">
-                  Обмен отменён. Если средства уже были отправлены или остались
-                  вопросы — напишите в поддержку.
-                </p>
-              </div>
+              </Button>
             </div>
           )}
         </div>
-
-        {order.status === "paid" && (
-          <div className="flex flex-col items-center text-center space-y-5 bg-indigo-500/15 dark:bg-indigo-500/10 border border-indigo-400/40 p-8 md:p-12 rounded-[24px] shadow-sm">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-            <h3 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">
-              Платёж проверяется
-            </h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-md">
-              Оператор проверяет ваш чек. Статус обновится автоматически.
-            </p>
-            {order.operator_receipt_url && (
-              <a
-                href={`/api/orders/${order.id}/operator-receipt`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 bg-white dark:bg-zinc-800 border border-indigo-300 text-indigo-700 dark:text-indigo-300 font-bold text-sm px-5 py-3 rounded-full hover:bg-indigo-50 transition-colors"
-              >
-                <FileText className="w-4 h-4" />
-                Подтверждение перевода (PDF)
-              </a>
-            )}
-          </div>
-        )}
       </div>
       <ConfirmDialogHost />
     </div>
