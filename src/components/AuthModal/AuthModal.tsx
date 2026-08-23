@@ -122,7 +122,7 @@ export default function AuthModal({
     >
       <div className="absolute inset-0" onClick={onClose} />
       <div
-        className={`relative w-full max-w-[480px] overflow-hidden bg-white text-zinc-900 rounded-[32px] p-8 md:p-10 shadow-[0_24px_80px_rgba(24,24,27,0.2)] z-10 border border-zinc-200 transform transition-all duration-300 ease-in-out ${
+        className={`relative w-full max-w-[480px] overflow-x-hidden overflow-y-auto bg-white text-zinc-900 rounded-[32px] p-8 md:p-10 shadow-[0_24px_80px_rgba(24,24,27,0.2)] z-10 border border-zinc-200 transform transition-all duration-300 ease-in-out ${
           isAnimated ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >

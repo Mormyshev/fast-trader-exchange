@@ -1,10 +1,16 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { getRecaptchaSiteKey, isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
 
 type GrecaptchaV2 = {
-  ready: (cb: () => void) => void;
+  ready?: (cb: () => void) => void;
   render: (
     container: HTMLElement,
     params: {
@@ -23,47 +29,50 @@ type GrecaptchaV2 = {
 declare global {
   interface Window {
     grecaptcha?: GrecaptchaV2;
+    __onRecaptchaV2Load?: () => void;
   }
 }
 
-const SCRIPT_SRC =
-  "https://www.recaptcha.net/recaptcha/api.js?hl=ru&render=explicit";
+const CALLBACK_NAME = "__onRecaptchaV2Load";
+const SCRIPT_SRC = `https://www.recaptcha.net/recaptcha/api.js?hl=ru&render=explicit&onload=${CALLBACK_NAME}`;
 
 let scriptPromise: Promise<GrecaptchaV2> | null = null;
+
+function resolveApi(): GrecaptchaV2 | null {
+  const api = window.grecaptcha;
+  return api?.render ? api : null;
+}
 
 function loadRecaptchaV2(): Promise<GrecaptchaV2> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("reCAPTCHA is client-only"));
   }
-  if (window.grecaptcha?.render) {
-    return Promise.resolve(window.grecaptcha);
-  }
+
+  const existingApi = resolveApi();
+  if (existingApi) return Promise.resolve(existingApi);
   if (scriptPromise) return scriptPromise;
 
   scriptPromise = new Promise<GrecaptchaV2>((resolve, reject) => {
+    const finish = () => {
+      const api = resolveApi();
+      if (api) resolve(api);
+      else reject(new Error("reCAPTCHA failed to initialize"));
+    };
+
+    window[CALLBACK_NAME] = finish;
+
     const existing = document.querySelector<HTMLScriptElement>(
       `script[src="${SCRIPT_SRC}"]`,
     );
-    const onReady = () => {
-      const api = window.grecaptcha;
-      if (!api?.ready || !api.render) {
-        reject(new Error("reCAPTCHA failed to initialize"));
-        return;
-      }
-      api.ready(() => resolve(api));
-    };
-
     if (existing) {
-      if (window.grecaptcha?.render) {
-        onReady();
+      if (resolveApi()) {
+        finish();
         return;
       }
-      existing.addEventListener("load", onReady, { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("Не удалось загрузить капчу")),
-        { once: true },
-      );
+      existing.addEventListener("error", () => {
+        scriptPromise = null;
+        reject(new Error("Не удалось загрузить капчу"));
+      }, { once: true });
       return;
     }
 
@@ -71,16 +80,19 @@ function loadRecaptchaV2(): Promise<GrecaptchaV2> {
     script.src = SCRIPT_SRC;
     script.async = true;
     script.defer = true;
-    script.onload = onReady;
-    script.onerror = () => reject(new Error("Не удалось загрузить капчу"));
+    script.onerror = () => {
+      scriptPromise = null;
+      reject(new Error("Не удалось загрузить скрипт Google reCAPTCHA"));
+    };
     document.head.appendChild(script);
   });
 
-  void scriptPromise.catch(() => {
-    scriptPromise = null;
-  });
-
   return scriptPromise;
+}
+
+function renderWhenReady(api: GrecaptchaV2, render: () => void) {
+  if (api.ready) api.ready(render);
+  else render();
 }
 
 export type RecaptchaV2Handle = {
@@ -95,6 +107,7 @@ export const RecaptchaV2 = forwardRef<
   const hostRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<number | null>(null);
   const onChangeRef = useRef(onChange);
+  const [error, setError] = useState("");
   onChangeRef.current = onChange;
 
   useImperativeHandle(ref, () => ({
@@ -112,7 +125,11 @@ export const RecaptchaV2 = forwardRef<
   }));
 
   useEffect(() => {
-    if (!isRecaptchaEnabled()) return;
+    const siteKey = getRecaptchaSiteKey();
+    if (!siteKey) {
+      setError("Ключ капчи не попал в сборку. Задайте NEXT_PUBLIC_RECAPTCHA_SITE_KEY и пересоберите проект.");
+      return;
+    }
 
     let cancelled = false;
 
@@ -121,20 +138,24 @@ export const RecaptchaV2 = forwardRef<
         if (cancelled || !hostRef.current || widgetIdRef.current !== null) {
           return;
         }
-        api.ready(() => {
+        renderWhenReady(api, () => {
           if (cancelled || !hostRef.current || widgetIdRef.current !== null) {
             return;
           }
           widgetIdRef.current = api.render(hostRef.current, {
-            sitekey: getRecaptchaSiteKey(),
+            sitekey: siteKey,
             callback: (token) => onChangeRef.current(token),
             "expired-callback": () => onChangeRef.current(""),
             "error-callback": () => onChangeRef.current(""),
           });
+          setError("");
         });
       })
-      .catch(() => {
-        if (!cancelled) onChangeRef.current("");
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message || "Не удалось загрузить капчу");
+          onChangeRef.current("");
+        }
       });
 
     return () => {
@@ -142,11 +163,18 @@ export const RecaptchaV2 = forwardRef<
     };
   }, []);
 
-  if (!isRecaptchaEnabled()) return null;
+  if (!isRecaptchaEnabled() && !error) return null;
 
   return (
-    <div className="flex justify-center overflow-x-auto">
-      <div ref={hostRef} />
+    <div className="space-y-2">
+      <div className="flex min-h-[78px] justify-center overflow-x-auto">
+        <div ref={hostRef} />
+      </div>
+      {error ? (
+        <p className="text-center text-[11px] font-semibold leading-relaxed text-rose-500">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 });
