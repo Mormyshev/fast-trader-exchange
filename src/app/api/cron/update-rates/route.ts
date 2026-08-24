@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: !dbError,
     source: rates.source,
-    spread_note: "mid stored; ±3% applied on client by trade direction",
+    spread_note: "mid stored; client buy CBR+5 RUB, sell CBR-2 RUB per USDT",
     diagnostics: dbError ? { dbError } : "ok",
     updated: upsertRows.length,
     data: upsertRows,

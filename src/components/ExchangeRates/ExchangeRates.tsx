@@ -61,14 +61,23 @@ export default function ExchangeRates() {
   }, []);
 
   const usdtMid = rates["USDTUSDT"] || 0;
+  const buyUsdtRub = usdtMid > 0 ? applyBuySpread(usdtMid) : 0;
+  const sellUsdtRub = usdtMid > 0 ? applySellSpread(usdtMid) : 0;
 
   const rows = CRYPTO_ASSETS.map((asset) => {
     const midUsdt = rates[asset.bybitSymbol || ""] || 0;
-    const rubPerCoin =
-      asset.bybitSymbol === "USDTUSDT"
-        ? usdtMid
-        : midUsdt > 0 && usdtMid > 0
-          ? midUsdt * usdtMid
+    const isUsdt = asset.bybitSymbol === "USDTUSDT";
+    const buy =
+      isUsdt
+        ? buyUsdtRub
+        : midUsdt > 0 && buyUsdtRub > 0
+          ? midUsdt * buyUsdtRub
+          : 0;
+    const sell =
+      isUsdt
+        ? sellUsdtRub
+        : midUsdt > 0 && sellUsdtRub > 0
+          ? midUsdt * sellUsdtRub
           : 0;
 
     return {
@@ -76,8 +85,8 @@ export default function ExchangeRates() {
       code: asset.code,
       name: asset.name,
       iconSrc: asset.iconSrc,
-      buy: rubPerCoin > 0 ? applyBuySpread(rubPerCoin) : 0,
-      sell: rubPerCoin > 0 ? applySellSpread(rubPerCoin) : 0,
+      buy,
+      sell,
     };
   });
 
@@ -86,12 +95,7 @@ export default function ExchangeRates() {
 
   return (
     <div className="bg-white p-6 rounded-3xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
-      <div className="flex items-baseline justify-between gap-3 mb-4">
-        <h3 className="text-zinc-900 font-bold text-xl">Курсы</h3>
-        <span className="text-[11px] font-semibold text-zinc-400">
-          RUB · ±3%
-        </span>
-      </div>
+      <h3 className="text-zinc-900 font-bold text-xl mb-4">Курсы</h3>
 
       <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-[11px] font-bold text-zinc-400 px-1 mb-2">
         <span>Актив</span>

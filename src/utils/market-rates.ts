@@ -1,7 +1,9 @@
 import axios from "axios";
 
-/** Отступ от рыночного mid в обе стороны */
-export const RATE_SPREAD = 0.03;
+/** Клиент покупает крипту: к курсу ЦБ +5 ₽ за 1 USDT */
+export const CLIENT_BUY_MARKUP_RUB = 5;
+/** Клиент продаёт крипту: от курса ЦБ −2 ₽ за 1 USDT */
+export const CLIENT_SELL_MARKDOWN_RUB = 2;
 
 export type MarketRates = {
   /** Mid: сколько RUB за 1 USDT */
@@ -20,14 +22,15 @@ export type RateRow = {
   updated_at: string;
 };
 
-/** Курс для покупки крипты за RUB (пользователь платит больше) */
+/** Курс покупки крипты за RUB (клиент платит ЦБ + 5 ₽ за USDT) */
 export function applyBuySpread(midRubPerUsdt: number): number {
-  return midRubPerUsdt * (1 + RATE_SPREAD);
+  return midRubPerUsdt + CLIENT_BUY_MARKUP_RUB;
 }
 
-/** Курс для продажи крипты за RUB (пользователь получает меньше) */
+/** Курс продажи крипты за RUB (клиент получает ЦБ − 2 ₽ за USDT) */
 export function applySellSpread(midRubPerUsdt: number): number {
-  return midRubPerUsdt * (1 - RATE_SPREAD);
+  const next = midRubPerUsdt - CLIENT_SELL_MARKDOWN_RUB;
+  return next > 0 ? next : midRubPerUsdt;
 }
 
 type RapiraRate = {
@@ -46,6 +49,86 @@ function midFromRapira(row: RapiraRate | undefined): number | null {
   }
   const close = Number(row.close);
   return Number.isFinite(close) && close > 0 ? close : null;
+}
+
+function parseCbrNumber(raw: string | undefined): number {
+  if (!raw) return NaN;
+  return Number(raw.replace(/\s/g, "").replace(",", "."));
+}
+
+/** Официальный курс ЦБ: рублей за 1 USD (USDT считаем как USD). */
+function parseCbrRubPerUsd(xml: string): number | null {
+  const block = xml.split(/<\/Valute>/i).find((part) =>
+    /<CharCode>\s*USD\s*<\/CharCode>/i.test(part),
+  );
+  if (!block) return null;
+
+  const nominal = parseCbrNumber(block.match(/<Nominal>([\d\s]+)<\/Nominal>/i)?.[1]);
+  const value = parseCbrNumber(block.match(/<Value>([\d\s,]+)<\/Value>/i)?.[1]);
+  if (!(nominal > 0) || !(value > 0)) return null;
+  return value / nominal;
+}
+
+function moscowDateReq(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).formatToParts(date);
+  const day = parts.find((part) => part.type === "day")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const year = parts.find((part) => part.type === "year")?.value;
+  return `${day}/${month}/${year}`;
+}
+
+async function fetchCbrXml(url: string): Promise<number | null> {
+  const res = await axios.get(url, {
+    timeout: 8000,
+    signal: AbortSignal.timeout(8000),
+    responseType: "text",
+    headers: {
+      Accept: "application/xml, text/xml, */*",
+      "User-Agent": "AurumSwap/1.0",
+    },
+  });
+  const xml = typeof res.data === "string" ? res.data : String(res.data ?? "");
+  const rate = parseCbrRubPerUsd(xml);
+  return rate && rate > 0 ? Number(rate.toFixed(4)) : null;
+}
+
+async function fetchCbrJsonMirror(): Promise<number | null> {
+  const res = await axios.get("https://www.cbr-xml-daily.ru/daily_json.js", {
+    timeout: 8000,
+    signal: AbortSignal.timeout(8000),
+    headers: { Accept: "application/json" },
+  });
+  const usd = res.data?.Valute?.USD;
+  const nominal = Number(usd?.Nominal);
+  const value = Number(usd?.Value);
+  if (!(nominal > 0) || !(value > 0)) return null;
+  return Number((value / nominal).toFixed(4));
+}
+
+/** Официальный USD/RUB ЦБ РФ. USDT на сайте считается по этому курсу, без спреда. */
+export async function fetchCbrUsdRub(): Promise<number | null> {
+  const dated = `https://www.cbr.ru/scripts/XML_daily.asp?date_req=${encodeURIComponent(moscowDateReq())}`;
+  const latest = "https://www.cbr.ru/scripts/XML_daily.asp";
+
+  for (const url of [dated, latest]) {
+    try {
+      const rate = await fetchCbrXml(url);
+      if (rate) return rate;
+    } catch {
+      // следующий источник ЦБ
+    }
+  }
+
+  try {
+    return await fetchCbrJsonMirror();
+  } catch {
+    return null;
+  }
 }
 
 async function fetchRapiraRates(): Promise<Partial<MarketRates> & { ok: boolean }> {
@@ -107,8 +190,9 @@ async function fetchBinanceLast(symbol: string): Promise<number | null> {
 }
 
 /**
- * Берём mid с Rapira (USDT/RUB + крипта), недостающее — с Bybit / Binance.
- * Спред ±3% на клиенте / при расчёте заявки, в БД храним mid.
+ * Рубль: ЦБ РФ (USD/RUB как USDT), затем Rapira USDT/RUB.
+ * Крипта: Rapira, затем Bybit, TON — Bybit затем Binance.
+ * В БД храним mid ЦБ. Клиенту: покупка +5 ₽, продажа −2 ₽ за 1 USDT.
  */
 export async function fetchMarketRates(): Promise<MarketRates> {
   const defaults: MarketRates = {
@@ -120,16 +204,20 @@ export async function fetchMarketRates(): Promise<MarketRates> {
     source: "fallback",
   };
 
-  const rapira = await fetchRapiraRates();
+  const [cbrUsdRub, rapira] = await Promise.all([
+    fetchCbrUsdRub(),
+    fetchRapiraRates(),
+  ]);
   const sources: string[] = [];
 
-  let USDTUSDT = rapira.USDTUSDT ?? defaults.USDTUSDT;
+  let USDTUSDT = cbrUsdRub ?? rapira.USDTUSDT ?? defaults.USDTUSDT;
   let BTCUSDT = rapira.BTCUSDT ?? defaults.BTCUSDT;
   let ETHUSDT = rapira.ETHUSDT ?? defaults.ETHUSDT;
   let SOLUSDT = rapira.SOLUSDT ?? defaults.SOLUSDT;
   let TONUSDT = defaults.TONUSDT;
 
-  if (rapira.USDTUSDT) sources.push("rapira:USDT/RUB");
+  if (cbrUsdRub) sources.push("cbr:USD/RUB");
+  else if (rapira.USDTUSDT) sources.push("rapira:USDT/RUB");
   if (rapira.BTCUSDT) sources.push("rapira:BTC");
   if (rapira.ETHUSDT) sources.push("rapira:ETH");
   if (rapira.SOLUSDT) sources.push("rapira:SOL");
@@ -186,7 +274,7 @@ export function ratesToUpsertRows(rates: MarketRates): RateRow[] {
   return symbols.map((symbol) => ({
     symbol,
     base_price: rates[symbol],
-    // mid в exchange_price; ±3% применяется в UI по направлению сделки
+    // mid в exchange_price; +5 / −2 ₽ к USDT применяются в UI по направлению
     exchange_price: rates[symbol],
     updated_at,
   }));

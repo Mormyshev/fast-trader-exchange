@@ -374,7 +374,7 @@ export function isRubPayout(currencyTo: string | null | undefined): boolean {
 
 /**
  * Сколько единиц receive за 1 единицу send.
- * Buy (RUB→crypto): mid × 1.03; Sell (crypto→RUB): mid × 0.97.
+ * Mid — официальный USD ЦБ. Клиенту: покупка ЦБ+5 ₽, продажа ЦБ−2 ₽ за 1 USDT.
  */
 export function getPairRate(
   rates: Record<string, number>,

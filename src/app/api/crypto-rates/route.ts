@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
+  fetchCbrUsdRub,
   fetchMarketRates,
   ratesToUpsertRows,
 } from "@/src/utils/market-rates";
@@ -70,10 +71,13 @@ export async function GET() {
   }
 
   if (!isStale(rows)) {
-    return ratesResponse(
-      rows.map(({ symbol, exchange_price }) => ({ symbol, exchange_price })),
-      { "X-Rates-Refreshed": "0" },
-    );
+    const cbrUsdRub = await fetchCbrUsdRub();
+    const payload = rows.map(({ symbol, exchange_price }) => ({
+      symbol,
+      exchange_price:
+        symbol === "USDTUSDT" && cbrUsdRub ? cbrUsdRub : exchange_price,
+    }));
+    return ratesResponse(payload, { "X-Rates-Refreshed": "0" });
   }
 
   const rates = await fetchMarketRates();

@@ -17,7 +17,7 @@ export default function CurrencyIcon({
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center self-center rounded-lg bg-white ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center self-center overflow-hidden rounded-lg bg-white ${className}`}
       style={{ width: size, height: size }}
     >
       <Image
