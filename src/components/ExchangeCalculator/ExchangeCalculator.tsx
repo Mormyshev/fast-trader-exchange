@@ -220,30 +220,6 @@ export default function ExchangeCalculator() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    function onSelectPair(event: Event) {
-      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
-      if (!id) return;
-
-      setSelectedSend((send) => {
-        if (id === "sbp") return FIAT_CURRENCIES[0];
-        return isCryptoCurrency(send) ? FIAT_CURRENCIES[0] : send;
-      });
-      setSelectedReceive((receive) => {
-        if (id === "sbp") {
-          return isCryptoCurrency(receive) ? receive : CRYPTO_CURRENCIES[0];
-        }
-        return resolveCurrencyVariant(id) ?? receive;
-      });
-      setIsSendActive(true);
-      setIsSendDropdownOpen(false);
-      setIsReceiveDropdownOpen(false);
-    }
-
-    window.addEventListener("aurum:select-pair", onSelectPair);
-    return () => window.removeEventListener("aurum:select-pair", onSelectPair);
-  }, []);
-
   const handleSwap = () => {
     const cryptoAmount = isSendCrypto ? sendAmount : receiveAmount;
     const nextSend = selectedReceive;
