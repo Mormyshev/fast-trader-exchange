@@ -10,14 +10,14 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="w-full bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-900 pt-12 pb-10 md:pt-16 md:pb-12 transition-colors duration-200 relative">
+    <footer className="w-full bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-900 pt-6 pb-4 md:pt-8 md:pb-5 transition-colors duration-200 relative">
       <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50">
         <ChatWidget />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-8 md:gap-6 pb-10 border-b border-gray-100 dark:border-zinc-900/60 w-full">
-          <div className="flex flex-col items-start text-left space-y-1.5 shrink-0 w-full md:w-auto">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-5 md:gap-6 pb-4 border-b border-gray-100 dark:border-zinc-900/60 w-full">
+          <div className="flex flex-col items-start text-left shrink-0 w-full md:w-auto">
             <Link href="/" className="flex items-center space-x-3 group">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -38,9 +38,9 @@ export default function Footer() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-6 gap-y-6 w-full md:flex md:flex-row md:justify-start md:gap-12 lg:gap-20">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 w-full md:flex md:flex-row md:justify-start md:gap-12 lg:gap-20">
             <nav
-              className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400"
+              className="flex flex-col space-y-2 text-[13px] font-medium text-gray-600 dark:text-zinc-400"
               aria-label="Правовая информация"
             >
               <Link
@@ -64,7 +64,7 @@ export default function Footer() {
             </nav>
 
             <nav
-              className="flex flex-col space-y-3 text-[13px] font-medium text-gray-600 dark:text-zinc-400"
+              className="flex flex-col space-y-2 text-[13px] font-medium text-gray-600 dark:text-zinc-400"
               aria-label="Сообщество и конфиденциальность"
             >
               <a
@@ -84,10 +84,10 @@ export default function Footer() {
             </nav>
           </div>
 
-          <div className="w-full md:w-auto flex justify-start md:justify-end shrink-0 pt-2 md:pt-0">
+          <div className="w-full md:w-auto flex justify-start md:justify-end shrink-0">
             <a
               href="mailto:hello@aurumswap.demo"
-              className="inline-flex items-center space-x-2 bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 text-xs font-bold px-6 py-4 rounded-full shadow-xs transition-all active:scale-95 w-full sm:w-auto justify-center whitespace-nowrap"
+              className="inline-flex items-center space-x-2 bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 text-xs font-bold px-5 py-2.5 rounded-full shadow-xs transition-all active:scale-95 w-full sm:w-auto justify-center whitespace-nowrap"
             >
               <Mail className="w-4 h-4 stroke-[2.2]" />
               <span>hello@aurumswap.demo</span>
@@ -95,9 +95,9 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="pt-6 w-full text-center">
-          <p className="text-xs font-medium text-gray-400 dark:text-zinc-500">
-            &copy; 2024 &mdash; {currentYear} aurumswap.demo
+        <div className="pt-3 w-full text-center">
+          <p className="text-[11px] font-medium text-gray-400 dark:text-zinc-500 leading-none">
+            &copy; 2024 &mdash; {currentYear} aurumswap.demo. Все права защищены.
           </p>
         </div>
       </div>

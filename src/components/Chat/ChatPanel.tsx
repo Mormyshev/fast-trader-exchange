@@ -9,8 +9,16 @@ import { subscribeSupportInbox } from "@/src/utils/supabase/support-inbox";
 import type { ChatConversation, ChatMessage } from "@/src/utils/chat/types";
 import { MAX_CHAT_ATTACHMENT_BYTES } from "@/src/utils/chat/types";
 import OperatorAvatar from "./OperatorAvatar";
+import { useAuth } from "@/src/app/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
+import {
+  getAssignedStaffRole,
+  supportJoinedMessage,
+  supportOnlineSubtitle,
+  supportStaffTitle,
+  supportWaitingLabel,
+} from "@/src/utils/chat/support-join";
 
 type ChatPanelProps = {
   conversationId: string;
@@ -24,8 +32,11 @@ type ChatPanelProps = {
 };
 
 function getOperatorDisplayName(conversation?: ChatConversation | null) {
-  const pseudonym = conversation?.operator?.operator_pseudonym?.trim();
-  return pseudonym || null;
+  return (
+    conversation?.assigned_operator?.operator_pseudonym?.trim() ||
+    conversation?.operator?.operator_pseudonym?.trim() ||
+    null
+  );
 }
 
 function startOfDay(date: Date) {
@@ -48,6 +59,29 @@ function formatDayLabel(iso: string) {
     month: "long",
     year: "numeric",
   });
+}
+
+function LiveStatus({ label }: { label: string }) {
+  return (
+    <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+      </span>
+      {label}
+    </p>
+  );
+}
+
+function SupportJoinedNotice({ role }: { role: "operator" | "admin" }) {
+  return (
+    <div className="flex justify-center">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-800">
+        <span className="size-1.5 rounded-full bg-emerald-500" />
+        {supportJoinedMessage(role)}
+      </span>
+    </div>
+  );
 }
 
 function formatTime(iso: string) {
@@ -77,8 +111,12 @@ export default function ChatPanel({
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
+  const { staffActive, role } = useAuth();
+  const workEnabled = mode !== "operator" || staffActive;
 
   const operatorName = getOperatorDisplayName(conversation);
+  const assignedRole = getAssignedStaffRole(conversation);
+  const staffTitle = supportStaffTitle(assignedRole);
   const isAssignedToMe =
     mode === "operator" &&
     !!conversation?.operator_id &&
@@ -92,9 +130,11 @@ export default function ChatPanel({
   const assignedStaffName =
     conversation?.assigned_operator?.operator_pseudonym?.trim() || null;
   const canSend =
-    mode === "user" ||
-    (canReply && (!conversation?.operator_id || isAssignedToMe));
+    workEnabled &&
+    (mode === "user" ||
+      (canReply && (!conversation?.operator_id || isAssignedToMe)));
   const canTakeDialog =
+    workEnabled &&
     !!showClaimButton &&
     canReply &&
     !!onClaim &&
@@ -267,7 +307,7 @@ export default function ChatPanel({
   };
 
   const handleClaim = async () => {
-    if (!onClaim || claiming) return;
+    if (!onClaim || claiming || !workEnabled) return;
 
     const ok = await confirm(
       conversation?.operator_id
@@ -281,7 +321,9 @@ export default function ChatPanel({
         : {
             title: "Взять диалог в работу?",
             description:
-              "Клиент увидит вас как оператора поддержки в этом чате.",
+              role === "admin"
+                ? "Клиент увидит, что к чату подключился администратор."
+                : "Клиент увидит, что к чату подключилась техподдержка.",
             confirmLabel: "Взять в работу",
           },
     );
@@ -300,20 +342,21 @@ export default function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 max-h-full bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
-      <div className="px-4 py-3 border-b border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] dark:from-amber-950/40 dark:to-amber-950/20 flex items-center justify-between gap-3 shrink-0">
+    <div className="flex flex-col h-full min-h-0 max-h-full bg-white dark:bg-zinc-950 rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+      <div className="px-4 py-3 border-b border-zinc-100 bg-[#FFF8D6] dark:from-amber-950/40 dark:to-amber-950/20 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           {mode === "user" ? (
-            operatorName ? (
+            operatorName && assignedRole ? (
               <>
-                <OperatorAvatar name={operatorName} size="sm" />
+                <div className="relative shrink-0">
+                  <OperatorAvatar name={operatorName} size="sm" />
+                  <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[#FFF8D6] bg-emerald-500" />
+                </div>
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
                     {operatorName}
                   </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold">
-                    Оператор поддержки
-                  </p>
+                  <LiveStatus label={supportOnlineSubtitle(assignedRole)} />
                 </div>
               </>
             ) : (
@@ -322,7 +365,7 @@ export default function ChatPanel({
                   Поддержка Aurum Swap
                 </p>
                 <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
-                  Ожидайте оператора
+                  {supportWaitingLabel()}
                 </p>
               </div>
             )
@@ -331,15 +374,23 @@ export default function ChatPanel({
               <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
                 {conversation?.user?.email ?? "Клиент"}
               </p>
-              <p className="text-xs text-zinc-500 truncate">
-                {!conversation?.operator_id
-                  ? "Не назначен"
-                  : isAssignedToMe
-                    ? "Ваш диалог"
-                    : assignedStaffName
-                      ? `В работе у: ${assignedStaffName}`
-                      : "В работе у другого оператора"}
-              </p>
+              {!conversation?.operator_id ? (
+                <p className="text-xs text-zinc-500 truncate">
+                  Ожидает подключения поддержки
+                </p>
+              ) : isAssignedToMe ? (
+                <LiveStatus
+                  label={`Вы подключены · ${staffTitle}`}
+                />
+              ) : (
+                <p className="text-xs text-zinc-500 truncate">
+                  {assignedStaffName
+                    ? assignedRole === "admin"
+                      ? `Подключён администратор: ${assignedStaffName}`
+                      : `Подключена техподдержка: ${assignedStaffName}`
+                    : "В работе у другого сотрудника"}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -360,24 +411,38 @@ export default function ChatPanel({
         )}
       </div>
 
-      {!canReply && mode === "operator" && (
-        <div className="px-4 py-3 bg-amber-100/80 border-b border-amber-200/70 text-sm text-amber-950 shrink-0">
-          Заполните{" "}
-          <Link
-            href="/operator/profile"
-            className="font-bold underline underline-offset-2"
-          >
-            профиль оператора
-          </Link>
-          , чтобы отвечать в чате.
+      {mode === "operator" && !staffActive && (
+        <div className="px-4 py-3 bg-[#FFF8D6] border-b border-amber-200/70 text-sm text-zinc-700 shrink-0">
+          Включите активный режим, чтобы брать чаты и отвечать клиентам.
         </div>
       )}
 
-      {isAssignedToOther && (
+      {!canReply && mode === "operator" && workEnabled && (
+        <div className="px-4 py-3 bg-amber-100/80 border-b border-amber-200/70 text-sm text-amber-950 shrink-0">
+          {role === "admin" ? (
+            <>
+              Назначьте псевдоним в разделе{" "}
+              <Link
+                href="/admin/profile"
+                className="font-bold underline underline-offset-2"
+              >
+                Операторы
+              </Link>
+              , чтобы отвечать в чате.
+            </>
+          ) : (
+            "Псевдоним ещё не назначен. Обратитесь к администратору, чтобы отвечать в чате."
+          )}
+        </div>
+      )}
+
+      {isAssignedToOther && workEnabled && (
         <div className="px-4 py-3 bg-zinc-100 border-b border-zinc-200 text-sm text-zinc-700 shrink-0">
           {assignedStaffName
-            ? `Диалог в работе у ${assignedStaffName}.`
-            : "Диалог в работе у другого оператора."}{" "}
+            ? assignedRole === "admin"
+              ? `Диалог ведёт администратор ${assignedStaffName}.`
+              : `Диалог ведёт техподдержка: ${assignedStaffName}.`
+            : "Диалог в работе у другого сотрудника."}{" "}
           Нажмите «Взять диалог на себя», чтобы ответить.
         </div>
       )}
@@ -388,13 +453,20 @@ export default function ChatPanel({
             <Loader2 className="w-6 h-6 animate-spin text-[#FFDD2D]" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="rounded-2xl border border-amber-200/40 bg-[#FFF9E6] dark:bg-amber-950/20 px-4 py-6 text-center">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Напишите сообщение — оператор ответит в ближайшее время.
-            </p>
+          <div className="space-y-4">
+            {assignedRole ? <SupportJoinedNotice role={assignedRole} /> : null}
+            <div className="rounded-2xl border border-amber-200/40 bg-[#FFF9E6] dark:bg-amber-950/20 px-4 py-6 text-center">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                {assignedRole
+                  ? "Можно писать — сотрудник уже в чате."
+                  : "Напишите сообщение — поддержка ответит в ближайшее время."}
+              </p>
+            </div>
           </div>
         ) : (
-          messages.map((message, index) => {
+          <>
+            {assignedRole ? <SupportJoinedNotice role={assignedRole} /> : null}
+            {messages.map((message, index) => {
             const isMine =
               mode === "user"
                 ? message.sender_id === conversation?.user_id
@@ -467,7 +539,8 @@ export default function ChatPanel({
               </div>
               </div>
             );
-          })
+          })}
+          </>
         )}
         <div ref={bottomRef} />
       </div>

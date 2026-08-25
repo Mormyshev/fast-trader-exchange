@@ -22,7 +22,7 @@ export default async function StaffLayout({
   const { data: profile } = await withTimeout(
     admin
       .from("profiles")
-      .select("role, operator_pseudonym")
+      .select("role, operator_pseudonym, staff_active")
       .eq("id", user.id)
       .maybeSingle(),
     5000,
@@ -36,9 +36,14 @@ export default async function StaffLayout({
   }
 
   const operatorPseudonym = profile?.operator_pseudonym?.trim() || null;
+  const initialStaffActive = profile?.staff_active === true;
 
   return (
-    <StaffLayoutClient role={role} initialOperatorPseudonym={operatorPseudonym}>
+    <StaffLayoutClient
+      role={role}
+      initialOperatorPseudonym={operatorPseudonym}
+      initialStaffActive={initialStaffActive}
+    >
       {children}
     </StaffLayoutClient>
   );

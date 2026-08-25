@@ -9,7 +9,7 @@ export function getStaffPseudonym(
 }
 
 export const STAFF_PSEUDONYM_REQUIRED =
-  "Заполните псевдоним в профиле оператора перед ответом в чате";
+  "Псевдоним ещё не назначен. Обратитесь к администратору.";
 
 export function buildOperatorMeta(
   row: Record<string, unknown>,
@@ -28,7 +28,8 @@ export function buildOperatorMeta(
       : "";
 
   return {
-    operator_pseudonym: snapshot || live || null,
+    operator_pseudonym: live || snapshot || null,
+    role: operatorProfile?.role === "admin" ? "admin" : "operator",
   };
 }
 
@@ -46,6 +47,7 @@ export function buildAssignedOperatorMeta(
   return {
     id: String(row.operator_id),
     operator_pseudonym: pseudonym || null,
+    role: operatorProfile?.role === "admin" ? "admin" : "operator",
   };
 }
 
@@ -146,6 +148,7 @@ export async function takeoverConversation(
   admin: any,
   conversationId: string,
   staffUserId: string,
+  pseudonym: string,
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const loaded = await loadStaffConversation(admin, conversationId);
   if (!loaded.ok) return loaded;
@@ -161,6 +164,13 @@ export async function takeoverConversation(
   }
 
   if (row.operator_id === staffUserId) {
+    if (row.operator_pseudonym_snapshot !== pseudonym) {
+      await admin
+        .from("chat_conversations")
+        .update({ operator_pseudonym_snapshot: pseudonym })
+        .eq("id", conversationId)
+        .eq("operator_id", staffUserId);
+    }
     return { ok: true };
   }
 
@@ -170,6 +180,7 @@ export async function takeoverConversation(
     .from("chat_conversations")
     .update({
       operator_id: staffUserId,
+      operator_pseudonym_snapshot: pseudonym,
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversationId)

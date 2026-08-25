@@ -3,24 +3,29 @@
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
 
 export default function SettingsPage() {
   return (
-    <div className="max-w-2xl mx-auto space-y-6 text-zinc-900 font-sans">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6 md:p-8 space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-zinc-100 flex items-center justify-center text-zinc-500">
-          <Settings className="w-6 h-6" />
+    <div className="w-full space-y-4 sm:space-y-6 lg:space-y-8 text-zinc-900 font-sans">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+          <Settings className="h-5 w-5 sm:h-6 sm:w-6" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Настройки системы
-        </h1>
-        <p className="text-sm text-zinc-500 font-medium leading-relaxed">
-          Раздел в разработке. Здесь появятся системные параметры и
-          конфигурация обменника.
+        <StaffPageHeader
+          title="Настройки системы"
+          description="Системные параметры и конфигурация обменника"
+        />
+      </div>
+
+      <div className="rounded-2xl bg-white p-5 sm:p-8 md:p-10 shadow-[0_4px_24px_rgba(15,23,42,0.04)] min-h-[16rem] flex flex-col justify-center">
+        <p className="text-sm font-medium leading-relaxed text-zinc-500 max-w-xl">
+          Раздел в разработке. Здесь появятся системные параметры и конфигурация
+          обменника.
         </p>
         <Button
           asChild
-          className="rounded-full h-10 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none"
+          className="mt-6 w-fit rounded-full h-10 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none"
         >
           <Link href="/operator/dashboard">Вернуться на дашборд</Link>
         </Button>

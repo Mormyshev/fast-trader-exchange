@@ -40,9 +40,9 @@ const TONE: Record<
     shell: "border-amber-200",
   },
   processing: {
-    header: "bg-blue-100 border-blue-200",
-    badge: "bg-white text-blue-900 border-blue-200",
-    shell: "border-blue-200",
+    header: "bg-[#FFF4C2] border-[#FFE58A]",
+    badge: "bg-white text-zinc-900 border-[#FFE58A]",
+    shell: "border-[#FFE58A]",
   },
   awaiting: {
     header: "bg-violet-100 border-violet-200",
@@ -101,7 +101,7 @@ export default function OperatorOrderCard({
 
   return (
     <article
-      className={`min-w-0 overflow-hidden rounded-2xl bg-white border ${toneStyle.shell} shadow-[0_1px_2px_rgba(15,23,42,0.06)]`}
+      className={`min-w-0 overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)] border ${toneStyle.shell}`}
     >
       <header
         className={`flex flex-wrap items-start justify-between gap-2 px-3 min-[380px]:px-3.5 sm:px-5 py-3 sm:py-3.5 border-b ${toneStyle.header}`}

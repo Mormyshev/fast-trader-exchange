@@ -28,10 +28,12 @@ export type ChatConversation = {
   };
   operator?: {
     operator_pseudonym?: string | null;
+    role?: "operator" | "admin" | null;
   } | null;
   assigned_operator?: {
     id: string;
     operator_pseudonym?: string | null;
+    role?: "operator" | "admin" | null;
   } | null;
   last_message?: ChatMessage | null;
   unread?: boolean;

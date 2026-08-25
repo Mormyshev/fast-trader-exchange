@@ -28,10 +28,12 @@ import {
 import OperatorPayInForm from "@/src/components/PaymentRequisites/OperatorPayInForm";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
 import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
+import AdminOrderAssignee from "@/src/components/staff/AdminOrderAssignee";
 import {
   orderStatusBadgeClass,
   orderStatusBannerClass,
 } from "@/src/utils/orders/status-style";
+import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
 
 type OrderStatus =
   | "pending"
@@ -82,7 +84,7 @@ function statusLabel(status: OrderStatus) {
 export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const router = useRouter();
   const supabase = createClient();
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, role, staffActive, isLoading: isAuthLoading } = useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -188,6 +190,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleClaim = async () => {
     if (!user?.id || !order) return;
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
 
     const ok = await confirm({
       title: "Взять заявку в работу?",
@@ -224,6 +230,14 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleSendDetails = async () => {
     if (!order) return;
+    if (role !== "admin" && order.operator_id !== user?.id) {
+      alert("Эту заявку ведёт другой оператор.");
+      return;
+    }
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
     const check = buildOperatorPaymentDetails(order.currency_from, {
       phone,
       bankId,
@@ -269,6 +283,14 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleComplete = async (status: "completed" | "cancelled") => {
     if (!order) return;
+    if (role !== "admin" && order.operator_id !== user?.id) {
+      alert("Эту заявку ведёт другой оператор.");
+      return;
+    }
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
 
     if (
       status === "completed" &&
@@ -317,6 +339,16 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     if (!order) return;
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      e.target.value = "";
+      return;
+    }
+    if (role !== "admin" && order.operator_id !== user?.id) {
+      alert("Эту заявку ведёт другой оператор.");
+      e.target.value = "";
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -369,6 +401,9 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
     );
   }
 
+  const canManageProcess =
+    role === "admin" || order.operator_id === user?.id;
+
   return (
     <div className="max-w-4xl mx-auto space-y-4 sm:space-y-5 lg:space-y-6 text-zinc-900 font-sans">
       <Link
@@ -378,7 +413,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
         <ArrowLeft className="w-4 h-4" />К активным ордерам
       </Link>
 
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_28px_rgba(15,23,42,0.04)]">
+      <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
         <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-5 sm:space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-4 sm:pb-5 border-b border-zinc-100">
           <div className="min-w-0">
@@ -413,7 +448,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-zinc-100 border border-zinc-200 px-3.5 sm:px-5 py-4">
+        <div className="rounded-2xl bg-[#FFF8D6] px-3.5 sm:px-5 py-4">
           <OrderExchangePair
             amountFrom={order.amount_from}
             amountTo={order.amount_to}
@@ -423,7 +458,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-          <div className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 space-y-2">
+          <div className="rounded-2xl bg-[#F4F5F7] p-4 space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
               {clientPaysWithCrypto(order.currency_from)
                 ? "Реквизиты получения клиента"
@@ -436,7 +471,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
           <StaffClientInfo client={order.client} />
 
-          <div className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 space-y-3 md:col-span-2">
+          <div className="rounded-2xl bg-[#F4F5F7] p-4 space-y-3 md:col-span-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
               Реквизиты для клиента
             </p>
@@ -459,6 +494,18 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             Управление заявкой
           </h2>
 
+          {role === "admin" &&
+            (order.status === "processing" ||
+              order.status === "awaiting_payment" ||
+              order.status === "paid") && (
+              <AdminOrderAssignee
+                orderId={order.id}
+                currentOperatorId={order.operator_id}
+                staffActive={staffActive}
+                onAssigned={(next) => setOrder(next as Order)}
+              />
+            )}
+
           {order.status === "pending" && (
             <div className="space-y-3">
               <p className="text-sm text-zinc-600 font-medium">
@@ -466,7 +513,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                 реквизиты.
               </p>
               <Button
-                disabled={saving}
+                disabled={saving || !staffActive}
                 onClick={handleClaim}
                 className="rounded-full h-11 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none"
               >
@@ -475,7 +522,8 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             </div>
           )}
 
-          {order.status === "processing" && (
+          {order.status === "processing" &&
+            (canManageProcess ? (
             <div className="space-y-3 max-w-xl">
               <label className="block text-xs font-bold text-zinc-500 uppercase">
                 {clientPaysWithCrypto(order.currency_from)
@@ -492,14 +540,19 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                 onWalletChange={setPayWallet}
               />
               <Button
-                disabled={saving}
+                disabled={saving || !staffActive}
                 onClick={handleSendDetails}
                 className="rounded-full h-11 px-6 font-bold bg-zinc-900 hover:bg-zinc-800 text-white shadow-none"
               >
                 {saving ? "..." : "Отправить реквизиты клиенту"}
               </Button>
             </div>
-          )}
+            ) : (
+              <p className="text-sm font-medium text-zinc-600">
+                Эту заявку ведёт другой оператор. Завершить её или сменить
+                исполнителя может администратор.
+              </p>
+            ))}
 
           {order.status === "awaiting_payment" && (
             <div className="p-5 bg-violet-50 rounded-2xl border border-violet-200 space-y-2 max-w-xl">
@@ -533,7 +586,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                     href={order.receipt_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-block mt-2 text-xs font-bold text-blue-600 hover:underline"
+                    className="inline-block mt-2 text-xs font-bold text-[#C9A227] hover:underline"
                   >
                     Открыть PDF чек клиента
                   </a>
@@ -559,18 +612,18 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                         href={`/api/orders/${order.id}/operator-receipt`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs font-bold text-blue-600 hover:underline"
+                        className="text-xs font-bold text-[#C9A227] hover:underline"
                       >
                         Открыть PDF
                       </a>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-teal-300 bg-white hover:bg-teal-50/50 rounded-2xl p-5 text-center cursor-pointer transition-all">
+                    <label className={`flex flex-col items-center justify-center border-2 border-dashed border-teal-300 bg-white rounded-2xl p-5 text-center transition-all ${staffActive && canManageProcess ? "hover:bg-teal-50/50 cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
                       <input
                         type="file"
                         accept="application/pdf"
                         onChange={handleOperatorReceiptUpload}
-                        disabled={uploadingPayout || saving}
+                        disabled={uploadingPayout || saving || !staffActive || !canManageProcess}
                         className="sr-only"
                       />
                       {uploadingPayout ? (
@@ -593,6 +646,8 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                   disabled={
                     saving ||
                     uploadingPayout ||
+                    !staffActive ||
+                    !canManageProcess ||
                     (isRubPayout(order.currency_to) &&
                       !order.operator_receipt_url)
                   }
@@ -602,7 +657,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                   Успешно
                 </Button>
                 <Button
-                  disabled={saving || uploadingPayout}
+                  disabled={saving || uploadingPayout || !staffActive || !canManageProcess}
                   onClick={() => handleComplete("cancelled")}
                   className="rounded-xl h-10 font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-none"
                 >
@@ -611,6 +666,18 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               </div>
             </div>
           )}
+
+          {role === "admin" &&
+            (order.status === "processing" ||
+              order.status === "awaiting_payment") && (
+              <Button
+                disabled={saving || !staffActive}
+                onClick={() => handleComplete("cancelled")}
+                className="rounded-xl h-10 px-5 font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-none max-w-xl"
+              >
+                Отменить заявку
+              </Button>
+            )}
 
           {(order.status === "completed" || order.status === "cancelled") && (
             <div

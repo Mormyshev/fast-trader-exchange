@@ -4,8 +4,7 @@ import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
 import { attachClientsToOrders } from "@/src/utils/orders/attach-client";
-
-const IN_PROGRESS = ["processing", "awaiting_payment", "paid"] as const;
+import { STAFF_OPEN_ORDER_STATUSES } from "@/src/utils/staff/duty";
 
 const ORDER_FIELDS =
   "id, created_at, status, user_id, operator_id, operator_pseudonym_snapshot, currency_from, currency_to, amount_from, amount_to, wallet_from, wallet_to, tx_hash, payment_details, receipt_url, operator_receipt_url";
@@ -56,7 +55,7 @@ export async function GET() {
         admin
           .from("orders")
           .select(ORDER_FIELDS)
-          .in("status", [...IN_PROGRESS])
+          .in("status", [...STAFF_OPEN_ORDER_STATUSES])
           .eq("operator_id", user.id)
           .order("created_at", { ascending: false }),
         isAdmin
@@ -85,11 +84,26 @@ export async function GET() {
       return NextResponse.json({ error: firstError.message }, { status: 500 });
     }
 
-    const [pending, mine, completed, cancelled] = await Promise.all([
+    let teamRows: typeof mineRes.data = [];
+    if (isAdmin) {
+      const teamRes = await admin
+        .from("orders")
+        .select(ORDER_FIELDS)
+        .in("status", [...STAFF_OPEN_ORDER_STATUSES])
+        .not("operator_id", "is", null)
+        .order("created_at", { ascending: false });
+      if (teamRes.error) {
+        return NextResponse.json({ error: teamRes.error.message }, { status: 500 });
+      }
+      teamRows = teamRes.data ?? [];
+    }
+
+    const [pending, mine, completed, cancelled, teamInProgress] = await Promise.all([
       attachClientsToOrders(admin, pendingRes.data ?? []),
       attachClientsToOrders(admin, mineRes.data ?? []),
       attachClientsToOrders(admin, completedRes.data ?? []),
       attachClientsToOrders(admin, cancelledRes.data ?? []),
+      isAdmin ? attachClientsToOrders(admin, teamRows ?? []) : Promise.resolve([]),
     ]);
 
     return NextResponse.json({
@@ -98,6 +112,7 @@ export async function GET() {
       completed,
       completedCount: completedCountRes.count ?? 0,
       cancelled,
+      ...(isAdmin ? { teamInProgress } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";

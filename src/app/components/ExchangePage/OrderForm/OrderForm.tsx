@@ -41,6 +41,7 @@ import {
   type OrderFormErrors,
 } from "@/src/utils/validation";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
+import { useAuthDialog } from "@/src/components/AuthDialog/AuthDialogProvider";
 
 type RateRow = { symbol: string; exchange_price: number };
 
@@ -156,6 +157,7 @@ export default function OrderForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
+  const { requireAuth } = useAuthDialog();
 
   const MIN_RUB = 1000;
   const MAX_RUB = 15000000;
@@ -556,8 +558,37 @@ export default function OrderForm() {
 
     const ok = await confirm({
       title: "Создать заявку на обмен?",
-      description: `Отдаёте ${formatAmount(finalSend, isCryptoCurrency(selectedSend))} ${selectedSend.code} → получаете ${formatAmount(finalReceive, isCryptoCurrency(selectedReceive))} ${selectedReceive.code}. После создания заявку нужно будет оплатить в указанный срок.`,
+      description:
+        "После создания заявку нужно будет оплатить в указанный срок.",
       confirmLabel: "Создать заявку",
+      summary: [
+        {
+          label: "Отдаёте",
+          amount: isCryptoCurrency(selectedSend)
+            ? formatAmount(finalSend, true)
+            : finalSend.toLocaleString("ru-RU", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }),
+          currency: selectedSend.code,
+          caption: selectedSend.network?.shortLabel ?? selectedSend.name,
+          iconSrc: selectedSend.iconSrc,
+          iconAlt: selectedSend.name,
+        },
+        {
+          label: "Получаете",
+          amount: isCryptoCurrency(selectedReceive)
+            ? formatAmount(finalReceive, true)
+            : finalReceive.toLocaleString("ru-RU", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }),
+          currency: selectedReceive.code,
+          caption: selectedReceive.network?.shortLabel ?? selectedReceive.name,
+          iconSrc: selectedReceive.iconSrc,
+          iconAlt: selectedReceive.name,
+        },
+      ],
     });
     if (!ok) return;
 
@@ -578,7 +609,12 @@ export default function OrderForm() {
       const json = await res.json();
 
       if (res.status === 401) {
-        alert("Для создания заявки необходимо авторизоваться на сайте!");
+        setIsSubmitting(false);
+        requireAuth(
+          searchParams.toString()
+            ? `/user/exchange?${searchParams.toString()}`
+            : "/user/exchange",
+        );
         return;
       }
       if (res.status === 403) {

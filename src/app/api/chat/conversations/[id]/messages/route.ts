@@ -15,6 +15,7 @@ import {
   getStaffPseudonym,
   STAFF_PSEUDONYM_REQUIRED,
 } from "@/src/utils/chat/staff-chat";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -106,6 +107,10 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     if (staff) {
+      if (!isStaffOnDuty(staff.profile)) {
+        return staffInactiveResponse();
+      }
+
       const pseudonym = getStaffPseudonym(staff.profile);
       if (!pseudonym) {
         return NextResponse.json(

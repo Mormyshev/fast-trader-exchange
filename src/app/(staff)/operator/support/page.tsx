@@ -51,16 +51,35 @@ function ConversationRow({
     <button
       type="button"
       onClick={() => onSelect(conversation.id)}
-      className={`w-full text-left px-4 py-3 border-b border-amber-100/60 hover:bg-[#FFF3B0]/50 transition-colors flex items-center gap-3 ${
+      className={`w-full text-left px-4 py-3 border-b border-zinc-100 hover:bg-[#FFF8D6] transition-colors flex items-center gap-3 ${
         selected
-          ? "bg-[#FFF3B0] border-l-4 border-l-[#FFDD2D]"
+          ? "bg-[#FFF4C2] border-l-4 border-l-[#FFDD2D]"
           : "border-l-4 border-l-transparent"
       }`}
     >
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-zinc-900 truncate">
-          {getUserLabel(conversation)}
-        </p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="text-sm font-bold text-zinc-900 truncate">
+            {getUserLabel(conversation)}
+          </p>
+          {conversation.operator_id ? (
+            <span
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                conversation.assigned_operator?.role === "admin"
+                  ? "bg-violet-100 text-violet-800"
+                  : "bg-emerald-50 text-emerald-700"
+              }`}
+            >
+              {conversation.assigned_operator?.role === "admin"
+                ? "Админ"
+                : "Поддержка"}
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+              Ждёт
+            </span>
+          )}
+        </div>
         <p className={`text-xs mt-0.5 truncate ${subtitleClassName}`}>
           {preview}
         </p>
@@ -171,13 +190,21 @@ export default function OperatorSupportPage() {
 
   function getAssignmentLabel(conversation: ChatConversation) {
     if (!conversation.operator_id) {
-      return "Ожидает оператора";
+      return "Ожидает поддержки";
     }
     if (conversation.operator_id === user?.id) {
-      return "Ваш диалог";
+      return conversation.assigned_operator?.role === "admin"
+        ? "Вы подключены · Администратор"
+        : "Вы подключены · Техподдержка";
     }
     const staffName = conversation.assigned_operator?.operator_pseudonym?.trim();
-    return staffName ? `У оператора: ${staffName}` : "У другого оператора";
+    const isAdmin = conversation.assigned_operator?.role === "admin";
+    if (staffName) {
+      return isAdmin
+        ? `Администратор: ${staffName}`
+        : `Техподдержка: ${staffName}`;
+    }
+    return isAdmin ? "У администратора" : "У техподдержки";
   }
 
   function getPreview(conversation: ChatConversation) {
@@ -215,14 +242,14 @@ export default function OperatorSupportPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,18rem)_1fr] xl:grid-cols-[minmax(0,20rem)_1fr] gap-3 sm:gap-4 lg:gap-5 flex-1 min-h-0 overflow-hidden">
         <div
-          className={`rounded-2xl border border-amber-200/70 bg-[#FFFDE7] overflow-hidden flex flex-col h-full min-h-0 shadow-[0_4px_16px_rgba(255,221,45,0.06)] ${
+          className={`rounded-2xl bg-white overflow-hidden flex flex-col h-full min-h-0 shadow-[0_4px_24px_rgba(15,23,42,0.04)] ${
             selectedId ? "hidden lg:flex" : "flex"
           }`}
         >
-          <div className="px-4 py-3 border-b border-amber-200/60 bg-gradient-to-r from-[#FFF3B0] to-[#FFFEEB] font-bold text-zinc-900 shrink-0">
+          <div className="px-4 py-3 border-b border-zinc-100 bg-[#FFF8D6] font-bold text-zinc-900 shrink-0">
             Чаты поддержки
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#FFFEEB]/40">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {loading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="w-6 h-6 animate-spin text-[#FFDD2D]" />
@@ -267,7 +294,7 @@ export default function OperatorSupportPage() {
 
                 {others.length > 0 && (
                   <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                    У других операторов ({others.length})
+                    У других ({others.length})
                   </div>
                 )}
                 {others.map((conversation) => (
@@ -315,7 +342,7 @@ export default function OperatorSupportPage() {
               </div>
             </>
           ) : (
-            <div className="h-full min-h-0 rounded-2xl border border-dashed border-amber-200/70 flex items-center justify-center text-sm text-amber-800/60 bg-[#FFFDE7] px-6 text-center">
+            <div className="h-full min-h-0 rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex items-center justify-center text-sm text-zinc-400 px-6 text-center">
               Выберите чат из списка слева
             </div>
           )}

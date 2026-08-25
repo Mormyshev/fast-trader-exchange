@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { ArrowLeftRight, ChevronDown } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
@@ -23,6 +23,8 @@ import {
   sanitizeAmountInput,
 } from "@/src/utils/exchange-currencies";
 import CryptoNetworkSelect from "@/src/components/Exchange/CryptoNetworkSelect";
+import { useAuth } from "@/src/app/context/AuthContext";
+import { useAuthDialog } from "@/src/components/AuthDialog/AuthDialogProvider";
 
 interface RateRow {
   symbol: string;
@@ -31,6 +33,9 @@ interface RateRow {
 
 export default function ExchangeCalculator() {
   const [supabase] = useState(() => createClient());
+  const router = useRouter();
+  const { role } = useAuth();
+  const { requireAuth } = useAuthDialog();
 
   const [sendAmount, setSendAmount] = useState<string>("100000");
   const [receiveAmount, setReceiveAmount] = useState<string>("");
@@ -218,7 +223,7 @@ export default function ExchangeCalculator() {
 
   return (
     <div className="w-full exchange-calculator">
-      <div className="bg-white dark:bg-zinc-900 border-2 border-[#FFDD2D] rounded-[32px] p-6 md:p-10 shadow-xs relative">
+      <div className="relative rounded-[24px] bg-white p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] dark:bg-zinc-900 md:p-10">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 relative">
           {/* Блок «Отправляете» */}
           <div className="w-full flex-1 space-y-3 relative" ref={sendRef}>
@@ -521,12 +526,20 @@ export default function ExchangeCalculator() {
               Продолжить
             </button>
           ) : (
-            <Link
-              href={`/user/exchange?from=${selectedSend.id}&to=${selectedReceive.id}&amount=${sendAmount}`}
+            <button
+              type="button"
+              onClick={() => {
+                const href = `/user/exchange?from=${selectedSend.id}&to=${selectedReceive.id}&amount=${sendAmount}`;
+                if (role === "guest") {
+                  requireAuth(href);
+                  return;
+                }
+                router.push(href);
+              }}
               className="inline-block text-center w-full bg-[#FFDD2D] text-zinc-900 font-bold text-base py-4 rounded-full hover:bg-[#e6c628] shadow-sm active:scale-[0.99] transition-all cursor-pointer"
             >
               Продолжить
-            </Link>
+            </button>
           )}
         </div>
       </div>

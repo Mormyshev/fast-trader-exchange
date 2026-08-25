@@ -9,6 +9,7 @@ import {
   ORDER_UPDATED_EVENT,
 } from "@/src/utils/supabase/broadcast";
 import { receiptsObjectPath } from "@/src/utils/orders/receipt-path";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -81,7 +82,7 @@ export async function POST(request: Request, context: RouteContext) {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("role")
+      .select("role, staff_active")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -89,6 +90,9 @@ export async function POST(request: Request, context: RouteContext) {
       profile?.role === "operator" || profile?.role === "admin";
     if (!isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(profile)) {
+      return staffInactiveResponse();
     }
 
     const form = await request.formData();
@@ -132,6 +136,16 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json(
         { error: "На этом этапе чек выплаты прикрепить нельзя" },
         { status: 400 },
+      );
+    }
+    if (
+      profile?.role !== "admin" &&
+      order.operator_id &&
+      order.operator_id !== user.id
+    ) {
+      return NextResponse.json(
+        { error: "Эту заявку ведёт другой оператор" },
+        { status: 403 },
       );
     }
 

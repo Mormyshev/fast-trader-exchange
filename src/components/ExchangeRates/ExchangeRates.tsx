@@ -94,7 +94,7 @@ export default function ExchangeRates() {
   const hiddenCount = rows.length - VISIBLE_COUNT;
 
   return (
-    <div className="bg-white p-6 rounded-3xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+    <div className="bg-white p-6 rounded-2xl shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
       <h3 className="text-zinc-900 font-bold text-xl mb-4">Курсы</h3>
 
       <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-[11px] font-bold text-zinc-400 px-1 mb-2">

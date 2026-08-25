@@ -15,13 +15,14 @@ export async function GET() {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("role")
+      .select("role, staff_active")
       .eq("id", user.id)
       .maybeSingle();
 
     return NextResponse.json({
       user: { id: user.id, email: user.email },
       role: profile?.role || "user",
+      staffActive: profile?.staff_active === true,
     });
   } catch {
     return NextResponse.json({ user: null, role: "guest" });

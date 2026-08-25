@@ -16,12 +16,14 @@ interface RegisterModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSwitchToLogin: () => void;
+  redirectTo?: string | null;
 }
 
 export default function RegisterModal({
   isOpen,
   onClose,
   onSwitchToLogin,
+  redirectTo,
 }: RegisterModalProps) {
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [isAnimated, setIsAnimated] = useState(isOpen);
@@ -144,8 +146,13 @@ export default function RegisterModal({
       setEmail("");
       setPassword("");
       setPasswordConfirm("");
-      onClose(); // Закрываем окно
-      router.refresh(); // Обновляем страницу
+      const next = redirectTo;
+      onClose();
+      if (next) {
+        window.location.href = next;
+      } else {
+        router.refresh();
+      }
     } else {
       // Вариант Б: Подтверждение включено, показываем текст
       setSuccessMessage(
@@ -167,7 +174,7 @@ export default function RegisterModal({
   return (
     <div
       data-lenis-prevent
-      className={`fixed inset-0 z-[80] flex items-center justify-center p-4 bg-zinc-950/45 backdrop-blur-[3px] transition-opacity duration-300 ease-in-out ${
+      className={`fixed inset-0 z-[80] flex items-center justify-center p-4 bg-zinc-950/35 backdrop-blur-[2px] transition-opacity duration-300 ease-in-out ${
         isOpen && isAnimated
           ? "opacity-100"
           : "opacity-0 pointer-events-none"
@@ -175,23 +182,19 @@ export default function RegisterModal({
     >
       <div className="absolute inset-0" onClick={onClose} />
       <div
-        className={`relative w-full max-w-[480px] flex flex-col overflow-hidden bg-white text-zinc-900 rounded-[32px] shadow-[0_24px_80px_rgba(24,24,27,0.2)] z-10 border border-zinc-200 transform transition-all duration-300 ease-in-out max-h-[90vh] ${
+        className={`relative w-full max-w-[420px] flex flex-col overflow-hidden bg-white text-zinc-900 rounded-2xl shadow-[0_24px_80px_rgba(15,23,42,0.12)] z-10 transform transition-all duration-300 ease-in-out max-h-[90vh] ${
           isAnimated ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-[#FFDD2D] z-10"
-        />
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 size-9 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 flex items-center justify-center transition-colors z-10"
+          className="absolute top-4 right-4 size-9 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 flex items-center justify-center transition-colors z-10"
           disabled={isLoading}
         >
           <X className="w-4 h-4" />
         </button>
-        <div className="overflow-y-auto scrollbar-none p-8 md:p-10">
-        <h2 className="text-xl md:text-2xl font-bold text-center text-[#2A2A2A] mb-6">
+        <div className="overflow-y-auto scrollbar-none p-6 sm:p-7">
+        <h2 className="text-xl font-bold tracking-tight text-zinc-900 mb-5">
           Регистрация
         </h2>
 
@@ -280,7 +283,7 @@ export default function RegisterModal({
             <button
               type="button"
               onClick={generateCaptcha}
-              className="p-2 text-amber-400 hover:text-amber-500 transition-colors"
+              className="p-2 text-[#C9A227] hover:text-[#a8861b] transition-colors"
               disabled={isLoading}
             >
               <RefreshCw className="w-4 h-4" />
@@ -303,7 +306,7 @@ export default function RegisterModal({
               className="text-[11px] font-medium text-zinc-500 leading-normal cursor-pointer select-none"
             >
               Я согласен с{" "}
-              <span className="text-amber-400">правилами сервиса</span> и
+              <span className="text-[#C9A227]">правилами сервиса</span> и
               обработкой персональных данных
             </label>
           </div>
@@ -312,7 +315,7 @@ export default function RegisterModal({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-3.5 rounded-full shadow-xs transition-all flex items-center justify-center"
+              className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-3.5 rounded-xl shadow-none transition-all flex items-center justify-center"
             >
               {isLoading ? "Регистрация..." : "Зарегистрироваться"}
             </button>
@@ -323,7 +326,7 @@ export default function RegisterModal({
           <span className="text-zinc-400">Уже зарегистрированы? </span>
           <button
             onClick={onSwitchToLogin}
-            className="text-amber-400 hover:underline"
+            className="text-[#C9A227] hover:underline"
             disabled={isLoading}
           >
             Войти

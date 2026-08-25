@@ -9,6 +9,7 @@ import {
   STAFF_PSEUDONYM_REQUIRED,
   takeoverConversation,
 } from "@/src/utils/chat/staff-chat";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -17,6 +18,9 @@ export async function POST(_request: Request, context: RouteContext) {
     const staff = await requireStaff();
     if (!staff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(staff.profile)) {
+      return staffInactiveResponse();
     }
 
     const pseudonym = getStaffPseudonym(staff.profile);
@@ -44,7 +48,7 @@ export async function POST(_request: Request, context: RouteContext) {
     }
 
     const access = existing?.operator_id
-      ? await takeoverConversation(staff.admin, id, staff.user.id)
+      ? await takeoverConversation(staff.admin, id, staff.user.id, pseudonym)
       : await claimConversation(staff.admin, id, staff.user.id, pseudonym);
 
     if (!access.ok) {

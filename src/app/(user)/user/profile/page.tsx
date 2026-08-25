@@ -11,6 +11,9 @@ import {
   Phone,
   Send,
   AlertTriangle,
+  Shield,
+  Star,
+  BadgeCheck,
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -303,14 +306,93 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50/50 dark:bg-zinc-950">
+      <div className="flex min-h-[40vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#FFDD2D] border-t-transparent"></div>
       </div>
     );
   }
 
+  const statusMeta =
+    verificationStatus === "verified"
+      ? {
+          label: "Верифицирован",
+          className: "text-emerald-600",
+          icon: CheckCircle2,
+        }
+      : verificationStatus === "pending"
+        ? { label: "На проверке", className: "text-amber-600", icon: Clock }
+        : {
+            label: "Не верифицирован",
+            className: "text-amber-600",
+            icon: AlertTriangle,
+          };
+  const StatusIcon = statusMeta.icon;
+
   return (
-    <div className="w-full max-w-4xl">
+    <div className="w-full space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+              Профиль
+            </h1>
+            <p className="mt-1 text-sm font-medium text-zinc-500">
+              {user?.email || "Аккаунт"}
+            </p>
+          </div>
+          <span
+            className={`inline-flex items-center gap-1.5 text-sm font-semibold ${statusMeta.className}`}
+          >
+            <StatusIcon className="h-4 w-4" />
+            {statusMeta.label}
+          </span>
+        </div>
+
+        {editable && (
+          <div className="relative overflow-hidden rounded-2xl bg-[#FFF8D6] px-6 py-7 sm:px-8 sm:py-8">
+            <div className="relative z-10 max-w-xl">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900">
+                Пройдите верификацию, чтобы пользоваться всеми возможностями
+              </h2>
+              <ul className="mt-5 space-y-3">
+                <li className="flex items-center gap-3 text-sm font-medium text-zinc-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80">
+                    <Shield className="h-4 w-4 text-[#C9A227]" />
+                  </span>
+                  Безопасный обмен после проверки оператором
+                </li>
+                <li className="flex items-center gap-3 text-sm font-medium text-zinc-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80">
+                    <BadgeCheck className="h-4 w-4 text-[#C9A227]" />
+                  </span>
+                  Полный доступ к заявкам и выплатам
+                </li>
+                <li className="flex items-center gap-3 text-sm font-medium text-zinc-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80">
+                    <Star className="h-4 w-4 text-[#C9A227]" />
+                  </span>
+                  Приоритетная обработка анкеты
+                </li>
+              </ul>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <a
+                  href="#verification-form"
+                  className="inline-flex h-11 items-center rounded-xl bg-[#FFDD2D] px-5 text-sm font-bold text-zinc-900 hover:bg-[#e6c628] transition-colors"
+                >
+                  Пройти верификацию
+                </a>
+                <span className="text-xs font-semibold text-zinc-500">
+                  ~1 минута
+                </span>
+              </div>
+            </div>
+            <div className="pointer-events-none absolute -right-4 top-1/2 hidden h-40 w-40 -translate-y-1/2 sm:block lg:right-8">
+              <div className="flex h-28 w-28 items-center justify-center rounded-[28px] bg-[#FFDD2D] shadow-[0_8px_30px_rgba(201,162,39,0.25)]">
+                <User className="h-14 w-14 text-zinc-900" />
+              </div>
+            </div>
+          </div>
+        )}
+
         {verificationStatus === "pending" && (
           <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-6 text-center shadow-sm dark:border-blue-900/30 dark:bg-blue-950/20 mb-6">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400">
@@ -362,7 +444,10 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm dark:border-zinc-900 dark:bg-zinc-900/50">
+        <div
+          id="verification-form"
+          className="rounded-2xl bg-white p-6 sm:p-8 shadow-[0_4px_24px_rgba(15,23,42,0.04)]"
+        >
           <div className="flex items-center space-x-3 border-b border-gray-100 pb-5 dark:border-zinc-800">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFDD2D]/10 text-zinc-900 dark:text-[#FFDD2D]">
               <User className="h-5 w-5" />
@@ -618,6 +703,19 @@ export default function ProfilePage() {
               </Button>
             )}
           </form>
+        </div>
+
+        <div className="flex gap-3 rounded-2xl bg-[#FFF8D6] px-5 py-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#C9A227]" />
+          <div>
+            <p className="text-sm font-bold text-zinc-900">
+              Отключите VPN перед отправкой документов
+            </p>
+            <p className="mt-1 text-sm font-medium leading-relaxed text-zinc-600">
+              Иначе проверка личности может затянуться. Данные должны совпадать
+              с паспортом — оператор сверяет анкету вручную.
+            </p>
+          </div>
         </div>
       <ConfirmDialogHost />
     </div>

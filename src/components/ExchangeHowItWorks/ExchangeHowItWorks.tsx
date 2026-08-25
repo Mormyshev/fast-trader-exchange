@@ -19,7 +19,7 @@ const STEPS = [
 
 export default function ExchangeHowItWorks() {
   return (
-    <div className="bg-white p-6 rounded-3xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+    <div className="bg-white p-6 rounded-2xl shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
       <h3 className="text-zinc-900 font-bold text-xl mb-4">Как проходит обмен</h3>
 
       <ol className="space-y-4">

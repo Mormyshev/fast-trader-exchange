@@ -14,6 +14,11 @@ import {
   stripOrderInternalFields,
 } from "@/src/utils/orders/operator-snapshot";
 import { attachClientToOrder } from "@/src/utils/orders/attach-client";
+import {
+  isStaffOnDuty,
+  staffInactiveResponse,
+  STAFF_OPEN_ORDER_STATUSES,
+} from "@/src/utils/staff/duty";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -29,7 +34,7 @@ async function getActor() {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("role")
+      .select("role, staff_active")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -38,6 +43,7 @@ async function getActor() {
       admin,
       role: profile?.role || "user",
       isStaff: profile?.role === "operator" || profile?.role === "admin",
+      staffActive: isStaffOnDuty(profile),
     };
   } catch {
     return null;
@@ -124,6 +130,37 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    if (actor.isStaff && !actor.staffActive) {
+      const tryingStaffWork =
+        body.operator_id !== undefined ||
+        typeof body.payment_details === "string" ||
+        typeof body.operator_receipt_url === "string" ||
+        (typeof body.status === "string" &&
+          body.status !== "paid" &&
+          body.status !== "cancelled");
+      if (!isOwner || tryingStaffWork) {
+        return staffInactiveResponse();
+      }
+    }
+
+    if (
+      actor.isStaff &&
+      actor.role !== "admin" &&
+      current.operator_id &&
+      current.operator_id !== actor.user.id
+    ) {
+      const touchingProcess =
+        typeof body.payment_details === "string" ||
+        typeof body.operator_receipt_url === "string" ||
+        typeof body.status === "string";
+      if (touchingProcess) {
+        return NextResponse.json(
+          { error: "Эту заявку ведёт другой оператор" },
+          { status: 403 },
+        );
+      }
+    }
+
     const patch: Record<string, unknown> = {};
 
     if (actor.isStaff) {
@@ -152,38 +189,77 @@ export async function PATCH(request: Request, context: RouteContext) {
         patch.operator_receipt_url = body.operator_receipt_url;
       }
       if (typeof body.operator_id === "string" || body.operator_id === null) {
-        if (
-          typeof body.operator_id === "string" &&
-          current.operator_id &&
-          current.operator_id !== body.operator_id
-        ) {
-          return NextResponse.json(
-            { error: "Эту заявку уже забрал другой оператор" },
-            { status: 409 },
+        if (typeof body.operator_id === "string") {
+          const isReassign =
+            !!current.operator_id && current.operator_id !== body.operator_id;
+
+          if (isReassign && actor.role !== "admin") {
+            return NextResponse.json(
+              { error: "Эту заявку уже забрал другой оператор" },
+              { status: 409 },
+            );
+          }
+
+          if (
+            isReassign &&
+            !(STAFF_OPEN_ORDER_STATUSES as readonly string[]).includes(
+              current.status,
+            )
+          ) {
+            return NextResponse.json(
+              { error: "Сменить оператора можно только у заявки в работе" },
+              { status: 400 },
+            );
+          }
+
+          const { data: target, error: targetError } = await actor.admin
+            .from("profiles")
+            .select("id, role, staff_active")
+            .eq("id", body.operator_id)
+            .maybeSingle();
+
+          if (targetError) {
+            return NextResponse.json(
+              { error: targetError.message },
+              { status: 503 },
+            );
+          }
+
+          if (
+            !target ||
+            (target.role !== "operator" && target.role !== "admin")
+          ) {
+            return NextResponse.json(
+              { error: "Можно назначить только оператора или администратора" },
+              { status: 400 },
+            );
+          }
+
+          if (!isStaffOnDuty(target)) {
+            return NextResponse.json(
+              { error: "Можно назначить только активного оператора." },
+              { status: 409 },
+            );
+          }
+
+          const hadSnapshot = Boolean(
+            (current as { operator_pseudonym_snapshot?: string | null })
+              .operator_pseudonym_snapshot,
           );
+          if (isReassign || !hadSnapshot) {
+            const pseudonym = await fetchOperatorPseudonym(
+              actor.admin,
+              body.operator_id,
+            );
+            if (pseudonym) {
+              patch.operator_pseudonym_snapshot = pseudonym;
+            } else if (isReassign) {
+              patch.operator_pseudonym_snapshot = null;
+            }
+          }
         }
+
         patch.operator_id = body.operator_id;
-      }
-
-      const nextOperatorId =
-        typeof patch.operator_id === "string"
-          ? patch.operator_id
-          : typeof body.operator_id === "string"
-            ? body.operator_id
-            : null;
-
-      if (
-        nextOperatorId &&
-        !(current as { operator_pseudonym_snapshot?: string | null })
-          .operator_pseudonym_snapshot
-      ) {
-        const pseudonym = await fetchOperatorPseudonym(
-          actor.admin,
-          nextOperatorId,
-        );
-        if (pseudonym) {
-          patch.operator_pseudonym_snapshot = pseudonym;
-        }
       }
     }
 

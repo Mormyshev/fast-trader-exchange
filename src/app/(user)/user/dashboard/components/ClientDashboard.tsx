@@ -42,38 +42,38 @@ export default function ClientDashboard({
   return (
     <div className="space-y-6 animate-fade-in">
       <ExchangeCalculator />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Link
           href="/user/orders"
-          className="rounded-xl border border-amber-200 bg-amber-50 p-5 flex items-center gap-4 hover:border-amber-300 transition-colors"
+          className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_28px_rgba(15,23,42,0.07)] transition-shadow"
         >
-          <div className="p-3 rounded-lg bg-amber-100 text-amber-700">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
             <Clock className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs text-amber-800 font-medium">Мои заявки</p>
-            <p className="text-xl font-bold text-amber-950">
+            <p className="text-xs font-semibold text-zinc-500">Мои заявки</p>
+            <p className="text-xl font-bold text-zinc-900">
               {activeOrders.length}
             </p>
           </div>
         </Link>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-emerald-100 text-emerald-700">
+        <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
             <CheckCircle2 className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs text-emerald-800 font-medium">Успешные обмены</p>
-            <p className="text-xl font-bold text-emerald-950">
+            <p className="text-xs font-semibold text-zinc-500">Успешные обмены</p>
+            <p className="text-xl font-bold text-zinc-900">
               {completedCount}
             </p>
           </div>
         </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-zinc-50 text-zinc-600">
+        <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
             <ArrowLeftRight className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Аккаунт</p>
+            <p className="text-xs font-semibold text-zinc-500">Аккаунт</p>
             <p className="text-sm font-semibold text-zinc-900 truncate max-w-[160px]">
               {userEmail}
             </p>
@@ -81,7 +81,7 @@ export default function ClientDashboard({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6">
+      <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between gap-3 mb-4">
           <h2 className="text-lg font-bold text-zinc-900">Активные заявки</h2>
           <Link
@@ -97,7 +97,7 @@ export default function ClientDashboard({
             У вас пока нет активных заявок.{" "}
             <Link
               href="/user/exchange"
-              className="text-blue-600 font-medium hover:underline"
+              className="text-[#C9A227] font-medium hover:underline"
             >
               Создать обмен?
             </Link>

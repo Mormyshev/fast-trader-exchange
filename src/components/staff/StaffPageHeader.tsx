@@ -7,7 +7,7 @@ export default function StaffPageHeader({
 }) {
   return (
     <div className="space-y-1">
-      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
+      <h1 className="text-xl sm:text-2xl md:text-[28px] font-bold tracking-tight text-zinc-900">
         {title}
       </h1>
       {description && (

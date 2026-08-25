@@ -3,9 +3,8 @@
 import { useState } from "react";
 import NextLink from "next/link";
 import { Menu, UserPlus, LogIn, LogOut, User } from "lucide-react";
-import AuthModal from "../AuthModal/AuthModal";
-import RegisterModal from "../RegisterModal/RegisterModal";
 import { useAuth } from "@/src/app/context/AuthContext";
+import { useAuthDialog } from "@/src/components/AuthDialog/AuthDialogProvider";
 
 import { Button } from "@/components/ui/button";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
@@ -28,10 +27,9 @@ function getCabinetLink(role: string) {
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   const { role, logoutUser } = useAuth();
+  const { openLogin, openRegister } = useAuthDialog();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const cabinet = getCabinetLink(role);
 
@@ -44,16 +42,6 @@ export default function Header() {
     });
     if (!ok) return;
     logoutUser();
-  };
-
-  const openLoginAndCloseRegister = () => {
-    setIsRegisterOpen(false);
-    setTimeout(() => setIsAuthOpen(true), 200);
-  };
-
-  const openRegisterAndCloseLogin = () => {
-    setIsAuthOpen(false);
-    setTimeout(() => setIsRegisterOpen(true), 200);
   };
 
   return (
@@ -87,13 +75,13 @@ export default function Header() {
                 <div className="flex items-center space-x-3">
                   <Button
                     variant="ghost"
-                    onClick={() => setIsAuthOpen(true)}
+                    onClick={openLogin}
                     className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-zinc-300 dark:hover:text-zinc-50 cursor-pointer"
                   >
                     Войти
                   </Button>
                   <Button
-                    onClick={() => setIsRegisterOpen(true)}
+                    onClick={openRegister}
                     className="rounded-full bg-[#FFDD2D] px-6 text-sm font-semibold text-black hover:bg-[#e6c625] transition-colors shadow-sm cursor-pointer"
                   >
                     Регистрация
@@ -102,40 +90,19 @@ export default function Header() {
               ) : (
                 <div className="flex items-center space-x-3">
                   <NextLink href={cabinet.href}>
-                    <Button
-                      variant="ghost"
-                      className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer"
-                    >
+                    <Button className="rounded-full bg-[#FFDD2D] px-6 text-sm font-semibold text-black hover:bg-[#e6c625] transition-colors shadow-sm cursor-pointer">
                       {cabinet.label}
                     </Button>
                   </NextLink>
-                  {role === "user" && (
-                    <>
-                      <NextLink href="/user/orders">
-                        <Button
-                          variant="ghost"
-                          className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer"
-                        >
-                          Мои заявки
-                        </Button>
-                      </NextLink>
-                      <NextLink href="/user/profile">
-                        <Button
-                          variant="ghost"
-                          className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer"
-                        >
-                          Профиль
-                        </Button>
-                      </NextLink>
-                    </>
+                  {role !== "user" && (
+                    <Button
+                      onClick={() => void handleLogout()}
+                      variant="secondary"
+                      className="rounded-full px-6 text-sm font-semibold transition-all cursor-pointer"
+                    >
+                      Выйти
+                    </Button>
                   )}
-                  <Button
-                    onClick={() => void handleLogout()}
-                    variant="secondary"
-                    className="rounded-full px-6 text-sm font-semibold transition-all cursor-pointer"
-                  >
-                    Выйти
-                  </Button>
                 </div>
               )}
             </div>
@@ -202,7 +169,7 @@ export default function Header() {
                           variant="outline"
                           onClick={() => {
                             setIsOpen(false);
-                            setIsRegisterOpen(true);
+                            openRegister();
                           }}
                           className="w-full min-w-0 h-12 border-gray-200 text-gray-700 dark:border-zinc-800 dark:text-zinc-300 rounded-xl text-sm font-semibold bg-white flex items-center justify-center gap-2 px-4"
                         >
@@ -212,7 +179,7 @@ export default function Header() {
                         <Button
                           onClick={() => {
                             setIsOpen(false);
-                            setIsAuthOpen(true);
+                            openLogin();
                           }}
                           className="w-full min-w-0 h-12 bg-[#FFDD2D] hover:bg-[#e6c625] text-black rounded-xl text-sm font-semibold border-none shadow-none flex items-center justify-center gap-2 px-4"
                         >
@@ -256,16 +223,6 @@ export default function Header() {
         </div>
       </header>
 
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        onSwitchToRegister={openRegisterAndCloseLogin}
-      />
-      <RegisterModal
-        isOpen={isRegisterOpen}
-        onClose={() => setIsRegisterOpen(false)}
-        onSwitchToLogin={openLoginAndCloseRegister}
-      />
       <ConfirmDialogHost />
     </>
   );

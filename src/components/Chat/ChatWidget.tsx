@@ -93,7 +93,11 @@ export default function ChatWidget() {
         >
           <SheetHeader className="px-4 py-3 border-b border-amber-200/60 bg-gradient-to-r from-[#FFDD2D] to-[#FFF3B0] flex-row items-center justify-between space-y-0 shrink-0">
             <SheetTitle className="text-base font-bold text-zinc-900">
-              Чат с поддержкой
+              {conversation?.operator_id
+                ? conversation.assigned_operator?.role === "admin"
+                  ? "Администратор на связи"
+                  : "Техподдержка на связи"
+                : "Чат с поддержкой"}
             </SheetTitle>
             <button
               type="button"

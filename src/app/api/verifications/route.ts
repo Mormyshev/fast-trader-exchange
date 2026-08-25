@@ -4,6 +4,7 @@ import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { broadcastVerificationEvent } from "@/src/utils/supabase/broadcast-verification";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 
 const VERIFICATION_TABS = ["pending", "verified", "rejected"] as const;
 type VerificationTab = (typeof VERIFICATION_TABS)[number];
@@ -18,7 +19,7 @@ async function requireAdmin() {
 
   const admin = createAdminClient();
   const { data: profile } = await withTimeout(
-    admin.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+    admin.from("profiles").select("role, staff_active").eq("id", user.id).maybeSingle(),
     5000,
     { data: null, error: null } as any,
   );
@@ -27,7 +28,7 @@ async function requireAdmin() {
     return null;
   }
 
-  return { user, admin };
+  return { user, admin, profile };
 }
 
 function parseTab(value: string | null): VerificationTab {
@@ -80,6 +81,9 @@ export async function PATCH(request: Request) {
     const actor = await requireAdmin();
     if (!actor) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(actor.profile)) {
+      return staffInactiveResponse();
     }
 
     const body = await request.json().catch(() => null);

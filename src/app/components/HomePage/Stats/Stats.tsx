@@ -9,21 +9,21 @@ const stats = [
 
 export default function Stats() {
   return (
-    <section className="rounded-[32px] border border-zinc-200/80 bg-white px-5 py-8 sm:px-8 sm:py-10">
-      <p className="text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400">
-        Показатели
-      </p>
-      <h2 className="mt-2 text-center text-xl sm:text-2xl font-semibold tracking-tight text-[#1A1A1A]">
+    <section className="w-full">
+      <h2 className="text-center text-2xl sm:text-[28px] font-bold tracking-tight text-zinc-900">
         Aurum Swap в цифрах
       </h2>
 
-      <div className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-6">
+      <div className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="min-w-0 text-center">
-            <p className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums">
+          <div
+            key={stat.label}
+            className="rounded-2xl bg-white px-3 py-6 text-center shadow-[0_4px_24px_rgba(15,23,42,0.04)]"
+          >
+            <p className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 tabular-nums">
               {stat.value}
             </p>
-            <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400 leading-snug">
+            <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-400 leading-snug">
               {stat.label}
             </p>
           </div>

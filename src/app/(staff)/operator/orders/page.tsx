@@ -20,6 +20,7 @@ import { isOrderExpiredByTtl } from "@/src/utils/orders/ttl";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import type { OrderClient } from "@/src/utils/orders/client-info";
 import { mergeOrderClient } from "@/src/utils/orders/client-info";
+import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
 import {
   buildOperatorPaymentDetails,
   clientPaysWithCrypto,
@@ -57,7 +58,7 @@ type TabId = "new" | "in_work" | "awaiting" | "review" | "completed" | "cancelle
 
 export default function OperatorOrdersPage() {
   const supabase = createClient();
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, staffActive, isLoading: isAuthLoading } = useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [newOrders, setNewOrders] = useState<Order[]>([]);
@@ -256,6 +257,10 @@ export default function OperatorOrdersPage() {
 
   const handleClaimOrder = async (orderId: string) => {
     if (!user?.id) return;
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
 
     const ok = await confirm({
       title: "Взять заявку в работу?",
@@ -293,6 +298,10 @@ export default function OperatorOrdersPage() {
   };
 
   const handleSendDetails = async (orderId: string) => {
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
     const target = myOrders.find((o) => o.id === orderId);
     if (!target) return;
     const current = detailsInput[orderId] ?? {
@@ -347,6 +356,10 @@ export default function OperatorOrdersPage() {
     orderId: string,
     status: "completed" | "cancelled",
   ) => {
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
     const target = myOrders.find((o) => o.id === orderId);
     if (
       status === "completed" &&
@@ -409,6 +422,11 @@ export default function OperatorOrdersPage() {
     orderId: string,
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      e.target.value = "";
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== "application/pdf") {
@@ -459,7 +477,7 @@ export default function OperatorOrdersPage() {
   ];
 
   const renderEmpty = (text: string) => (
-    <div className="px-5 py-12 sm:py-16 text-center bg-white rounded-2xl text-zinc-400 text-sm font-medium border border-dashed border-zinc-200">
+    <div className="px-5 py-12 sm:py-16 text-center bg-white rounded-2xl text-zinc-400 text-sm font-medium shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
       {text}
     </div>
   );
@@ -488,7 +506,7 @@ export default function OperatorOrdersPage() {
         walletLabel="Куда отправить клиенту"
       >
         {order.payment_details && (
-          <div className="rounded-xl bg-zinc-50/80 border border-zinc-100 px-3 py-2.5">
+          <div className="rounded-xl bg-[#FFF8D6] px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
               Выданные реквизиты
             </p>
@@ -550,7 +568,8 @@ export default function OperatorOrdersPage() {
             />
             <button
               onClick={() => handleSendDetails(order.id)}
-              className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm cursor-pointer"
+              disabled={!staffActive}
+              className="w-full bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm cursor-pointer disabled:cursor-not-allowed"
             >
               Отправить реквизиты
             </button>
@@ -608,11 +627,12 @@ export default function OperatorOrdersPage() {
                     </a>
                   </div>
                 ) : (
-                  <label className="flex items-center justify-center gap-2 border border-dashed border-teal-300 bg-white rounded-xl px-3 py-2.5 cursor-pointer hover:bg-teal-50/50">
+                  <label className={`flex items-center justify-center gap-2 border border-dashed border-teal-300 bg-white rounded-xl px-3 py-2.5 ${staffActive ? "cursor-pointer hover:bg-teal-50/50" : "cursor-not-allowed opacity-50"}`}>
                     <input
                       type="file"
                       accept="application/pdf"
                       className="sr-only"
+                      disabled={!staffActive}
                       onChange={(e) => handleOperatorReceiptUpload(order.id, e)}
                     />
                     <Upload className="w-4 h-4 text-teal-600" />
@@ -628,7 +648,8 @@ export default function OperatorOrdersPage() {
               <button
                 onClick={() => handleCloseOrder(order.id, "completed")}
                 disabled={
-                  isRubPayout(order.currency_to) && !order.operator_receipt_url
+                  !staffActive ||
+                  (isRubPayout(order.currency_to) && !order.operator_receipt_url)
                 }
                 className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-semibold py-2.5 rounded-xl text-sm cursor-pointer transition-colors disabled:cursor-not-allowed"
               >
@@ -636,7 +657,8 @@ export default function OperatorOrdersPage() {
               </button>
               <button
                 onClick={() => handleCloseOrder(order.id, "cancelled")}
-                className="bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold py-2.5 rounded-xl text-sm cursor-pointer transition-colors"
+                disabled={!staffActive}
+                className="bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed font-semibold py-2.5 rounded-xl text-sm cursor-pointer transition-colors"
               >
                 Отклонить
               </button>
@@ -664,7 +686,7 @@ export default function OperatorOrdersPage() {
             onClick={() => setActiveTab(tab.id)}
             className={`text-xs font-bold rounded-xl h-8 px-3 sm:px-4 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === tab.id
-                ? "bg-white text-zinc-900 shadow-xs hover:bg-white"
+                ? "bg-[#FFF4C2] text-zinc-900 hover:bg-[#FFF4C2]"
                 : "text-zinc-400 hover:text-zinc-600"
             }`}
           >
@@ -709,7 +731,8 @@ export default function OperatorOrdersPage() {
                         </Link>
                         <button
                           onClick={() => handleClaimOrder(order.id)}
-                          className="bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-950 font-semibold py-2.5 px-2 rounded-xl text-xs min-[380px]:text-sm cursor-pointer transition-colors leading-snug"
+                          disabled={!staffActive}
+                          className="bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-950 font-semibold py-2.5 px-2 rounded-xl text-xs min-[380px]:text-sm cursor-pointer disabled:cursor-not-allowed transition-colors leading-snug"
                         >
                           Взять в работу
                         </button>

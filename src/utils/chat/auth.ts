@@ -10,7 +10,7 @@ export async function requireStaff() {
 
   const admin = createAdminClient();
   const { data: profile } = await withTimeout(
-    admin.from("profiles").select("role, operator_pseudonym").eq("id", user.id).maybeSingle(),
+    admin.from("profiles").select("role, operator_pseudonym, staff_active").eq("id", user.id).maybeSingle(),
     5000,
     { data: null, error: null } as any,
   );
@@ -20,6 +20,14 @@ export async function requireStaff() {
   }
 
   return { user, admin, profile };
+}
+
+export async function requireAdmin() {
+  const staff = await requireStaff();
+  if (!staff || staff.profile?.role !== "admin") {
+    return null;
+  }
+  return staff;
 }
 
 export async function requireUser() {

@@ -26,6 +26,8 @@ import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
 import OperatorOrderCard from "@/src/components/staff/OperatorOrderCard";
 import type { OperatorOrderCardTone } from "@/src/components/staff/OperatorOrderCard";
 import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
+import StaffDutyToggle from "@/src/components/staff/StaffDutyToggle";
+import StaffRoster from "@/src/components/staff/StaffRoster";
 import { useAuth } from "@/src/app/context/AuthContext";
 import {
   formatClientName,
@@ -169,7 +171,11 @@ export default function OperatorDashboard() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
         setPendingOrders(((json.pending || []) as Order[]).map(rememberClient));
-        setMyOrders(((json.mine || []) as Order[]).map(rememberClient));
+        const isAdmin = roleRef.current === "admin";
+        const inWork = isAdmin
+          ? ((json.teamInProgress || []) as Order[])
+          : ((json.mine || []) as Order[]);
+        setMyOrders(inWork.map(rememberClient));
         setCompletedOrders(((json.completed || []) as Order[]).map(rememberClient));
         setCancelledOrders(((json.cancelled || []) as Order[]).map(rememberClient));
         setCompletedCount(
@@ -183,7 +189,25 @@ export default function OperatorDashboard() {
     }
 
     void fetchOrders();
-  }, [user?.id, isAuthLoading]);
+  }, [user?.id, isAuthLoading, role]);
+
+  useEffect(() => {
+    if (role !== "admin" || !user?.id) return;
+
+    const timer = window.setInterval(() => {
+      void fetch("/api/orders/staff", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((json) => {
+          if (!Array.isArray(json.teamInProgress)) return;
+          setMyOrders(
+            ((json.teamInProgress || []) as Order[]).map(rememberClient),
+          );
+        })
+        .catch(() => {});
+    }, 15000);
+
+    return () => window.clearInterval(timer);
+  }, [role, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -202,10 +226,13 @@ export default function OperatorDashboard() {
 
       setMyOrders((prev) => {
         const without = prev.filter((o) => o.id !== next.id);
-        const mine =
+        const isAdmin = roleRef.current === "admin";
+        const inWork =
           IN_PROGRESS_STATUSES.includes(next.status) &&
-          next.operator_id === currentUserId;
-        return mine ? [next, ...without] : without;
+          (isAdmin
+            ? !!next.operator_id
+            : next.operator_id === currentUserId);
+        return inWork ? [next, ...without] : without;
       });
 
       setCompletedOrders((prev) => {
@@ -328,7 +355,11 @@ export default function OperatorDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <StaffPageHeader
           title="Панель оператора"
-          description="Мониторинг заявок Aurum Swap Demo"
+          description={
+            role === "admin"
+              ? "Мониторинг очереди и заявок в работе. Можно открыть карточку и вести процесс до завершения."
+              : "Мониторинг заявок Aurum Swap Demo"
+          }
         />
 
         <div className="flex items-center space-x-2.5 bg-emerald-50 border border-emerald-100 px-3 sm:px-4 py-1.5 rounded-full self-start">
@@ -339,45 +370,61 @@ export default function OperatorDashboard() {
         </div>
       </div>
 
+      <StaffDutyToggle />
+      <StaffRoster />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
-        <Card className="rounded-2xl border-none bg-[#FFDD2D] p-4 sm:p-5 lg:p-6 shadow-none flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]">
+        <Card className="rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-zinc-800 uppercase tracking-wide">
+            <span className="text-sm font-bold text-zinc-500 uppercase tracking-wide">
               Новые заявки
             </span>
-            <Clock className="w-5 h-5 text-zinc-800" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+              <Clock className="w-5 h-5" />
+            </span>
           </div>
           <div className="text-4xl font-bold text-zinc-900">
             {pendingOrders.length}
           </div>
         </Card>
 
-        <Card className="rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:p-5 lg:p-6 shadow-none flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]">
+        <Card className="rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-blue-800 uppercase tracking-wide">
+            <span className="text-sm font-bold text-zinc-500 uppercase tracking-wide">
               В работе
             </span>
-            <AlertCircle className="w-5 h-5 text-blue-600" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+              <AlertCircle className="w-5 h-5" />
+            </span>
           </div>
-          <div className="text-4xl font-bold text-blue-950">
-            {myOrders.length}
+          <div>
+            <div className="text-4xl font-bold text-zinc-900">
+              {myOrders.length}
+            </div>
+            {role === "admin" ? (
+              <p className="mt-1 text-[11px] font-semibold text-zinc-400">
+                все заявки команды в работе
+              </p>
+            ) : null}
           </div>
         </Card>
 
-        <Card className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5 lg:p-6 shadow-none flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem] sm:col-span-2 lg:col-span-1">
+        <Card className="rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem] sm:col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-emerald-800 uppercase tracking-wide">
+            <span className="text-sm font-bold text-zinc-500 uppercase tracking-wide">
               {role === "admin" ? "Выполнено" : "Выполнено мной"}
             </span>
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+              <CheckCircle2 className="w-5 h-5" />
+            </span>
           </div>
-          <div className="text-4xl font-bold text-emerald-950">
+          <div className="text-4xl font-bold text-zinc-900">
             {completedCount}
           </div>
         </Card>
       </div>
 
-      <Card className="rounded-2xl border border-zinc-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_28px_rgba(15,23,42,0.04)] overflow-hidden">
+      <Card className="rounded-2xl border-none bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)] overflow-hidden">
         <div className="flex items-center gap-2 min-w-0 p-3 sm:p-4 md:p-5 lg:p-6 pb-3 sm:pb-4 md:pb-5 border-b border-zinc-100">
           <StaffScrollTabs className="min-w-0 flex-1">
             {(
@@ -407,7 +454,7 @@ export default function OperatorDashboard() {
                 }}
                 className={`text-xs font-bold rounded-xl h-8 px-3 sm:px-4 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                   activeTab === tab.id
-                    ? "bg-white text-zinc-900 shadow-xs hover:bg-white"
+                    ? "bg-[#FFF4C2] text-zinc-900 hover:bg-[#FFF4C2]"
                     : "text-zinc-400 hover:text-zinc-600"
                 }`}
               >
@@ -546,12 +593,14 @@ export default function OperatorDashboard() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-200 flex items-center justify-center text-zinc-400 mb-3">
+              <div className="w-12 h-12 rounded-xl bg-[#FFF4C2] flex items-center justify-center text-[#C9A227] mb-3">
                 <ClipboardList className="w-5 h-5" />
               </div>
               <p className="text-sm font-semibold text-zinc-700">Нет заявок</p>
               <p className="text-xs font-medium text-zinc-400 mt-1">
-                В этой вкладке пока пусто или ничего не нашлось по запросу
+                {activeTab === "in_progress" && role === "admin"
+                  ? "Сейчас нет заявок в работе"
+                  : "В этой вкладке пока пусто или ничего не нашлось по запросу"}
               </p>
             </div>
           )}
@@ -590,7 +639,9 @@ export default function OperatorDashboard() {
             <div className="py-12 text-center">
               <p className="text-sm font-semibold text-zinc-700">Нет заявок</p>
               <p className="text-xs font-medium text-zinc-400 mt-1">
-                В этой вкладке пока пусто
+                {activeTab === "in_progress" && role === "admin"
+                  ? "Сейчас нет заявок в работе"
+                  : "В этой вкладке пока пусто"}
               </p>
             </div>
           )}

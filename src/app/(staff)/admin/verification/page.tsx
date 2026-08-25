@@ -29,6 +29,8 @@ import {
 import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
 import { normalizeVerificationStatus } from "@/src/utils/verification";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
+import { useAuth } from "@/src/app/context/AuthContext";
+import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
 
 type VerificationTab = "pending" | "verified" | "rejected";
 
@@ -52,12 +54,6 @@ const TAB_LABELS: Record<VerificationTab, string> = {
   rejected: "Отменённые",
 };
 
-const TAB_SHELL: Record<VerificationTab, string> = {
-  pending: "border-amber-200",
-  verified: "border-emerald-300",
-  rejected: "border-rose-300",
-};
-
 function formatSubmittedAt(iso: string | null | undefined) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("ru-RU", {
@@ -78,6 +74,7 @@ function fullName(req: ProfileRequest) {
 
 export default function AdminVerificationPage() {
   const supabase = createClient();
+  const { staffActive } = useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [activeTab, setActiveTab] = useState<VerificationTab>("pending");
@@ -179,6 +176,10 @@ export default function AdminVerificationPage() {
     status: "verified" | "rejected",
     comment?: string,
   ) => {
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
     setProcessingId(id);
     setRequests((prev) => prev.filter((req) => req.id !== id));
 
@@ -210,6 +211,10 @@ export default function AdminVerificationPage() {
   };
 
   const handleApprove = async (req: ProfileRequest) => {
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
     const ok = await confirm({
       title:
         activeTab === "rejected"
@@ -226,6 +231,10 @@ export default function AdminVerificationPage() {
   };
 
   const openRejectDialog = (req: ProfileRequest) => {
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
     setRejectTarget(req);
     setRejectComment("");
     setRejectError(null);
@@ -269,7 +278,7 @@ export default function AdminVerificationPage() {
       return (
         <Button
           size="sm"
-          disabled={processingId === req.id}
+          disabled={processingId === req.id || !staffActive}
           onClick={() => void handleApprove(req)}
           className={`rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold ${
             compact ? "h-10 text-xs w-full" : "h-8 px-3 text-xs"
@@ -293,7 +302,7 @@ export default function AdminVerificationPage() {
       >
         <Button
           size="sm"
-          disabled={processingId === req.id}
+          disabled={processingId === req.id || !staffActive}
           onClick={() => void handleApprove(req)}
           className={`rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold ${
             compact ? "h-10 text-xs w-full" : "h-8 px-3 text-xs"
@@ -311,7 +320,7 @@ export default function AdminVerificationPage() {
         <Button
           size="sm"
           variant="destructive"
-          disabled={processingId === req.id}
+          disabled={processingId === req.id || !staffActive}
           onClick={() => openRejectDialog(req)}
           className={`rounded-full font-bold ${
             compact ? "h-10 text-xs w-full" : "h-8 px-3 text-xs"
@@ -339,7 +348,7 @@ export default function AdminVerificationPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start sm:items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 shrink-0">
+          <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227] shrink-0">
             <ShieldAlert className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
           <div className="min-w-0">
@@ -375,7 +384,7 @@ export default function AdminVerificationPage() {
             }}
             className={`shrink-0 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
               activeTab === tab
-                ? "bg-white text-zinc-900 shadow-sm"
+                ? "bg-[#FFF4C2] text-zinc-900"
                 : "text-zinc-500 hover:text-zinc-900"
             }`}
           >
@@ -402,7 +411,7 @@ export default function AdminVerificationPage() {
       )}
 
       {requests.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-8 sm:p-12 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
+        <div className="rounded-2xl bg-white p-8 sm:p-12 text-center shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
           <p className="text-gray-500 dark:text-zinc-400">{emptyText}</p>
         </div>
       ) : (
@@ -411,7 +420,7 @@ export default function AdminVerificationPage() {
             {requests.map((req) => (
               <div
                 key={req.id}
-                className={`rounded-2xl border bg-white p-4 shadow-sm dark:bg-zinc-900/50 space-y-3 ${TAB_SHELL[activeTab]}`}
+                className="rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.04)] space-y-3"
               >
                 <div>
                   <p className="font-bold text-sm text-zinc-900 break-all">
@@ -449,7 +458,7 @@ export default function AdminVerificationPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedPhoto(req.passport_url)}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline"
                   >
                     <Eye className="h-3.5 w-3.5" />
                     Открыть документ
@@ -462,7 +471,7 @@ export default function AdminVerificationPage() {
             ))}
           </div>
 
-          <div className={`hidden md:block overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-zinc-900/50 ${TAB_SHELL[activeTab]}`}>
+          <div className="hidden md:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-zinc-900 dark:text-zinc-400 border-b border-gray-100 dark:border-zinc-800">
@@ -516,7 +525,7 @@ export default function AdminVerificationPage() {
                           <button
                             type="button"
                             onClick={() => setSelectedPhoto(req.passport_url)}
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline cursor-pointer"
                           >
                             <Eye className="h-3.5 w-3.5" />
                             Открыть
@@ -575,14 +584,14 @@ export default function AdminVerificationPage() {
               type="button"
               variant="outline"
               onClick={closeRejectDialog}
-              className="h-11 rounded-full border-zinc-200 px-5 font-bold text-zinc-700 hover:bg-zinc-50"
+              className="h-11 rounded-xl border-zinc-200 px-5 font-bold text-zinc-700 hover:bg-zinc-50"
             >
               Отмена
             </Button>
             <Button
               type="button"
               onClick={() => void handleRejectSubmit()}
-              className="h-11 rounded-full bg-rose-600 px-5 font-bold text-white shadow-none hover:bg-rose-700"
+              className="h-11 rounded-xl bg-rose-600 px-5 font-bold text-white shadow-none hover:bg-rose-700"
             >
               Отклонить
             </Button>
@@ -592,17 +601,13 @@ export default function AdminVerificationPage() {
 
       {selectedPhoto && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/55 backdrop-blur-[3px] p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/35 backdrop-blur-[2px] p-4"
           onClick={() => setSelectedPhoto(null)}
         >
           <div
-            className="relative max-h-[90vh] max-w-3xl overflow-hidden rounded-[28px] border border-zinc-200 bg-white p-2 shadow-[0_24px_80px_rgba(24,24,27,0.25)]"
+            className="relative max-h-[90vh] max-w-3xl overflow-hidden rounded-2xl bg-white p-2 shadow-[0_24px_80px_rgba(15,23,42,0.12)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-[#FFDD2D]"
-            />
             <Image
               src={selectedPhoto}
               alt="Документ"

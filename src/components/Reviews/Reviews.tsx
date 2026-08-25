@@ -30,7 +30,7 @@ const mockReviews: ReviewItem[] = [
 
 export default function Reviews() {
     return (
-        <div className="bg-white p-6 rounded-3xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col gap-4">
+        <div className="bg-white p-6 rounded-2xl shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col gap-4">
             <h3 className="text-zinc-900 font-bold text-xl mb-1">Отзывы</h3>
 
             <div className="space-y-3">

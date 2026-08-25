@@ -1,3 +1,4 @@
+import { isListedOperatorPseudonym } from "@/src/utils/staff/pseudonyms";
 import { validationError, validationOk, type ValidationResult } from "./types";
 
 const CYRILLIC_NAME = /^[А-Яа-яЁё-]+$/;
@@ -191,13 +192,10 @@ export function validatePasswordConfirm(
 export function validateOperatorPseudonym(value: string): ValidationResult {
   const trimmed = value.trim();
   if (!trimmed) {
-    return validationError("Укажите псевдоним");
+    return validationError("Выберите псевдоним");
   }
-  if (trimmed.length > 40) {
-    return validationError("Псевдоним: до 40 символов");
-  }
-  if (!/^[А-Яа-яЁёA-Za-z0-9\s.-]{2,40}$/.test(trimmed)) {
-    return validationError("Псевдоним: буквы, цифры, пробел, . и -");
+  if (!isListedOperatorPseudonym(trimmed)) {
+    return validationError("Выберите псевдоним из списка");
   }
   return validationOk(trimmed);
 }

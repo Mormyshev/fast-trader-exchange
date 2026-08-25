@@ -7,7 +7,7 @@ import Features from "../components/Features/Features";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50/50 text-zinc-900 transition-colors duration-200 dark:bg-zinc-950 dark:text-zinc-50">
+    <div className="flex min-h-screen flex-col bg-[#F4F5F7] text-zinc-900 transition-colors duration-200 dark:bg-zinc-950 dark:text-zinc-50">
       <Header />
 
       <main className="main-content w-full flex-grow">

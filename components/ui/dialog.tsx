@@ -39,7 +39,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-zinc-950/45 backdrop-blur-[3px] duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-zinc-950/35 backdrop-blur-[2px] duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -61,15 +61,11 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-hidden rounded-[28px] border border-zinc-200 bg-white p-6 text-sm text-zinc-900 shadow-[0_24px_80px_rgba(24,24,27,0.2)] outline-none sm:max-w-md sm:p-7 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-hidden rounded-2xl bg-white p-6 text-sm text-zinc-900 shadow-[0_24px_80px_rgba(15,23,42,0.12)] outline-none sm:max-w-md sm:p-7 dark:bg-zinc-900 dark:text-zinc-50 duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-[#FFDD2D]"
-        />
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
@@ -120,7 +116,7 @@ function DialogFooter({
         <DialogPrimitive.Close asChild>
           <Button
             variant="outline"
-            className="h-11 rounded-full border-zinc-200 px-5 font-bold"
+            className="h-11 rounded-xl border-zinc-200 px-5 font-bold"
           >
             Закрыть
           </Button>

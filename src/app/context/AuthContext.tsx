@@ -9,6 +9,8 @@ type AppRole = "guest" | "user" | "operator" | "admin";
 interface AuthContextType {
   user: any | null;
   role: AppRole;
+  staffActive: boolean;
+  setStaffActive: (value: boolean) => void;
   isLoading: boolean;
   logoutUser: () => Promise<void>;
 }
@@ -16,6 +18,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   role: "guest",
+  staffActive: false,
+  setStaffActive: () => {},
   isLoading: true,
   logoutUser: async () => {},
 });
@@ -29,13 +33,16 @@ export function AuthProvider({
   children,
   initialUser,
   initialRole,
+  initialStaffActive = false,
 }: {
   children: React.ReactNode;
   initialUser: any;
   initialRole: AppRole;
+  initialStaffActive?: boolean;
 }) {
   const [user, setUser] = useState<any | null>(initialUser);
   const [role, setRole] = useState<AppRole>(initialRole);
+  const [staffActive, setStaffActive] = useState(initialStaffActive);
   const [isLoading, setIsLoading] = useState(!initialUser);
 
   const router = useRouter();
@@ -54,6 +61,7 @@ export function AuthProvider({
       if (event === "SIGNED_OUT" || !session) {
         setUser(null);
         setRole("guest");
+        setStaffActive(false);
         setIsLoading(false);
         return;
       }
@@ -80,6 +88,7 @@ export function AuthProvider({
           const res = await fetch("/api/me");
           const json = await res.json();
           setRole(normalizeRole(json.role));
+          setStaffActive(Boolean(json.staffActive));
         } catch {
           setRole("user");
         } finally {
@@ -108,6 +117,7 @@ export function AuthProvider({
     }
     setUser(null);
     setRole("guest");
+    setStaffActive(false);
     setIsLoading(false);
 
     if (typeof window !== "undefined") {
@@ -118,7 +128,9 @@ export function AuthProvider({
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, isLoading, logoutUser }}>
+    <AuthContext.Provider
+      value={{ user, role, staffActive, setStaffActive, isLoading, logoutUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

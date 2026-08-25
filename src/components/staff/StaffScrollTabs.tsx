@@ -11,7 +11,7 @@ export default function StaffScrollTabs({
     <div
       className={`overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${className}`}
     >
-      <div className="inline-flex h-10 min-w-full sm:min-w-0 flex-nowrap items-center gap-1 bg-zinc-100/70 p-1 rounded-2xl">
+      <div className="inline-flex h-10 min-w-full sm:min-w-0 flex-nowrap items-center gap-1 bg-white p-1 rounded-2xl shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
         {children}
       </div>
     </div>
