@@ -104,7 +104,8 @@ export default function AuthModal({
         setIsLoading(false);
         onClose();
         const next =
-          redirectTo && result.route === "/user/dashboard"
+          redirectTo &&
+          (result.route === "/user/orders" || result.route === "/user/dashboard")
             ? redirectTo
             : result.route;
         window.location.href = next;

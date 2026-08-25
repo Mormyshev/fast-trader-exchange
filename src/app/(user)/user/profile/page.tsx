@@ -25,7 +25,7 @@ const FILE_ACCEPT = ".gif,.jpg,.jpeg,.jpe,.png,image/gif,image/jpeg,image/png";
 const FILE_HINT = "(.GIF, .JPG, .JPEG, .JPE, .PNG, макс. 20 МБ)";
 
 const INPUT_CLASS =
-    "mt-1.5 block h-16 w-full rounded-2xl border-2 border-[#FFDD2D] bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#e6c628] focus:ring-2 focus:ring-[#FFDD2D]/40 disabled:cursor-not-allowed disabled:opacity-60";
+    "mt-1 block h-12 w-full rounded-xl border-2 border-[#FFDD2D] bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#e6c628] focus:ring-2 focus:ring-[#FFDD2D]/40 disabled:cursor-not-allowed disabled:opacity-60";
 
 function inputClass(hasError: boolean) {
     return hasError
@@ -55,47 +55,6 @@ function statusLabel(status: VerificationStatus) {
     }
 }
 
-function SelfieIllustration() {
-    return (
-        <svg
-            viewBox="0 0 220 170"
-            className="mx-auto h-auto w-full max-w-[200px]"
-            aria-hidden
-        >
-            <rect
-                x="8"
-                y="18"
-                width="204"
-                height="140"
-                rx="18"
-                fill="#FFF8D6"
-            />
-            <circle cx="88" cy="78" r="28" fill="#FFDD2D" />
-            <rect
-                x="68"
-                y="108"
-                width="40"
-                height="36"
-                rx="16"
-                fill="#FFDD2D"
-            />
-            <rect
-                x="118"
-                y="54"
-                width="70"
-                height="86"
-                rx="8"
-                fill="white"
-                stroke="#C9A227"
-                strokeWidth="3"
-            />
-            <rect x="128" y="66" width="50" height="28" rx="4" fill="#FFF4C2" />
-            <rect x="128" y="102" width="50" height="6" rx="3" fill="#E5E7EB" />
-            <rect x="128" y="114" width="36" height="6" rx="3" fill="#E5E7EB" />
-        </svg>
-    );
-}
-
 function FilePicker({
     label,
     required,
@@ -105,7 +64,6 @@ function FilePicker({
     error,
     onChange,
     onClear,
-    hint,
 }: {
     label: string;
     required?: boolean;
@@ -115,62 +73,62 @@ function FilePicker({
     error?: string;
     onChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClear: () => void;
-    hint?: string;
 }) {
     const name = file?.name || (previewUrl ? "Файл загружен" : null);
 
     return (
-        <div className="space-y-2">
-            <p className="text-sm font-semibold text-zinc-800">
+        <div
+            className={`flex h-full min-h-0 flex-col justify-center rounded-xl border-2 px-3 py-2.5 ${
+                error
+                    ? "border-rose-400 bg-rose-50/40"
+                    : "border-[#FFDD2D] bg-[#FFFEF6]"
+            }`}
+        >
+            <p className="text-xs font-semibold leading-snug text-zinc-800">
                 {label}
                 {required ? <RequiredMark /> : null}
             </p>
-            <p className="text-xs font-medium text-zinc-400">{FILE_HINT}</p>
             {disabled ? (
-                <p className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500">
-                    <FileText className="h-4 w-4 text-[#C9A227]" />
+                <p className="mt-1.5 inline-flex items-center gap-2 text-xs font-medium text-zinc-500">
+                    <FileText className="h-3.5 w-3.5 text-[#C9A227]" />
                     {name || "Файл отправлен"}
                 </p>
             ) : (
-                <label className="inline-flex h-16 cursor-pointer items-center rounded-full border-2 border-[#FFDD2D] bg-white px-6 text-sm font-bold text-zinc-900 transition-colors hover:bg-[#FFF8D6]">
-                    Выбрать файл
-                    <input
-                        type="file"
-                        accept={FILE_ACCEPT}
-                        className="sr-only"
-                        onChange={onChange}
-                    />
-                </label>
+                <div className="mt-1.5 flex min-w-0 items-center gap-2">
+                    {previewUrl ? (
+                        <div className="h-10 w-14 shrink-0 overflow-hidden rounded-lg bg-white">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={previewUrl}
+                                alt="Превью"
+                                className="h-full w-full object-cover"
+                            />
+                        </div>
+                    ) : null}
+                    <label className="inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-[#FFDD2D] bg-white px-4 text-xs font-bold text-zinc-900 transition-colors hover:bg-[#FFF8D6]">
+                        Выбрать файл
+                        <input
+                            type="file"
+                            accept={FILE_ACCEPT}
+                            className="sr-only"
+                            onChange={onChange}
+                        />
+                    </label>
+                    {name ? (
+                        <div className="flex min-w-0 items-center gap-1 text-[11px] font-medium text-zinc-600">
+                            <span className="truncate">{name}</span>
+                            <button
+                                type="button"
+                                onClick={onClear}
+                                className="rounded-full p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-800"
+                                aria-label="Удалить файл"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
             )}
-            {name && !disabled ? (
-                <div className="flex items-center gap-2 text-xs font-medium text-zinc-600">
-                    <FileText className="h-4 w-4 shrink-0 text-[#C9A227]" />
-                    <span className="truncate">{name}</span>
-                    <button
-                        type="button"
-                        onClick={onClear}
-                        className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-800"
-                        aria-label="Удалить файл"
-                    >
-                        <X className="h-3.5 w-3.5" />
-                    </button>
-                </div>
-            ) : null}
-            {previewUrl ? (
-                <div className="relative mt-2 h-40 w-full overflow-hidden rounded-xl bg-zinc-50">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src={previewUrl}
-                        alt="Превью"
-                        className="h-full w-full object-contain"
-                    />
-                </div>
-            ) : null}
-            {hint ? (
-                <p className="text-xs font-medium leading-relaxed text-zinc-400">
-                    {hint}
-                </p>
-            ) : null}
             <FieldError message={error} />
         </div>
     );
@@ -484,252 +442,253 @@ export default function ProfilePage() {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
                 {formError ? (
                     <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
                         {formError}
                     </div>
                 ) : null}
 
-                <div className="rounded-2xl bg-white p-5 sm:p-7 shadow-[0_4px_24px_rgba(15,23,42,0.04)] space-y-4">
-                    <div>
-                        <label className="text-sm font-semibold text-zinc-800">
-                            Фамилия
-                            <RequiredMark />:
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            disabled={!editable}
-                            value={lastName}
-                            onChange={(e) => {
-                                setLastName(e.target.value);
-                                if (fieldErrors.lastName) {
-                                    setFieldErrors((prev) => ({
-                                        ...prev,
-                                        lastName: undefined,
-                                    }));
-                                }
-                            }}
-                            onBlur={() => touchField("lastName")}
-                            className={inputClass(!!fieldErrors.lastName)}
-                        />
-                        <FieldError message={fieldErrors.lastName} />
+                <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
+                        <div className="flex flex-col gap-3">
+                            <div>
+                                <label className="text-sm font-semibold text-zinc-800">
+                                    Фамилия
+                                    <RequiredMark />:
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    disabled={!editable}
+                                    value={lastName}
+                                    onChange={(e) => {
+                                        setLastName(e.target.value);
+                                        if (fieldErrors.lastName) {
+                                            setFieldErrors((prev) => ({
+                                                ...prev,
+                                                lastName: undefined,
+                                            }));
+                                        }
+                                    }}
+                                    onBlur={() => touchField("lastName")}
+                                    className={inputClass(!!fieldErrors.lastName)}
+                                />
+                                <FieldError message={fieldErrors.lastName} />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-zinc-800">
+                                    Имя
+                                    <RequiredMark />:
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    disabled={!editable}
+                                    value={firstName}
+                                    onChange={(e) => {
+                                        setFirstName(e.target.value);
+                                        if (fieldErrors.firstName) {
+                                            setFieldErrors((prev) => ({
+                                                ...prev,
+                                                firstName: undefined,
+                                            }));
+                                        }
+                                    }}
+                                    onBlur={() => touchField("firstName")}
+                                    className={inputClass(!!fieldErrors.firstName)}
+                                />
+                                <FieldError message={fieldErrors.firstName} />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-zinc-800">
+                                    Отчество
+                                    <RequiredMark />:
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    disabled={!editable}
+                                    value={middleName}
+                                    onChange={(e) => {
+                                        setMiddleName(e.target.value);
+                                        if (fieldErrors.middleName) {
+                                            setFieldErrors((prev) => ({
+                                                ...prev,
+                                                middleName: undefined,
+                                            }));
+                                        }
+                                    }}
+                                    onBlur={() => touchField("middleName")}
+                                    className={inputClass(!!fieldErrors.middleName)}
+                                />
+                                <FieldError message={fieldErrors.middleName} />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-zinc-800">
+                                    Серия и номер документа
+                                    <RequiredMark />:
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    disabled={!editable}
+                                    value={documentNumber}
+                                    onChange={(e) => {
+                                        setDocumentNumber(e.target.value);
+                                        if (fieldErrors.documentNumber) {
+                                            setFieldErrors((prev) => ({
+                                                ...prev,
+                                                documentNumber: undefined,
+                                            }));
+                                        }
+                                    }}
+                                    onBlur={() => touchField("documentNumber")}
+                                    placeholder="Паспорт или водительское удостоверение"
+                                    className={inputClass(
+                                        !!fieldErrors.documentNumber,
+                                    )}
+                                />
+                                <FieldError
+                                    message={fieldErrors.documentNumber}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-zinc-800">
+                                    Телефон
+                                    <RequiredMark />:
+                                </label>
+                                <input
+                                    type="tel"
+                                    required
+                                    disabled={!editable}
+                                    value={phone}
+                                    onChange={(e) => {
+                                        setPhone(formatPhoneInput(e.target.value));
+                                        if (fieldErrors.phone) {
+                                            setFieldErrors((prev) => ({
+                                                ...prev,
+                                                phone: undefined,
+                                            }));
+                                        }
+                                    }}
+                                    onBlur={() => touchField("phone")}
+                                    placeholder="+7 (999) 000-00-00"
+                                    className={inputClass(!!fieldErrors.phone)}
+                                />
+                                <FieldError message={fieldErrors.phone} />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-zinc-800">
+                                    Telegram
+                                    <RequiredMark />:
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    disabled={!editable}
+                                    value={telegram}
+                                    onChange={(e) => {
+                                        setTelegram(
+                                            formatTelegramInput(e.target.value),
+                                        );
+                                        if (fieldErrors.telegram) {
+                                            setFieldErrors((prev) => ({
+                                                ...prev,
+                                                telegram: undefined,
+                                            }));
+                                        }
+                                    }}
+                                    onBlur={() => touchField("telegram")}
+                                    placeholder="@username"
+                                    className={inputClass(!!fieldErrors.telegram)}
+                                />
+                                <FieldError message={fieldErrors.telegram} />
+                            </div>
+                        </div>
+
+                        <div className="flex h-full flex-col gap-2">
+                            <div>
+                                <p className="text-sm font-bold text-zinc-900">
+                                    Сканы или фотографии документов
+                                </p>
+                                <p className="mt-0.5 text-[11px] font-medium text-zinc-400">
+                                    {FILE_HINT}. На фоне — адрес сайта или лист
+                                    бумаги с email, номером заявки и Aurum Swap.
+                                </p>
+                            </div>
+                            <div className="grid min-h-0 flex-1 grid-rows-3 gap-2">
+                                <FilePicker
+                                    label="Фото 2 и 3 страницы паспорта или ВУ"
+                                    required
+                                    file={passportFile}
+                                    previewUrl={passportUrl}
+                                    disabled={!editable}
+                                    error={fieldErrors.passport}
+                                    onChange={(e) =>
+                                        pickFile(
+                                            e,
+                                            setPassportFile,
+                                            setPassportUrl,
+                                            "passport",
+                                        )
+                                    }
+                                    onClear={() => {
+                                        setPassportFile(null);
+                                        setPassportUrl(null);
+                                    }}
+                                />
+                                <FilePicker
+                                    label="Селфи с разворотом документа"
+                                    required
+                                    file={selfieFile}
+                                    previewUrl={selfieUrl}
+                                    disabled={!editable}
+                                    error={fieldErrors.selfie}
+                                    onChange={(e) =>
+                                        pickFile(
+                                            e,
+                                            setSelfieFile,
+                                            setSelfieUrl,
+                                            "selfie",
+                                        )
+                                    }
+                                    onClear={() => {
+                                        setSelfieFile(null);
+                                        setSelfieUrl(null);
+                                    }}
+                                />
+                                <FilePicker
+                                    label="Дополнительный файл"
+                                    file={extraFile}
+                                    previewUrl={extraUrl}
+                                    disabled={!editable}
+                                    onChange={(e) =>
+                                        pickFile(e, setExtraFile, setExtraUrl)
+                                    }
+                                    onClear={() => {
+                                        setExtraFile(null);
+                                        setExtraUrl(null);
+                                    }}
+                                />
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-sm font-semibold text-zinc-800">
-                            Имя
-                            <RequiredMark />:
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            disabled={!editable}
-                            value={firstName}
-                            onChange={(e) => {
-                                setFirstName(e.target.value);
-                                if (fieldErrors.firstName) {
-                                    setFieldErrors((prev) => ({
-                                        ...prev,
-                                        firstName: undefined,
-                                    }));
-                                }
-                            }}
-                            onBlur={() => touchField("firstName")}
-                            className={inputClass(!!fieldErrors.firstName)}
-                        />
-                        <FieldError message={fieldErrors.firstName} />
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-zinc-800">
-                            Серия номер паспорта или водительского удостоверения
-                            <RequiredMark />:
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            disabled={!editable}
-                            value={documentNumber}
-                            onChange={(e) => {
-                                setDocumentNumber(e.target.value);
-                                if (fieldErrors.documentNumber) {
-                                    setFieldErrors((prev) => ({
-                                        ...prev,
-                                        documentNumber: undefined,
-                                    }));
-                                }
-                            }}
-                            onBlur={() => touchField("documentNumber")}
-                            className={inputClass(!!fieldErrors.documentNumber)}
-                        />
-                        <FieldError message={fieldErrors.documentNumber} />
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-zinc-800">
-                            Отчество
-                            <RequiredMark />:
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            disabled={!editable}
-                            value={middleName}
-                            onChange={(e) => {
-                                setMiddleName(e.target.value);
-                                if (fieldErrors.middleName) {
-                                    setFieldErrors((prev) => ({
-                                        ...prev,
-                                        middleName: undefined,
-                                    }));
-                                }
-                            }}
-                            onBlur={() => touchField("middleName")}
-                            className={inputClass(!!fieldErrors.middleName)}
-                        />
-                        <FieldError message={fieldErrors.middleName} />
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-zinc-800">
-                            Телефон
-                            <RequiredMark />:
-                        </label>
-                        <input
-                            type="tel"
-                            required
-                            disabled={!editable}
-                            value={phone}
-                            onChange={(e) => {
-                                setPhone(formatPhoneInput(e.target.value));
-                                if (fieldErrors.phone) {
-                                    setFieldErrors((prev) => ({
-                                        ...prev,
-                                        phone: undefined,
-                                    }));
-                                }
-                            }}
-                            onBlur={() => touchField("phone")}
-                            placeholder="+7 (999) 000-00-00"
-                            className={inputClass(!!fieldErrors.phone)}
-                        />
-                        <FieldError message={fieldErrors.phone} />
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-zinc-800">
-                            Telegram
-                            <RequiredMark />:
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            disabled={!editable}
-                            value={telegram}
-                            onChange={(e) => {
-                                setTelegram(
-                                    formatTelegramInput(e.target.value),
-                                );
-                                if (fieldErrors.telegram) {
-                                    setFieldErrors((prev) => ({
-                                        ...prev,
-                                        telegram: undefined,
-                                    }));
-                                }
-                            }}
-                            onBlur={() => touchField("telegram")}
-                            placeholder="@username"
-                            className={inputClass(!!fieldErrors.telegram)}
-                        />
-                        <FieldError message={fieldErrors.telegram} />
-                    </div>
+
+                    {editable ? (
+                        <Button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="mt-5 h-12 w-full rounded-full bg-[#FFDD2D] text-sm font-bold text-zinc-900 shadow-none hover:bg-[#e6c628] disabled:opacity-50"
+                        >
+                            {isSubmitting
+                                ? "Отправка..."
+                                : verificationStatus === "rejected"
+                                  ? "Отправить запрос повторно"
+                                  : "Отправить запрос"}
+                        </Button>
+                    ) : null}
                 </div>
-
-                <h2 className="text-xl font-bold tracking-tight text-zinc-900">
-                    Сканы или фотографии документов
-                </h2>
-
-                <div className="rounded-2xl bg-white p-5 sm:p-7 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] lg:items-start">
-                        <FilePicker
-                            label="Фото 2 и 3 страницы паспорта или водительского удостоверения на фоне сайта или листа бумаги"
-                            required
-                            file={passportFile}
-                            previewUrl={passportUrl}
-                            disabled={!editable}
-                            error={fieldErrors.passport}
-                            onChange={(e) =>
-                                pickFile(
-                                    e,
-                                    setPassportFile,
-                                    setPassportUrl,
-                                    "passport",
-                                )
-                            }
-                            onClear={() => {
-                                setPassportFile(null);
-                                setPassportUrl(null);
-                            }}
-                        />
-                        <p className="text-sm font-medium leading-relaxed text-zinc-400 lg:pt-1">
-                            «На фоне сайта или листа бумаги» означает, что на
-                            заднем фоне должен быть виден адрес сайта или лист
-                            бумаги, где указаны ваша электронная почта, номер
-                            заявки и название обменника Aurum Swap.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="rounded-2xl bg-white p-5 sm:p-7 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] lg:items-center">
-                        <FilePicker
-                            label="Селфи с разворотом 2-3 страницы паспорта или водительского удостоверения"
-                            required
-                            file={selfieFile}
-                            previewUrl={selfieUrl}
-                            disabled={!editable}
-                            error={fieldErrors.selfie}
-                            onChange={(e) =>
-                                pickFile(
-                                    e,
-                                    setSelfieFile,
-                                    setSelfieUrl,
-                                    "selfie",
-                                )
-                            }
-                            onClear={() => {
-                                setSelfieFile(null);
-                                setSelfieUrl(null);
-                            }}
-                        />
-                        <SelfieIllustration />
-                    </div>
-                </div>
-
-                <div className="rounded-2xl bg-white p-5 sm:p-7 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-                    <FilePicker
-                        label="Дополнительное поле для загрузки"
-                        file={extraFile}
-                        previewUrl={extraUrl}
-                        disabled={!editable}
-                        onChange={(e) => pickFile(e, setExtraFile, setExtraUrl)}
-                        onClear={() => {
-                            setExtraFile(null);
-                            setExtraUrl(null);
-                        }}
-                    />
-                </div>
-
-                {editable ? (
-                    <Button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="h-16 w-full rounded-full bg-[#FFDD2D] text-sm font-bold text-zinc-900 shadow-none hover:bg-[#e6c628] disabled:opacity-50"
-                    >
-                        {isSubmitting
-                            ? "Отправка..."
-                            : verificationStatus === "rejected"
-                              ? "Отправить запрос повторно"
-                              : "Отправить запрос"}
-                    </Button>
-                ) : null}
             </form>
 
             <div className="space-y-3">

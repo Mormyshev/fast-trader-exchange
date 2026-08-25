@@ -28,7 +28,7 @@ function parseScope(raw: string | null): Scope {
   if (raw && (SCOPES as readonly string[]).includes(raw)) {
     return raw as Scope;
   }
-  return "pending";
+  return "all";
 }
 
 export async function GET(request: NextRequest) {
@@ -71,7 +71,23 @@ export async function GET(request: NextRequest) {
       return query;
     };
 
-    let { data, error } = await buildQuery(fieldsWithNumber);
+    const ACTIVE_STATUSES = ["pending", ...IN_PROGRESS_STATUSES];
+
+    const [listRes, activeCountRes, completedCountRes] = await Promise.all([
+      buildQuery(fieldsWithNumber),
+      admin
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .in("status", ACTIVE_STATUSES),
+      admin
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "completed"),
+    ]);
+
+    let { data, error } = listRes;
     if (error && isOrderNumberColumnMissing(error)) {
       ({ data, error } = await buildQuery(stripOrderNumberField(fieldsWithNumber)));
     }
@@ -80,7 +96,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ orders: data ?? [], scope });
+    return NextResponse.json({
+      orders: data ?? [],
+      scope,
+      stats: {
+        active: activeCountRes.count ?? 0,
+        completed: completedCountRes.count ?? 0,
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

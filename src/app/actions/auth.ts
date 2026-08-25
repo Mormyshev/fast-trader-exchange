@@ -31,7 +31,7 @@ export async function loginAndGetRoute(
   // 2. Сразу же запрашиваем роль на сервере в рамках одного процесса
   try {
     const userId = authData.user?.id;
-    if (!userId) return { route: "/user/dashboard" };
+    if (!userId) return { route: "/user/orders" };
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -46,5 +46,5 @@ export async function loginAndGetRoute(
     console.error("Server Action Role Error:", err);
   }
 
-  return { route: "/user/dashboard" };
+  return { route: "/user/orders" };
 }

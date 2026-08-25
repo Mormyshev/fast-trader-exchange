@@ -446,6 +446,41 @@ export function formatRateLabel(
   return "Курс: —";
 }
 
+export function formatLockedOrderRate(
+  amountFrom: number,
+  amountTo: number,
+  currencyFrom: string,
+  currencyTo: string,
+): string {
+  const fromAmt = Number(amountFrom);
+  const toAmt = Number(amountTo);
+  if (!(fromAmt > 0 && toAmt > 0)) return "—";
+
+  const send = findCurrencyByOrderCode(currencyFrom);
+  const receive = findCurrencyByOrderCode(currencyTo);
+  const sendCode = send?.code ?? currencyFrom.replace(/_/g, " ");
+  const receiveCode = receive?.code ?? currencyTo.replace(/_/g, " ");
+  const sendCrypto = send
+    ? isCryptoCurrency(send)
+    : !/^RUB/i.test(currencyFrom);
+  const receiveCrypto = receive
+    ? isCryptoCurrency(receive)
+    : !/^RUB/i.test(currencyTo);
+
+  if (sendCrypto && !receiveCrypto) {
+    return `1 ${sendCode} = ${formatRubPrice(toAmt / fromAmt)} ${receiveCode}`;
+  }
+  if (!sendCrypto && receiveCrypto) {
+    return `${formatRubPrice(fromAmt / toAmt)} ${sendCode} = 1 ${receiveCode}`;
+  }
+
+  const rate = toAmt / fromAmt;
+  const formatted = rate.toLocaleString("ru-RU", {
+    maximumFractionDigits: rate >= 1 ? 6 : 8,
+  });
+  return `1 ${sendCode} = ${formatted} ${receiveCode}`;
+}
+
 export function sanitizeAmountInput(raw: string): string {
   return raw.replace(/,/g, ".").replace(/[^\d.]/g, "");
 }

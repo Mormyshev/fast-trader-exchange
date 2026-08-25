@@ -3,27 +3,27 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRightLeft,
-  Clock,
+  ArrowLeftRight,
   Loader2,
   ClipboardList,
   ChevronLeft,
   ChevronRight,
   FileText,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
 import { startPolling, subscribeWithAuth } from "@/src/utils/supabase/realtime";
-import {
-  orderStatusBadgeClass,
-  orderStatusCardClass,
-} from "@/src/utils/orders/status-style";
+import { orderStatusBadgeClass } from "@/src/utils/orders/status-style";
 import { orderPublicTitle } from "@/src/utils/orders/public-number";
-import OrderProgressStepper from "@/src/components/OrderProgress/OrderProgressStepper";
-import RateFixationBar from "@/src/components/OrderTtlBadge/RateFixationBar";
-import { useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import { formatOrderMoney } from "@/src/components/staff/OrderExchangePair";
+import {
+  findCurrencyByOrderCode,
+  formatLockedOrderRate,
+} from "@/src/utils/exchange-currencies";
 
 type OrderStatus =
   | "pending"
@@ -51,6 +51,10 @@ interface Order {
 }
 
 const PAGE_SIZE = 10;
+const TABLE_HEAD_CELL =
+  "border-r border-zinc-200 px-5 py-3 whitespace-nowrap last:border-r-0";
+const TABLE_CELL =
+  "border-r border-zinc-200 px-5 py-3.5 align-middle last:border-r-0";
 
 const IN_PROGRESS_STATUSES: OrderStatus[] = [
   "processing",
@@ -77,18 +81,43 @@ function statusLabel(status: OrderStatus) {
   }
 }
 
-function formatCurrency(value: number, currency: string) {
-  const num = Number(value || 0);
-  const formatted = Number.isInteger(num)
-    ? num.toLocaleString("ru-RU")
-    : num.toLocaleString("ru-RU", { maximumFractionDigits: 8 });
-  return `${formatted} ${currency.replace(/_/g, " ")}`;
+function AmountCell({
+  amount,
+  orderCode,
+}: {
+  amount: number;
+  orderCode: string;
+}) {
+  const currency = findCurrencyByOrderCode(orderCode);
+  const code = currency?.code ?? orderCode.replace(/_/g, " ");
+  const network = currency?.network?.shortLabel;
+  const iconSrc = currency?.iconSrc ?? "/icons/usdt.svg";
+
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <CurrencyIcon
+        src={iconSrc}
+        alt={code}
+        size={28}
+        className="rounded-lg border border-zinc-200"
+      />
+      <div className="min-w-0">
+        <p className="font-bold tabular-nums text-zinc-900 whitespace-nowrap">
+          {formatOrderMoney(amount, orderCode)}
+        </p>
+        <p className="text-[11px] font-semibold text-zinc-400 whitespace-nowrap">
+          {code}
+          {network && network !== code ? ` · ${network}` : ""}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function formatOrderCreatedAt(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", {
-    day: "numeric",
-    month: "long",
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
@@ -136,12 +165,12 @@ function emptyCopy(tab: TabId) {
 
 export default function UserOrdersPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>("pending");
+  const [activeTab, setActiveTab] = useState<TabId>("all");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const now = useNowTick(!loading && orders.length > 0);
+  const [stats, setStats] = useState({ active: 0, completed: 0 });
 
   useEffect(() => {
     if (!user?.id) {
@@ -164,6 +193,10 @@ export default function UserOrdersPage() {
         }
         if (!cancelled) {
           setOrders(json.orders || []);
+          setStats({
+            active: Number(json.stats?.active) || 0,
+            completed: Number(json.stats?.completed) || 0,
+          });
           setError(null);
         }
       } catch (err) {
@@ -253,14 +286,46 @@ export default function UserOrdersPage() {
         </p>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+            <ClipboardList className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-zinc-500">Мои заявки</p>
+            <p className="text-xl font-bold text-zinc-900">{stats.active}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-zinc-500">Успешные обмены</p>
+            <p className="text-xl font-bold text-zinc-900">{stats.completed}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+            <ArrowLeftRight className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-zinc-500">Аккаунт</p>
+            <p className="text-sm font-semibold text-zinc-900 truncate max-w-[200px]">
+              {user?.email || "Пользователь"}
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl w-fit">
         {(
           [
+            { id: "all", label: "Все" },
             { id: "pending", label: "Новые" },
             { id: "in_progress", label: "В работе" },
             { id: "completed", label: "Выполненные" },
             { id: "cancelled", label: "Отменённые" },
-            { id: "all", label: "Все" },
           ] as const
         ).map((tab) => (
           <Button
@@ -288,154 +353,162 @@ export default function UserOrdersPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-[#FFDD2D]" />
-        </div>
-      ) : orders.length === 0 ? (
-        <Card className="rounded-[32px] border border-dashed border-zinc-200 bg-white shadow-none p-10 md:p-14 text-center space-y-4">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400">
-            <ClipboardList className="w-7 h-7" />
+      <Card className="rounded-[32px] border border-dashed border-zinc-200 bg-white shadow-none overflow-hidden p-0">
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-[#FFDD2D]" />
           </div>
-          <div className="space-y-2">
-            <h2 className="text-lg font-bold text-zinc-900">{empty.title}</h2>
-            <p className="text-sm text-zinc-500 font-medium max-w-md mx-auto">
-              {empty.text}
-            </p>
-          </div>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {paginatedOrders.map((order) => {
-            const isActive = [
-              "pending",
-              "processing",
-              "awaiting_payment",
-              "paid",
-            ].includes(order.status);
-
-            return (
-              <Card
-                key={order.id}
-                className={`rounded-[28px] border shadow-none p-4 sm:p-5 md:p-6 ${orderStatusCardClass(order.status)}`}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center gap-4 md:gap-6">
-                  <div className="space-y-3 min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-zinc-400">
-                      <span className="text-sm font-bold text-zinc-900">
-                        {orderPublicTitle(order)}
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <Clock className="w-3.5 h-3.5 shrink-0" />
-                        {formatOrderCreatedAt(order.created_at)}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-zinc-900">
-                      <span>
-                        {formatCurrency(order.amount_from, order.currency_from)}
-                      </span>
-                      <ArrowRightLeft className="w-4 h-4 text-zinc-300 shrink-0" />
-                      <span>
-                        {formatCurrency(order.amount_to, order.currency_to)}
-                      </span>
-                    </div>
-
-                    <RateFixationBar
-                      createdAt={order.created_at}
-                      status={order.status}
-                      now={now}
-                      embedded
-                    />
-                    <OrderProgressStepper status={order.status} embedded />
-                    <p className="text-xs font-medium text-zinc-400 break-all">
-                      Кошелёк:{" "}
-                      <span className="font-mono text-zinc-600">
-                        {order.wallet_to}
-                      </span>
-                    </p>
-                    {order.status === "completed" &&
-                      order.operator_receipt_url && (
-                        <a
-                          href={`/api/orders/${order.id}/operator-receipt`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:underline"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          Подтверждение перевода
-                        </a>
-                      )}
-                  </div>
-
-                  <div className="flex md:justify-center md:min-w-[11rem]">
-                    <span
-                      className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${orderStatusBadgeClass(order.status)}`}
-                    >
-                      {statusLabel(order.status)}
-                    </span>
-                  </div>
-
-                  <div className="flex md:justify-end">
-                    <Button
-                      asChild
-                      className={`rounded-full h-11 px-6 font-bold shadow-none w-full md:w-auto cursor-pointer ${
-                        isActive
-                          ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
-                          : order.status === "completed"
-                            ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-900"
-                            : order.status === "cancelled" ||
-                                order.status === "failed"
-                              ? "bg-rose-100 hover:bg-rose-200 text-rose-900"
-                              : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
-                      }`}
-                    >
-                      <Link href={`/order/${order.id}`}>
-                        {isActive ? "Открыть заявку" : "Подробнее"}
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-
-          {showPagination && (
-            <div className="flex items-center justify-between gap-3 pt-2">
-              <p className="text-xs font-semibold text-zinc-400">
-                {(currentPage - 1) * PAGE_SIZE + 1}–
-                {Math.min(currentPage * PAGE_SIZE, orders.length)} из{" "}
-                {orders.length}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="h-9 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <span className="text-xs font-bold text-zinc-700 min-w-[4.5rem] text-center">
-                  {currentPage} / {totalPages}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="h-9 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
+        ) : orders.length === 0 ? (
+          <div className="p-10 md:p-14 text-center space-y-4">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400">
+              <ClipboardList className="w-7 h-7" />
             </div>
-          )}
-        </div>
-      )}
+            <div className="space-y-2">
+              <h2 className="text-lg font-bold text-zinc-900">{empty.title}</h2>
+              <p className="text-sm text-zinc-500 font-medium max-w-md mx-auto">
+                {empty.text}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+                <thead>
+                  <tr className="bg-[#FFF4C2] text-[11px] font-bold uppercase tracking-wider text-zinc-600">
+                    <th className={TABLE_HEAD_CELL}>№</th>
+                    <th className={TABLE_HEAD_CELL}>Дата</th>
+                    <th className={TABLE_HEAD_CELL}>Отдаёте</th>
+                    <th className={TABLE_HEAD_CELL}>Получаете</th>
+                    <th className={TABLE_HEAD_CELL}>Курс</th>
+                    <th className={TABLE_HEAD_CELL}>Статус</th>
+                    <th className={`${TABLE_HEAD_CELL} text-right`}> </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedOrders.map((order) => {
+                    const isActive = [
+                      "pending",
+                      "processing",
+                      "awaiting_payment",
+                      "paid",
+                    ].includes(order.status);
+
+                    return (
+                      <tr
+                        key={order.id}
+                        className="border-b border-zinc-200 hover:bg-zinc-50/80"
+                      >
+                        <td className={TABLE_CELL}>
+                          <div className="font-bold text-zinc-900 whitespace-nowrap">
+                            {orderPublicTitle(order)}
+                          </div>
+                          {order.status === "completed" &&
+                          order.operator_receipt_url ? (
+                            <a
+                              href={`/api/orders/${order.id}/operator-receipt`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:underline"
+                            >
+                              <FileText className="w-3 h-3" />
+                              Подтверждение
+                            </a>
+                          ) : null}
+                        </td>
+                        <td
+                          className={`${TABLE_CELL} whitespace-nowrap font-medium text-zinc-500`}
+                        >
+                          {formatOrderCreatedAt(order.created_at)}
+                        </td>
+                        <td className={TABLE_CELL}>
+                          <AmountCell
+                            amount={order.amount_from}
+                            orderCode={order.currency_from}
+                          />
+                        </td>
+                        <td className={TABLE_CELL}>
+                          <AmountCell
+                            amount={order.amount_to}
+                            orderCode={order.currency_to}
+                          />
+                        </td>
+                        <td className={TABLE_CELL}>
+                          <span className="font-semibold tabular-nums text-zinc-800 whitespace-nowrap">
+                            {formatLockedOrderRate(
+                              order.amount_from,
+                              order.amount_to,
+                              order.currency_from,
+                              order.currency_to,
+                            )}
+                          </span>
+                        </td>
+                        <td className={TABLE_CELL}>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap ${orderStatusBadgeClass(order.status)}`}
+                          >
+                            {statusLabel(order.status)}
+                          </span>
+                        </td>
+                        <td className={`${TABLE_CELL} text-right`}>
+                          <Button
+                            asChild
+                            size="sm"
+                            className={`rounded-full h-8 px-4 text-xs font-bold shadow-none cursor-pointer ${
+                              isActive
+                                ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
+                                : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
+                            }`}
+                          >
+                            <Link href={`/order/${order.id}`}>
+                              {isActive ? "Открыть" : "Подробнее"}
+                            </Link>
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {showPagination && (
+              <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-5 py-3">
+                <p className="text-xs font-semibold text-zinc-400">
+                  {(currentPage - 1) * PAGE_SIZE + 1}–
+                  {Math.min(currentPage * PAGE_SIZE, orders.length)} из{" "}
+                  {orders.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="h-8 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-xs font-bold text-zinc-700 min-w-[4.5rem] text-center">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="h-8 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </Card>
     </div>
   );
 }

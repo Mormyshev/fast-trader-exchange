@@ -7,11 +7,13 @@ export default function CryptoNetworkSelect({
   selectedVariantId,
   onSelectVariant,
   label = "Сеть",
+  compact = false,
 }: {
   asset: CryptoAsset;
   selectedVariantId: string;
   onSelectVariant: (variantId: string) => void;
   label?: string;
+  compact?: boolean;
 }) {
   if (!asset.networks.length) return null;
 
@@ -20,11 +22,14 @@ export default function CryptoNetworkSelect({
   );
 
   return (
-    <div className="space-y-2">
-      <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
-        {label} <span className="text-red-500 font-bold ml-0.5">*</span> :
+    <div className={compact ? "space-y-1.5" : "space-y-2"}>
+      <label
+        className={`block text-xs font-bold text-zinc-500 ${compact ? "" : "pl-4"}`}
+      >
+        {label}
+        <span className="ml-0.5 font-bold text-red-500">*</span>
       </label>
-      <div className="flex flex-wrap gap-2 pl-1">
+      <div className={`flex flex-wrap gap-2 ${compact ? "" : "pl-1"}`}>
         {asset.networks.map((variant) => {
           const active = selectedVariantId === variant.id;
           const singleNetwork = asset.networks.length === 1;
@@ -34,7 +39,7 @@ export default function CryptoNetworkSelect({
               type="button"
               onClick={() => onSelectVariant(variant.id)}
               disabled={singleNetwork}
-              className={`rounded-full px-4 py-2 text-xs font-bold border transition-colors ${
+              className={`rounded-full px-3 py-1.5 text-xs font-bold border transition-colors ${
                 singleNetwork
                   ? "cursor-default"
                   : "cursor-pointer hover:border-[#FFDD2D]"
@@ -49,11 +54,11 @@ export default function CryptoNetworkSelect({
           );
         })}
       </div>
-      {selectedVariant && (
+      {!compact && selectedVariant ? (
         <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 pl-4 leading-relaxed">
           {selectedVariant.network.description}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

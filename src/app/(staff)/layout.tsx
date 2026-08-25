@@ -32,7 +32,7 @@ export default async function StaffLayout({
   const role = profile?.role || "user";
 
   if (role !== "operator" && role !== "admin") {
-    redirect("/user/dashboard");
+    redirect("/user/orders");
   }
 
   const operatorPseudonym = profile?.operator_pseudonym?.trim() || null;

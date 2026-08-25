@@ -14,15 +14,13 @@ import {
   SheetTrigger,
   SheetTitle,
 } from "@/components/ui/sheet";
+import UserCabinetNav from "@/src/components/UserCabinetNav/UserCabinetNav";
 
-function getCabinetLink(role: string) {
-  if (role === "operator" || role === "admin") {
-    return {
-      href: "/operator/dashboard",
-      label: role === "admin" ? "Панель управления" : "Панель оператора",
-    };
-  }
-  return { href: "/user/dashboard", label: "Кабинет" };
+function getStaffHome(role: string) {
+  return {
+    href: "/operator/dashboard",
+    label: role === "admin" ? "Панель управления" : "Панель оператора",
+  };
 }
 
 export default function Header() {
@@ -31,7 +29,7 @@ export default function Header() {
   const { role, logoutUser } = useAuth();
   const { openLogin, openRegister } = useAuthDialog();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
-  const cabinet = getCabinetLink(role);
+  const staffHome = getStaffHome(role);
 
   const handleLogout = async () => {
     const ok = await confirm({
@@ -48,7 +46,7 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md transition-colors duration-200 dark:border-zinc-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-5 md:px-6 lg:px-8">
-          <div className="flex h-16 md:h-20 items-center justify-between">
+          <div className="flex h-16 items-center justify-between">
             <NextLink href="/" className="flex items-center space-x-3 group">
               <div className="relative h-10 w-10 flex items-center justify-center shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -87,22 +85,21 @@ export default function Header() {
                     Регистрация
                   </Button>
                 </div>
+              ) : role === "user" ? (
+                <UserCabinetNav />
               ) : (
                 <div className="flex items-center space-x-3">
-                  <NextLink href={cabinet.href}>
+                  <NextLink href={staffHome.href}>
                     <Button className="rounded-full bg-[#FFDD2D] px-6 text-sm font-semibold text-black hover:bg-[#e6c625] transition-colors shadow-sm cursor-pointer">
-                      {cabinet.label}
+                      {staffHome.label}
                     </Button>
                   </NextLink>
-                  {role !== "user" && (
-                    <Button
-                      onClick={() => void handleLogout()}
-                      variant="secondary"
-                      className="rounded-full px-6 text-sm font-semibold transition-all cursor-pointer"
-                    >
-                      Выйти
-                    </Button>
-                  )}
+                  <Button
+                    onClick={() => void handleLogout()}
+                    className="rounded-full bg-[#FFDD2D] px-6 text-sm font-semibold text-black hover:bg-[#e6c625] transition-colors shadow-sm cursor-pointer"
+                  >
+                    Выйти
+                  </Button>
                 </div>
               )}
             </div>
@@ -130,22 +127,22 @@ export default function Header() {
 
                     {role !== "guest" && (
                       <div className="bg-[#FFDD2D] text-zinc-900 rounded-2xl p-2.5 flex flex-col shadow-sm mb-6">
-                        <NextLink
-                          href={cabinet.href}
-                          onClick={() => setIsOpen(false)}
-                          className="block min-w-0 text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer truncate"
-                        >
-                          {cabinet.label}
-                        </NextLink>
-                        {role === "user" && (
+                        {role === "user" ? (
                           <>
+                            <NextLink
+                              href="/user/exchange"
+                              onClick={() => setIsOpen(false)}
+                              className="block min-w-0 text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer truncate"
+                            >
+                              Обмен
+                            </NextLink>
                             <div className="h-[1px] bg-black/10 w-full my-0.5" />
                             <NextLink
                               href="/user/orders"
                               onClick={() => setIsOpen(false)}
                               className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer"
                             >
-                              Мои заявки
+                              Заявки
                             </NextLink>
                             <div className="h-[1px] bg-black/10 w-full my-0.5" />
                             <NextLink
@@ -156,6 +153,14 @@ export default function Header() {
                               Профиль
                             </NextLink>
                           </>
+                        ) : (
+                          <NextLink
+                            href={staffHome.href}
+                            onClick={() => setIsOpen(false)}
+                            className="block min-w-0 text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer truncate"
+                          >
+                            {staffHome.label}
+                          </NextLink>
                         )}
                       </div>
                     )}
@@ -188,28 +193,29 @@ export default function Header() {
                       </div>
                     ) : (
                       <div className="flex flex-col gap-3">
-                        <NextLink
-                          href={cabinet.href}
-                          onClick={() => setIsOpen(false)}
-                          className="w-full min-w-0"
-                        >
-                          <Button
-                            variant="outline"
-                            className="w-full min-w-0 h-12 border-gray-200 dark:border-zinc-800 rounded-xl text-sm font-semibold bg-white flex items-center justify-center gap-2 px-4"
+                        {role !== "user" && (
+                          <NextLink
+                            href={staffHome.href}
+                            onClick={() => setIsOpen(false)}
+                            className="w-full min-w-0"
                           >
-                            <User className="w-4 h-4 shrink-0" />
-                            <span className="truncate">{cabinet.label}</span>
-                          </Button>
-                        </NextLink>
+                            <Button
+                              variant="outline"
+                              className="w-full min-w-0 h-12 border-gray-200 dark:border-zinc-800 rounded-xl text-sm font-semibold bg-white flex items-center justify-center gap-2 px-4"
+                            >
+                              <User className="w-4 h-4 shrink-0" />
+                              <span className="truncate">{staffHome.label}</span>
+                            </Button>
+                          </NextLink>
+                        )}
                         <Button
                           onClick={() => {
                             setIsOpen(false);
                             void handleLogout();
                           }}
-                          variant="destructive"
-                          className="w-full min-w-0 h-12 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 px-4"
+                          className="w-full min-w-0 h-12 bg-[#FFDD2D] hover:bg-[#e6c625] text-black rounded-xl text-sm font-semibold border-none shadow-none flex items-center justify-center gap-2 px-4 cursor-pointer"
                         >
-                          <LogOut className="w-4 h-4 shrink-0" />
+                          <LogOut className="w-4 h-4 shrink-0 text-black" />
                           <span className="truncate">Выйти</span>
                         </Button>
                       </div>

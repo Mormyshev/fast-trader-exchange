@@ -300,5 +300,33 @@ input[type="number"].no-spin,
   margin-top: 0.5rem;
 }
 
+@keyframes banner-icon-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--banner-tilt, 0deg));
+  }
+  50% {
+    transform: translateY(-8px)
+      rotate(calc(var(--banner-tilt, 0deg) + 5deg));
+  }
+}
+
+.banner-icon-float {
+  animation: banner-icon-float 3.6s ease-in-out infinite;
+}
+
+.group:hover .banner-icon-float,
+.group:focus-visible .banner-icon-float {
+  animation: none;
+  transform: translateY(-4px) rotate(0deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner-icon-float {
+    animation: none;
+    transform: rotate(var(--banner-tilt, 0deg));
+  }
+}
+
 
 
