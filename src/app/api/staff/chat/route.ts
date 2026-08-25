@@ -134,7 +134,10 @@ export async function GET() {
     );
     const peers = (profilesRes.data ?? [])
       .map(mapStaffPeer)
-      .filter((peer) => peer.id !== staff.user.id && !dmPeerIds.has(peer.id))
+      .filter(
+        (peer: StaffChatPeer) =>
+          peer.id !== staff.user.id && !dmPeerIds.has(peer.id),
+      )
       .sort(sortPeers);
 
     const unread =

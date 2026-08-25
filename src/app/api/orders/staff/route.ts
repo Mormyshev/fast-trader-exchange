@@ -139,14 +139,17 @@ export async function GET() {
       );
     }
 
+    const asOrderRows = (rows: unknown): Record<string, unknown>[] =>
+      Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
+
     const [pending, mine, completed, cancelled, teamInProgress] =
       await Promise.all([
-        attachClientsToOrders(admin, bundle.pendingRes.data ?? []),
-        attachClientsToOrders(admin, bundle.mineRes.data ?? []),
-        attachClientsToOrders(admin, bundle.completedRes.data ?? []),
-        attachClientsToOrders(admin, bundle.cancelledRes.data ?? []),
+        attachClientsToOrders(admin, asOrderRows(bundle.pendingRes.data)),
+        attachClientsToOrders(admin, asOrderRows(bundle.mineRes.data)),
+        attachClientsToOrders(admin, asOrderRows(bundle.completedRes.data)),
+        attachClientsToOrders(admin, asOrderRows(bundle.cancelledRes.data)),
         isAdmin
-          ? attachClientsToOrders(admin, bundle.teamRows ?? [])
+          ? attachClientsToOrders(admin, asOrderRows(bundle.teamRows))
           : Promise.resolve([]),
       ]);
 

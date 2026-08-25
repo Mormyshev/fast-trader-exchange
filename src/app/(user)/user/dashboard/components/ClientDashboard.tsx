@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { orderStatusBadgeClass } from "@/src/utils/orders/status-style";
 import { orderPublicTitle } from "@/src/utils/orders/public-number";
 
-type ActiveOrder = {
+export type ActiveOrder = {
   id: string;
   created_at: string;
   status: string;
