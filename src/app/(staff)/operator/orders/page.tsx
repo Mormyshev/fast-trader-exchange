@@ -5,10 +5,11 @@ import Link from "next/link";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
-import { Loader2, CheckCircle2, Upload, Check } from "lucide-react";
+import { Loader2, CheckCircle2, Upload, Check, Search } from "lucide-react";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   hasOrderTtl,
   useNowTick,
@@ -19,7 +20,8 @@ import OperatorOrderCard from "@/src/components/staff/OperatorOrderCard";
 import { isOrderExpiredByTtl } from "@/src/utils/orders/ttl";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import type { OrderClient } from "@/src/utils/orders/client-info";
-import { mergeOrderClient } from "@/src/utils/orders/client-info";
+import { formatClientName, mergeOrderClient } from "@/src/utils/orders/client-info";
+import { orderPublicNumber } from "@/src/utils/orders/public-number";
 import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
 import {
   buildOperatorPaymentDetails,
@@ -52,13 +54,14 @@ interface Order {
   operator_receipt_url?: string | null;
   operator_pseudonym_snapshot?: string | null;
   client?: OrderClient | null;
+  order_number?: number | null;
 }
 
 type TabId = "new" | "in_work" | "awaiting" | "review" | "completed" | "cancelled";
 
 export default function OperatorOrdersPage() {
   const supabase = createClient();
-  const { user, staffActive, isLoading: isAuthLoading } = useAuth();
+  const { user, staffActive, role, isLoading: isAuthLoading } = useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [newOrders, setNewOrders] = useState<Order[]>([]);
@@ -67,15 +70,18 @@ export default function OperatorOrdersPage() {
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("new");
+  const [searchQuery, setSearchQuery] = useState("");
   const [detailsInput, setDetailsInput] = useState<{
     [key: string]: { bankId: string; phone: string; wallet: string };
   }>({});
 
   const userIdRef = useRef<string | null>(null);
+  const roleRef = useRef(role);
   const clientCacheRef = useRef(new Map<string, OrderClient>());
   if (user?.id) {
     userIdRef.current = user.id;
   }
+  roleRef.current = role;
 
   const now = useNowTick(!loading && !!user?.id);
   const expiredHandledRef = useRef<Set<string>>(new Set());
@@ -98,7 +104,8 @@ export default function OperatorOrdersPage() {
 
     if (
       ["processing", "awaiting_payment", "paid"].includes(next.status) &&
-      next.operator_id === userIdRef.current
+      next.operator_id &&
+      (roleRef.current === "admin" || next.operator_id === userIdRef.current)
     ) {
       setMyOrders((prev) => [next, ...prev]);
       return;
@@ -106,7 +113,7 @@ export default function OperatorOrdersPage() {
 
     if (
       next.status === "completed" &&
-      next.operator_id === userIdRef.current
+      (roleRef.current === "admin" || next.operator_id === userIdRef.current)
     ) {
       setCompletedOrders((prev) => [next, ...prev].slice(0, 50));
       return;
@@ -114,7 +121,9 @@ export default function OperatorOrdersPage() {
 
     if (
       next.status === "cancelled" &&
-      (next.operator_id === userIdRef.current || next.operator_id == null)
+      (roleRef.current === "admin" ||
+        next.operator_id === userIdRef.current ||
+        next.operator_id == null)
     ) {
       setCancelledOrders((prev) => [next, ...prev].slice(0, 100));
     }
@@ -161,11 +170,14 @@ export default function OperatorOrdersPage() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
         const pending = ((json.pending || []) as Order[]).map(rememberClient);
-        const mine = ((json.mine || []) as Order[]).map(rememberClient);
+        const isAdmin = roleRef.current === "admin";
+        const inWork = isAdmin
+          ? ((json.teamInProgress || json.mine || []) as Order[])
+          : ((json.mine || []) as Order[]);
         const cancelled = ((json.cancelled || []) as Order[]).map(rememberClient);
         const completed = ((json.completed || []) as Order[]).map(rememberClient);
         setNewOrders(pending);
-        setMyOrders(mine);
+        setMyOrders(inWork.map(rememberClient));
         setCancelledOrders(cancelled);
         setCompletedOrders(completed);
       } catch (err) {
@@ -176,7 +188,7 @@ export default function OperatorOrdersPage() {
     }
 
     void fetchInitialOrders();
-  }, [user?.id, isAuthLoading]);
+  }, [user?.id, isAuthLoading, role]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -255,6 +267,41 @@ export default function OperatorOrdersPage() {
     [myOrders],
   );
 
+  const q = searchQuery.trim().toLowerCase();
+  const matchesSearch = (order: Order) => {
+    if (!q) return true;
+    return [
+      order.id,
+      orderPublicNumber(order),
+      order.wallet_to,
+      order.wallet_from,
+      order.payment_details,
+      order.currency_from,
+      order.currency_to,
+      order.operator_pseudonym_snapshot,
+      order.client?.email,
+      order.client?.phone,
+      order.client?.telegram,
+      order.client?.first_name,
+      order.client?.last_name,
+      order.client?.middle_name,
+      formatClientName(order.client),
+      String(order.amount_from ?? ""),
+      String(order.amount_to ?? ""),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  };
+
+  const visibleNewOrders = newOrders.filter(matchesSearch);
+  const visibleInWorkOrders = inWorkOrders.filter(matchesSearch);
+  const visibleAwaitingOrders = awaitingOrders.filter(matchesSearch);
+  const visibleReviewOrders = reviewOrders.filter(matchesSearch);
+  const visibleCompletedOrders = completedOrders.filter(matchesSearch);
+  const visibleCancelledOrders = cancelledOrders.filter(matchesSearch);
+
   const handleClaimOrder = async (orderId: string) => {
     if (!user?.id) return;
     if (!staffActive) {
@@ -291,6 +338,42 @@ export default function OperatorOrdersPage() {
       }
       if (json.order) applyOrderUpdate(json.order as Order);
       setActiveTab("in_work");
+    } catch (err) {
+      console.error(err);
+      alert("Произошла системная ошибка.");
+    }
+  };
+
+  const handleJoinOrder = async (orderId: string) => {
+    if (!user?.id) return;
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
+
+    const target = myOrders.find((order) => order.id === orderId);
+    const operatorName = target?.operator_pseudonym_snapshot?.trim();
+    const ok = await confirm({
+      title: "Подключиться к сделке?",
+      description: operatorName
+        ? `Заявка сейчас у ${operatorName}. Вы станете исполнителем и сможете вести её дальше с текущего этапа.`
+        : "Вы станете исполнителем этой заявки и сможете вести её дальше с текущего этапа.",
+      confirmLabel: "Подключиться",
+    });
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operator_id: user.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || "Не удалось подключиться к заявке");
+        return;
+      }
+      if (json.order) applyOrderUpdate(json.order as Order);
     } catch (err) {
       console.error(err);
       alert("Произошла системная ошибка.");
@@ -482,6 +565,49 @@ export default function OperatorOrdersPage() {
     </div>
   );
 
+  const emptyText = (fallback: string) =>
+    q
+      ? "Ничего не найдено. Измените запрос или очистите поиск."
+      : fallback;
+
+  const renderStageList = (orders: Order[], emptyText: string) => {
+    if (orders.length === 0) return renderEmpty(emptyText);
+
+    const grid = (list: Order[]) => (
+      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 sm:gap-4">
+        {list.map(renderMyOrderCard)}
+      </div>
+    );
+
+    if (role !== "admin") return grid(orders);
+
+    const mine = orders.filter((order) => order.operator_id === user?.id);
+    const others = orders.filter((order) => order.operator_id !== user?.id);
+
+    return (
+      <div className="space-y-6 sm:space-y-8">
+        {others.length > 0 ? (
+          <section className="space-y-3">
+            <h2 className="px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              У других операторов
+              {` (${others.length})`}
+            </h2>
+            {grid(others)}
+          </section>
+        ) : null}
+        {mine.length > 0 ? (
+          <section className="space-y-3">
+            <h2 className="px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              Мои
+              {` (${mine.length})`}
+            </h2>
+            {grid(mine)}
+          </section>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderMyOrderCard = (order: Order) => {
     const tone =
       order.status === "paid"
@@ -495,6 +621,10 @@ export default function OperatorOrdersPage() {
         : order.status === "awaiting_payment"
           ? "Ожидает оплаты"
           : "Клиент оплатил";
+    const isForeign =
+      role === "admin" &&
+      !!order.operator_id &&
+      order.operator_id !== user?.id;
 
     return (
       <OperatorOrderCard
@@ -504,28 +634,49 @@ export default function OperatorOrdersPage() {
         tone={tone}
         statusText={statusText}
         walletLabel="Куда отправить клиенту"
+        showOperator={isForeign}
+        actions={
+          isForeign ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href={`/operator/orders/${order.id}`}
+                className="inline-flex items-center justify-center border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-800 font-bold py-2.5 px-2 rounded-xl text-xs min-[380px]:text-sm cursor-pointer transition-colors text-center leading-snug"
+              >
+                Открыть
+              </Link>
+              <button
+                type="button"
+                onClick={() => void handleJoinOrder(order.id)}
+                disabled={!staffActive}
+                className="bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-2.5 px-2 rounded-xl text-xs min-[380px]:text-sm cursor-pointer disabled:cursor-not-allowed transition-colors leading-snug"
+              >
+                Подключиться
+              </button>
+            </div>
+          ) : undefined
+        }
       >
         {order.payment_details && (
-          <div className="rounded-xl bg-[#FFF8D6] px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
+          <div className="rounded-2xl bg-[#F4F5F7] px-3.5 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
               Выданные реквизиты
             </p>
             <PaymentRequisitesView value={order.payment_details} compact />
           </div>
         )}
-        {order.receipt_url && (
+        {order.receipt_url && order.status !== "paid" && (
           <a
             href={order.receipt_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center text-xs font-semibold text-emerald-700 hover:underline"
+            className="inline-flex items-center text-xs font-bold text-[#C9A227] hover:underline"
           >
             Чек клиента (PDF)
           </a>
         )}
         {order.status === "processing" && (
           <div className="space-y-2.5">
-            <label className="block text-[11px] font-semibold text-zinc-500">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
               {clientPaysWithCrypto(order.currency_from)
                 ? "Адрес для оплаты клиентом"
                 : "Реквизиты СБП для оплаты клиентом"}
@@ -569,28 +720,28 @@ export default function OperatorOrdersPage() {
             <button
               onClick={() => handleSendDetails(order.id)}
               disabled={!staffActive}
-              className="w-full bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm cursor-pointer disabled:cursor-not-allowed"
+              className="w-full bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-bold py-2.5 rounded-xl transition-colors text-sm cursor-pointer disabled:cursor-not-allowed"
             >
               Отправить реквизиты
             </button>
           </div>
         )}
         {order.status === "awaiting_payment" && (
-          <div className="flex items-start gap-3 rounded-xl bg-violet-50/80 border border-violet-100 px-3.5 py-3">
-            <CheckCircle2 className="w-4 h-4 text-violet-600 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-3 rounded-2xl bg-[#FFF8D6] px-3.5 py-3">
+            <CheckCircle2 className="w-4 h-4 text-[#C9A227] mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-violet-800">
+              <p className="text-sm font-bold text-zinc-900">
                 Реквизиты отправлены
               </p>
-              <p className="text-[12px] text-violet-700/70 mt-0.5">
+              <p className="text-[12px] font-medium text-zinc-500 mt-0.5">
                 Ждём оплату и чек от клиента
               </p>
             </div>
           </div>
         )}
         {order.status === "paid" && (
-          <div className="rounded-xl bg-teal-50/80 border border-teal-200 px-3.5 py-3 space-y-3">
-            <p className="text-sm font-semibold text-teal-800">
+          <div className="rounded-2xl bg-[#F4F5F7] px-3.5 py-3 space-y-3">
+            <p className="text-sm font-bold text-zinc-900">
               Проверьте поступление и чек
             </p>
             {order.receipt_url ? (
@@ -598,36 +749,40 @@ export default function OperatorOrdersPage() {
                 href={order.receipt_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block text-xs font-semibold text-teal-800 hover:underline"
+                className="inline-block text-xs font-bold text-[#C9A227] hover:underline"
               >
                 Открыть чек клиента
               </a>
             ) : (
-              <p className="text-xs text-zinc-500">Файл чека клиента не найден</p>
+              <p className="text-xs font-medium text-zinc-500">
+                Файл чека клиента не найден
+              </p>
             )}
 
             {isRubPayout(order.currency_to) && (
-              <div className="space-y-2 border-t border-teal-200 pt-3">
-                <p className="text-[11px] font-semibold text-zinc-600">
+              <div className="space-y-2 border-t border-zinc-200/80 pt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                   Чек выплаты RUB
                 </p>
                 {order.operator_receipt_url ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-teal-800">
-                      <Check className="w-3.5 h-3.5" />
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-zinc-800">
+                      <Check className="w-3.5 h-3.5 text-[#C9A227]" />
                       Прикреплён
                     </span>
                     <a
                       href={`/api/orders/${order.id}/operator-receipt`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs font-semibold text-zinc-600 hover:underline"
+                      className="text-xs font-bold text-[#C9A227] hover:underline"
                     >
                       Открыть PDF
                     </a>
                   </div>
                 ) : (
-                  <label className={`flex items-center justify-center gap-2 border border-dashed border-teal-300 bg-white rounded-xl px-3 py-2.5 ${staffActive ? "cursor-pointer hover:bg-teal-50/50" : "cursor-not-allowed opacity-50"}`}>
+                  <label
+                    className={`flex items-center justify-center gap-2 border border-dashed border-amber-200 bg-white rounded-xl px-3 py-2.5 ${staffActive ? "cursor-pointer hover:bg-[#FFF8D6]" : "cursor-not-allowed opacity-50"}`}
+                  >
                     <input
                       type="file"
                       accept="application/pdf"
@@ -635,8 +790,8 @@ export default function OperatorOrdersPage() {
                       disabled={!staffActive}
                       onChange={(e) => handleOperatorReceiptUpload(order.id, e)}
                     />
-                    <Upload className="w-4 h-4 text-teal-600" />
-                    <span className="text-xs font-semibold text-zinc-700">
+                    <Upload className="w-4 h-4 text-[#C9A227]" />
+                    <span className="text-xs font-bold text-zinc-700">
                       Прикрепить PDF
                     </span>
                   </label>
@@ -651,14 +806,14 @@ export default function OperatorOrdersPage() {
                   !staffActive ||
                   (isRubPayout(order.currency_to) && !order.operator_receipt_url)
                 }
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-semibold py-2.5 rounded-xl text-sm cursor-pointer transition-colors disabled:cursor-not-allowed"
+                className="bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-2.5 rounded-xl text-sm cursor-pointer transition-colors disabled:cursor-not-allowed"
               >
                 Успешно
               </button>
               <button
                 onClick={() => handleCloseOrder(order.id, "cancelled")}
                 disabled={!staffActive}
-                className="bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed font-semibold py-2.5 rounded-xl text-sm cursor-pointer transition-colors"
+                className="bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed font-bold py-2.5 rounded-xl text-sm cursor-pointer transition-colors"
               >
                 Отклонить
               </button>
@@ -673,10 +828,15 @@ export default function OperatorOrdersPage() {
     <div className="w-full max-w-7xl mx-auto space-y-4 sm:space-y-5 lg:space-y-6 text-zinc-900 font-sans antialiased">
       <StaffPageHeader
         title="Активные ордера"
-        description="Очередь и ваши заявки по этапам"
+        description={
+          role === "admin"
+            ? "Все заявки команды. Можно подключиться к сделке на любом этапе"
+            : "Очередь и ваши заявки по этапам"
+        }
       />
 
-      <StaffScrollTabs>
+      <div className="flex flex-col md:flex-row md:items-center gap-2.5 min-w-0">
+        <StaffScrollTabs className="min-w-0 flex-1">
         {tabs.map((tab) => (
           <Button
             key={tab.id}
@@ -704,17 +864,30 @@ export default function OperatorOrdersPage() {
             </span>
           </Button>
         ))}
-      </StaffScrollTabs>
+        </StaffScrollTabs>
+        <div className="relative w-full md:w-64 lg:w-72 shrink-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input
+            type="search"
+            placeholder="Номер, клиент, кошелёк"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-10 rounded-2xl bg-white border-zinc-200/80 shadow-[0_4px_24px_rgba(15,23,42,0.04)] focus-visible:ring-[#FFDD2D] text-sm font-medium"
+          />
+        </div>
+      </div>
 
       {activeTab === "new" && (
         <div className="space-y-3 sm:space-y-4">
-          {newOrders.length === 0
+          {visibleNewOrders.length === 0
             ? renderEmpty(
-                "Сейчас очередь пуста. Новые обмены появятся здесь мгновенно.",
+                emptyText(
+                  "Сейчас очередь пуста. Новые обмены появятся здесь мгновенно.",
+                ),
               )
             : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
-                {newOrders.map((order) => (
+                {visibleNewOrders.map((order) => (
                   <OperatorOrderCard
                     key={order.id}
                     order={order}
@@ -725,14 +898,14 @@ export default function OperatorOrdersPage() {
                       <div className="grid grid-cols-2 gap-2">
                         <Link
                           href={`/operator/orders/${order.id}`}
-                          className="inline-flex items-center justify-center border border-zinc-200 hover:border-zinc-300 hover:bg-white text-zinc-800 font-semibold py-2.5 px-2 rounded-xl text-xs min-[380px]:text-sm cursor-pointer transition-colors text-center leading-snug"
+                          className="inline-flex items-center justify-center border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-800 font-bold py-2.5 px-2 rounded-xl text-xs min-[380px]:text-sm cursor-pointer transition-colors text-center leading-snug"
                         >
                           Открыть
                         </Link>
                         <button
                           onClick={() => handleClaimOrder(order.id)}
                           disabled={!staffActive}
-                          className="bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-950 font-semibold py-2.5 px-2 rounded-xl text-xs min-[380px]:text-sm cursor-pointer disabled:cursor-not-allowed transition-colors leading-snug"
+                          className="bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-2.5 px-2 rounded-xl text-xs min-[380px]:text-sm cursor-pointer disabled:cursor-not-allowed transition-colors leading-snug"
                         >
                           Взять в работу
                         </button>
@@ -745,51 +918,43 @@ export default function OperatorOrdersPage() {
         </div>
       )}
 
-      {activeTab === "in_work" && (
-        inWorkOrders.length === 0
-          ? renderEmpty(
-              "Нет заявки в работе. Возьмите ордер из вкладки «Новые».",
-            )
-          : (
-            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 sm:gap-4">
-              {inWorkOrders.map(renderMyOrderCard)}
-            </div>
-          )
-      )}
+      {activeTab === "in_work" &&
+        renderStageList(
+          visibleInWorkOrders,
+          emptyText(
+            role === "admin"
+              ? "Нет заявок в работе у команды."
+              : "Нет заявки в работе. Возьмите ордер из вкладки «Новые».",
+          ),
+        )}
 
-      {activeTab === "awaiting" && (
-        awaitingOrders.length === 0
-          ? renderEmpty("Нет заявок, ожидающих оплаты клиента.")
-          : (
-            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 sm:gap-4">
-              {awaitingOrders.map(renderMyOrderCard)}
-            </div>
-          )
-      )}
+      {activeTab === "awaiting" &&
+        renderStageList(
+          visibleAwaitingOrders,
+          emptyText("Нет заявок, ожидающих оплаты клиента."),
+        )}
 
-      {activeTab === "review" && (
-        reviewOrders.length === 0
-          ? renderEmpty("Нет заявок на проверке оплаты.")
-          : (
-            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 sm:gap-4">
-              {reviewOrders.map(renderMyOrderCard)}
-            </div>
-          )
-      )}
+      {activeTab === "review" &&
+        renderStageList(
+          visibleReviewOrders,
+          emptyText("Нет заявок на проверке оплаты."),
+        )}
 
       {activeTab === "completed" && (
-        completedOrders.length === 0
-          ? renderEmpty("Нет выполненных заявок.")
+        visibleCompletedOrders.length === 0
+          ? renderEmpty(emptyText("Нет выполненных заявок."))
           : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
-              {completedOrders.map((order) => (
+              {visibleCompletedOrders.map((order) => (
                 <OperatorOrderCard
                   key={order.id}
                   order={order}
                   now={now}
                   tone="completed"
                   statusText="Выполнена"
-                  showOperator
+                  showOperator={
+                    role === "admin" || !!order.operator_pseudonym_snapshot
+                  }
                   walletLabel="Реквизиты клиента"
                 />
               ))}
@@ -798,19 +963,22 @@ export default function OperatorOrdersPage() {
       )}
 
       {activeTab === "cancelled" && (
-        cancelledOrders.length === 0
+        visibleCancelledOrders.length === 0
           ? renderEmpty(
-              "Нет отменённых заявок. Сюда попадают заявки после ручной отмены или истечения таймера.",
+              emptyText(
+                "Нет отменённых заявок. Сюда попадают заявки после ручной отмены или истечения таймера.",
+              ),
             )
           : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
-              {cancelledOrders.map((order) => (
+              {visibleCancelledOrders.map((order) => (
                 <OperatorOrderCard
                   key={order.id}
                   order={order}
                   now={now}
                   tone="cancelled"
                   statusText="Отменена"
+                  showOperator={role === "admin"}
                   walletLabel="Реквизиты клиента"
                 />
               ))}

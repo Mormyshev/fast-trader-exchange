@@ -1,6 +1,7 @@
 export type { ValidationResult } from "./types";
 export {
   validatePersonName,
+  validateDocumentNumber,
   validateFio,
   validateEmail,
   validatePhone,

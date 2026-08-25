@@ -30,13 +30,13 @@ export default function StaffClientInfo({
       .join(" · ");
 
     return (
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className="w-8 h-8 rounded-full bg-zinc-200 text-[10px] font-bold text-zinc-700 flex items-center justify-center shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+        <span className="w-8 h-8 rounded-full bg-[#FFF4C2] text-[10px] font-bold text-[#C9A227] flex items-center justify-center shrink-0">
           {initials}
         </span>
         <div className="min-w-0">
           {!hideLabel && (
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
               Клиент
             </p>
           )}
@@ -52,8 +52,8 @@ export default function StaffClientInfo({
   }
 
   return (
-    <div className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 space-y-3">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+    <div className="rounded-2xl bg-[#F4F5F7] p-4 space-y-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
         Клиент
       </p>
       <div className="flex items-start gap-2">

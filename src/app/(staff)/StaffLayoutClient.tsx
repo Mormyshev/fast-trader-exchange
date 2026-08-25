@@ -14,6 +14,7 @@ import {
   LogOut,
   ExternalLink,
   MessageCircle,
+  MessagesSquare,
   UserCog,
   CalendarDays,
   type LucideIcon,
@@ -23,11 +24,13 @@ import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeSupportInbox } from "@/src/utils/supabase/support-inbox";
+import { subscribeStaffChatInbox } from "@/src/utils/supabase/staff-chat-inbox";
 import type { ChatConversation } from "@/src/utils/chat/types";
 import {
   countUnreadConversations,
   STAFF_CHAT_READ_EVENT,
 } from "@/src/utils/chat/staff-inbox";
+import { STAFF_TEAM_CHAT_READ_EVENT } from "@/src/utils/chat/staff-internal";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import StaffDutyToggle from "@/src/components/staff/StaffDutyToggle";
@@ -36,6 +39,7 @@ const pageTitles: { [key: string]: string } = {
   "/operator/dashboard": "Дашборд статистики",
   "/operator/orders": "Активные ордера",
   "/operator/support": "Чат поддержки",
+  "/operator/team": "Чат команды",
   "/operator/schedule": "График",
   "/admin/profile": "Операторы",
   "/admin/verification": "Верификация аккаунтов",
@@ -129,6 +133,7 @@ export default function StaffLayoutClient({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [pendingChats, setPendingChats] = useState(0);
+  const [teamChats, setTeamChats] = useState(0);
   const [activeOrders, setActiveOrders] = useState(0);
   const [operatorPseudonym, setOperatorPseudonym] = useState(
     initialOperatorPseudonym,
@@ -154,6 +159,17 @@ export default function StaffLayoutClient({
       // ignore
     }
   }, [applyUnreadCount]);
+
+  const loadTeamChats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/staff/chat", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) return;
+      setTeamChats(typeof data.unread === "number" ? data.unread : 0);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const loadActiveOrders = useCallback(async () => {
     try {
@@ -215,6 +231,7 @@ export default function StaffLayoutClient({
 
   useEffect(() => {
     void loadPendingChats();
+    void loadTeamChats();
     void loadActiveOrders();
 
     const supabase = createClient();
@@ -222,25 +239,34 @@ export default function StaffLayoutClient({
       onMessage: () => void loadPendingChats(),
       onConversation: () => void loadPendingChats(),
     });
+    const teamInbox = subscribeStaffChatInbox(supabase, {
+      onMessage: () => void loadTeamChats(),
+      onConversation: () => void loadTeamChats(),
+    });
     const ordersInbox = subscribeOrdersInbox(supabase, () => {
       void loadActiveOrders();
     });
 
     const interval = setInterval(() => {
       void loadPendingChats();
+      void loadTeamChats();
       void loadActiveOrders();
     }, 30_000);
 
     const onChatRead = () => applyUnreadCount();
+    const onTeamRead = () => void loadTeamChats();
     window.addEventListener(STAFF_CHAT_READ_EVENT, onChatRead);
+    window.addEventListener(STAFF_TEAM_CHAT_READ_EVENT, onTeamRead);
 
     return () => {
       clearInterval(interval);
       inbox.unsubscribe();
+      teamInbox.unsubscribe();
       ordersInbox.unsubscribe();
       window.removeEventListener(STAFF_CHAT_READ_EVENT, onChatRead);
+      window.removeEventListener(STAFF_TEAM_CHAT_READ_EVENT, onTeamRead);
     };
-  }, [loadPendingChats, loadActiveOrders, applyUnreadCount]);
+  }, [loadPendingChats, loadTeamChats, loadActiveOrders, applyUnreadCount]);
 
   const isAdmin = role === "admin";
   const currentTitle = getPageTitle(pathname);
@@ -348,6 +374,15 @@ export default function StaffLayoutClient({
               label="Чат поддержки"
               active={pathname.startsWith("/operator/support")}
               badge={pendingChats}
+              collapsed={collapsed}
+              onClick={handleNavClick}
+            />
+            <StaffNavLink
+              href="/operator/team"
+              icon={MessagesSquare}
+              label="Чат команды"
+              active={pathname.startsWith("/operator/team")}
+              badge={teamChats}
               collapsed={collapsed}
               onClick={handleNavClick}
             />

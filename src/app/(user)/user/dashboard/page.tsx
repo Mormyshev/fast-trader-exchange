@@ -3,6 +3,9 @@ import { createAdminClient } from "@/src/utils/supabase/admin";
 import { redirect } from "next/navigation";
 
 import ClientDashboard from "./components/ClientDashboard";
+import {
+  isOrderNumberColumnMissing,
+} from "@/src/utils/orders/public-number";
 
 const ACTIVE_STATUSES = [
   "pending",
@@ -37,21 +40,31 @@ export default async function DashboardPage() {
     redirect("/operator/dashboard");
   }
 
-  const [activeRes, completedRes] = await Promise.all([
+  const activeSelect =
+    "id, created_at, status, currency_from, currency_to, amount_from, amount_to, order_number";
+
+  const fetchActive = (fields: string) =>
     admin
       .from("orders")
-      .select(
-        "id, created_at, status, currency_from, currency_to, amount_from, amount_to",
-      )
+      .select(fields)
       .eq("user_id", user.id)
       .in("status", [...ACTIVE_STATUSES])
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false });
+
+  let [activeRes, completedRes] = await Promise.all([
+    fetchActive(activeSelect),
     admin
       .from("orders")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("status", "completed"),
   ]);
+
+  if (activeRes.error && isOrderNumberColumnMissing(activeRes.error)) {
+    activeRes = await fetchActive(
+      "id, created_at, status, currency_from, currency_to, amount_from, amount_to",
+    );
+  }
 
   return (
     <ClientDashboard

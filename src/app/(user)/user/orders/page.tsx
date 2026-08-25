@@ -20,6 +20,10 @@ import {
   orderStatusBadgeClass,
   orderStatusCardClass,
 } from "@/src/utils/orders/status-style";
+import { orderPublicTitle } from "@/src/utils/orders/public-number";
+import OrderProgressStepper from "@/src/components/OrderProgress/OrderProgressStepper";
+import RateFixationBar from "@/src/components/OrderTtlBadge/RateFixationBar";
+import { useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
 
 type OrderStatus =
   | "pending"
@@ -43,6 +47,7 @@ interface Order {
   amount_to: number;
   wallet_to: string;
   operator_receipt_url?: string | null;
+  order_number?: number | null;
 }
 
 const PAGE_SIZE = 10;
@@ -136,6 +141,7 @@ export default function UserOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const now = useNowTick(!loading && orders.length > 0);
 
   useEffect(() => {
     if (!user?.id) {
@@ -238,21 +244,13 @@ export default function UserOrdersPage() {
 
   return (
     <div className="w-full space-y-5 sm:space-y-6 lg:space-y-8 pb-8 sm:pb-12 text-zinc-900 font-sans">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
-            Мои заявки
-          </h1>
-          <p className="text-sm font-medium text-zinc-400 mt-1">
-            История обменов и заявки в работе
-          </p>
-        </div>
-        <Button
-          asChild
-          className="rounded-full h-10 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none self-start sm:self-auto cursor-pointer"
-        >
-          <Link href="/user/exchange">Создать обмен</Link>
-        </Button>
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#2A2A2A]">
+          Мои заявки
+        </h1>
+        <p className="text-sm font-medium text-zinc-400 mt-1">
+          История обменов и заявки в работе
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-1 bg-zinc-100/70 p-1 rounded-2xl w-fit">
@@ -305,12 +303,6 @@ export default function UserOrdersPage() {
               {empty.text}
             </p>
           </div>
-          <Button
-            asChild
-            className="rounded-full h-10 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none cursor-pointer"
-          >
-            <Link href="/user/exchange">Перейти к обмену</Link>
-          </Button>
         </Card>
       ) : (
         <div className="space-y-4">
@@ -330,6 +322,9 @@ export default function UserOrdersPage() {
                 <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center gap-4 md:gap-6">
                   <div className="space-y-3 min-w-0">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-zinc-400">
+                      <span className="text-sm font-bold text-zinc-900">
+                        {orderPublicTitle(order)}
+                      </span>
                       <span className="inline-flex items-center gap-2">
                         <Clock className="w-3.5 h-3.5 shrink-0" />
                         {formatOrderCreatedAt(order.created_at)}
@@ -346,6 +341,13 @@ export default function UserOrdersPage() {
                       </span>
                     </div>
 
+                    <RateFixationBar
+                      createdAt={order.created_at}
+                      status={order.status}
+                      now={now}
+                      embedded
+                    />
+                    <OrderProgressStepper status={order.status} embedded />
                     <p className="text-xs font-medium text-zinc-400 break-all">
                       Кошелёк:{" "}
                       <span className="font-mono text-zinc-600">

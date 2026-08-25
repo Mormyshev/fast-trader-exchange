@@ -1,13 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import {
-  OrderTtlBadge,
-  hasOrderTtl,
-} from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import { ChevronRight } from "lucide-react";
+import RateFixationBar from "@/src/components/OrderTtlBadge/RateFixationBar";
 import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
 import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
 import type { OrderClient } from "@/src/utils/orders/client-info";
+import { orderPublicTitle } from "@/src/utils/orders/public-number";
+import OrderProgressStepper from "@/src/components/OrderProgress/OrderProgressStepper";
 
 export type OperatorOrderCardTone =
   | "new"
@@ -28,42 +28,16 @@ type CardOrder = {
   wallet_to?: string | null;
   client?: OrderClient | null;
   operator_pseudonym_snapshot?: string | null;
+  order_number?: number | null;
 };
 
-const TONE: Record<
-  OperatorOrderCardTone,
-  { header: string; badge: string; shell: string }
-> = {
-  new: {
-    header: "bg-amber-100 border-amber-200",
-    badge: "bg-white text-amber-900 border-amber-200",
-    shell: "border-amber-200",
-  },
-  processing: {
-    header: "bg-[#FFF4C2] border-[#FFE58A]",
-    badge: "bg-white text-zinc-900 border-[#FFE58A]",
-    shell: "border-[#FFE58A]",
-  },
-  awaiting: {
-    header: "bg-violet-100 border-violet-200",
-    badge: "bg-white text-violet-900 border-violet-200",
-    shell: "border-violet-200",
-  },
-  review: {
-    header: "bg-teal-100 border-teal-200",
-    badge: "bg-white text-teal-900 border-teal-200",
-    shell: "border-teal-300",
-  },
-  completed: {
-    header: "bg-emerald-100 border-emerald-200",
-    badge: "bg-white text-emerald-900 border-emerald-200",
-    shell: "border-emerald-300",
-  },
-  cancelled: {
-    header: "bg-rose-100 border-rose-200",
-    badge: "bg-white text-rose-800 border-rose-200",
-    shell: "border-rose-200",
-  },
+const BADGE: Record<OperatorOrderCardTone, string> = {
+  new: "bg-[#FFF4C2] text-zinc-900",
+  processing: "bg-[#FFF4C2] text-zinc-900",
+  awaiting: "bg-[#FFF8D6] text-zinc-800",
+  review: "bg-[#FFF4C2] text-zinc-900",
+  completed: "bg-zinc-100 text-zinc-600",
+  cancelled: "bg-zinc-100 text-zinc-500",
 };
 
 function formatCardTime(iso: string) {
@@ -96,83 +70,83 @@ export default function OperatorOrderCard({
   actions?: ReactNode;
   children?: ReactNode;
 }) {
-  const toneStyle = TONE[tone];
-  const showTtl = hasOrderTtl(order.status);
-
   return (
-    <article
-      className={`min-w-0 overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)] border ${toneStyle.shell}`}
-    >
-      <header
-        className={`flex flex-wrap items-start justify-between gap-2 px-3 min-[380px]:px-3.5 sm:px-5 py-3 sm:py-3.5 border-b ${toneStyle.header}`}
-      >
-        <div className="flex flex-wrap items-center gap-1.5 min-w-0 max-w-full">
-          <span
-            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${toneStyle.badge}`}
-          >
-            {statusText}
-          </span>
-          {showTtl && (
-            <OrderTtlBadge
-              createdAt={order.created_at}
-              status={order.status}
-              now={now}
-              compact
-            />
-          )}
-        </div>
-        <div className="text-right min-w-0 max-w-full space-y-0.5">
-          <p className="text-[11px] font-mono font-semibold text-zinc-600">
-            #{order.id.slice(0, 8)}
+    <article className="min-w-0 overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+      <header className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${BADGE[tone]}`}
+            >
+              {statusText}
+            </span>
+            {showOperator ? (
+              <StaffOperatorLabel
+                snapshot={order.operator_pseudonym_snapshot}
+              />
+            ) : null}
+          </div>
+          <p className="text-[11px] font-medium text-zinc-400">
+            <span className="font-semibold text-zinc-700">
+              {orderPublicTitle(order)}
+            </span>
+            <span className="mx-1.5">·</span>
+            {formatCardTime(order.created_at)}
           </p>
-          <p className="text-[11px] text-zinc-600">{formatCardTime(order.created_at)}</p>
+        </div>
+        {actions ? null : (
           <Link
             href={`/operator/orders/${order.id}`}
-            className="inline-block text-[11px] font-semibold text-zinc-700 hover:text-zinc-950 underline-offset-2 hover:underline"
+            className="inline-flex items-center gap-0.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 transition-colors shrink-0"
           >
-            Карточка
+            Открыть
+            <ChevronRight className="w-4 h-4" />
           </Link>
-        </div>
+        )}
       </header>
 
-      <div className="px-3 min-[380px]:px-3.5 sm:px-5 py-3.5 sm:py-4 bg-zinc-50 border-b border-zinc-200 min-w-0">
-        <OrderExchangePair
-          amountFrom={order.amount_from}
-          amountTo={order.amount_to}
-          currencyFrom={order.currency_from}
-          currencyTo={order.currency_to}
+      <div className="px-4 sm:px-5 pt-4 space-y-2.5">
+        <RateFixationBar
+          createdAt={order.created_at}
+          status={order.status}
+          now={now}
+          embedded
         />
+        <div className="rounded-2xl bg-[#FFF8D6] px-3.5 sm:px-4 py-3.5">
+          <OrderExchangePair
+            amountFrom={order.amount_from}
+            amountTo={order.amount_to}
+            currencyFrom={order.currency_from}
+            currencyTo={order.currency_to}
+          />
+        </div>
+        <OrderProgressStepper status={order.status} embedded />
       </div>
 
-      <div className="px-3 min-[380px]:px-3.5 sm:px-5 py-3.5 sm:py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
-        <div className="min-w-0 rounded-xl bg-zinc-100 border border-zinc-200 px-3 py-2.5">
+      <div className="px-4 sm:px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">
+        <div className="min-w-0 rounded-2xl bg-[#F4F5F7] px-3.5 py-3">
           <StaffClientInfo client={order.client} compact />
         </div>
-        {showWallet && (
-          <div className="min-w-0 rounded-xl bg-zinc-100 border border-zinc-200 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        {showWallet ? (
+          <div className="min-w-0 rounded-2xl bg-[#F4F5F7] px-3.5 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
               {walletLabel}
             </p>
             <p className="mt-1 font-mono text-[11px] sm:text-xs font-semibold text-zinc-800 break-all leading-relaxed">
               {order.wallet_to || "Не указаны"}
             </p>
           </div>
-        )}
-        {showOperator && (
-          <div className="sm:col-span-2 min-w-0">
-            <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
-          </div>
-        )}
+        ) : null}
       </div>
 
-      {children && (
-        <div className="px-3 min-[380px]:px-3.5 sm:px-5 pb-4 space-y-3 min-w-0 overflow-hidden">
+      {children ? (
+        <div className="px-4 sm:px-5 pb-4 space-y-3 min-w-0 overflow-hidden">
           {children}
         </div>
-      )}
+      ) : null}
 
       {actions ? (
-        <footer className="border-t border-zinc-200 bg-zinc-100 px-3 min-[380px]:px-3.5 sm:px-5 py-3 sm:py-4 min-w-0">
+        <footer className="border-t border-zinc-100 px-4 sm:px-5 py-3.5 sm:py-4 min-w-0">
           {actions}
         </footer>
       ) : null}

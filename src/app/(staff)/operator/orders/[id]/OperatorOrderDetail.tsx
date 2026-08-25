@@ -15,7 +15,7 @@ import { createClient } from "@/src/utils/supabase/client";
 import { startPolling, subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
-import { OrderTtlBadge, useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import { useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
 import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
@@ -29,10 +29,9 @@ import OperatorPayInForm from "@/src/components/PaymentRequisites/OperatorPayInF
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
 import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
 import AdminOrderAssignee from "@/src/components/staff/AdminOrderAssignee";
-import {
-  orderStatusBadgeClass,
-  orderStatusBannerClass,
-} from "@/src/utils/orders/status-style";
+import RateFixationBar from "@/src/components/OrderTtlBadge/RateFixationBar";
+import OrderProgressStepper from "@/src/components/OrderProgress/OrderProgressStepper";
+import OrderNumberTitle from "@/src/components/OrderNumberTitle/OrderNumberTitle";
 import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
 
 type OrderStatus =
@@ -60,6 +59,7 @@ interface Order {
   operator_receipt_url: string | null;
   operator_pseudonym_snapshot?: string | null;
   client?: OrderClient | null;
+  order_number?: number | null;
 }
 
 function statusLabel(status: OrderStatus) {
@@ -79,6 +79,13 @@ function statusLabel(status: OrderStatus) {
     case "failed":
       return "Ошибка";
   }
+}
+
+function statusBadgeClass(status: OrderStatus) {
+  if (status === "completed" || status === "cancelled" || status === "failed") {
+    return "bg-zinc-100 text-zinc-600";
+  }
+  return "bg-[#FFF4C2] text-zinc-900";
 }
 
 export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
@@ -223,6 +230,41 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       setOrder(json.order as Order);
     } catch (err: any) {
       alert(err.message || "Не удалось взять заявку");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleJoin = async () => {
+    if (!user?.id || !order) return;
+    if (role !== "admin") return;
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
+
+    const operatorName = order.operator_pseudonym_snapshot?.trim();
+    const ok = await confirm({
+      title: "Подключиться к сделке?",
+      description: operatorName
+        ? `Заявка сейчас у ${operatorName}. Вы станете исполнителем и сможете вести её дальше с текущего этапа.`
+        : "Вы станете исполнителем этой заявки и сможете вести её дальше с текущего этапа.",
+      confirmLabel: "Подключиться",
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operator_id: user.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось подключиться");
+      setOrder(json.order as Order);
+    } catch (err: any) {
+      alert(err.message || "Не удалось подключиться к заявке");
     } finally {
       setSaving(false);
     }
@@ -403,6 +445,13 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const canManageProcess =
     role === "admin" || order.operator_id === user?.id;
+  const canJoinDeal =
+    role === "admin" &&
+    !!order.operator_id &&
+    order.operator_id !== user?.id &&
+    (order.status === "processing" ||
+      order.status === "awaiting_payment" ||
+      order.status === "paid");
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 sm:space-y-5 lg:space-y-6 text-zinc-900 font-sans">
@@ -413,40 +462,36 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
         <ArrowLeft className="w-4 h-4" />К активным ордерам
       </Link>
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <OrderNumberTitle order={order} />
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${statusBadgeClass(order.status)}`}
+          >
+            {statusLabel(order.status)}
+          </span>
+          <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
+        </div>
+      </div>
+
+      <RateFixationBar
+        createdAt={order.created_at}
+        status={order.status}
+        now={now}
+      />
+      <OrderProgressStepper status={order.status} />
+
       <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
         <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-5 sm:space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-4 sm:pb-5 border-b border-zinc-100">
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight">
-              Заявка
-            </h1>
-            <p className="text-[11px] sm:text-xs font-mono font-semibold text-zinc-400 mt-1">
-              #{order.id.slice(0, 8)}
-            </p>
-            <p className="text-[11px] sm:text-xs font-medium text-zinc-500 mt-1">
-              {new Date(order.created_at).toLocaleString("ru-RU", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          </div>
-          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 flex-wrap">
-            <span
-              className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${orderStatusBadgeClass(order.status, true)}`}
-            >
-              {statusLabel(order.status)}
-            </span>
-            <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
-            <OrderTtlBadge
-              createdAt={order.created_at}
-              status={order.status}
-              now={now}
-            />
-          </div>
-        </div>
+        <p className="text-[11px] sm:text-xs font-medium text-zinc-500">
+          {new Date(order.created_at).toLocaleString("ru-RU", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </p>
 
         <div className="rounded-2xl bg-[#FFF8D6] px-3.5 sm:px-5 py-4">
           <OrderExchangePair
@@ -476,16 +521,16 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               Реквизиты для клиента
             </p>
             <PaymentRequisitesView value={order.payment_details} />
-            {order.receipt_url && (
+            {order.receipt_url && order.status !== "paid" ? (
               <a
                 href={order.receipt_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex text-xs font-semibold text-emerald-700 hover:underline"
+                className="inline-flex text-xs font-bold text-[#C9A227] hover:underline"
               >
                 Открыть чек клиента (PDF)
               </a>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -493,6 +538,24 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-400">
             Управление заявкой
           </h2>
+
+          {canJoinDeal ? (
+            <div className="rounded-2xl bg-[#FFF8D6] p-4 space-y-3 max-w-xl">
+              <p className="text-sm font-medium text-zinc-700">
+                Заявку ведёт{" "}
+                {order.operator_pseudonym_snapshot?.trim() ||
+                  "другой оператор"}
+                . Можно продолжить с текущего этапа или взять её на себя.
+              </p>
+              <Button
+                disabled={saving || !staffActive}
+                onClick={() => void handleJoin()}
+                className="rounded-full h-11 px-6 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none"
+              >
+                {saving ? "..." : "Подключиться к сделке"}
+              </Button>
+            </div>
+          ) : null}
 
           {role === "admin" &&
             (order.status === "processing" ||
@@ -555,10 +618,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             ))}
 
           {order.status === "awaiting_payment" && (
-            <div className="p-5 bg-violet-50 rounded-2xl border border-violet-200 space-y-2 max-w-xl">
+            <div className="p-5 bg-[#FFF8D6] rounded-2xl space-y-2 max-w-xl">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-violet-600" />
-                <p className="text-sm font-bold text-violet-800">
+                <CheckCircle2 className="w-4 h-4 text-[#C9A227]" />
+                <p className="text-sm font-bold text-zinc-900">
                   Реквизиты отправлены клиенту
                 </p>
               </div>
@@ -576,9 +639,9 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           )}
 
           {order.status === "paid" && (
-            <div className="p-5 bg-teal-50 rounded-2xl border border-teal-200 space-y-4 max-w-xl">
+            <div className="p-5 bg-[#F4F5F7] rounded-2xl space-y-4 max-w-xl">
               <div>
-                <p className="text-sm font-bold text-teal-800 uppercase tracking-wider">
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                   Клиент оплатил — проверьте чек
                 </p>
                 {order.receipt_url ? (
@@ -598,14 +661,14 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               </div>
 
               {isRubPayout(order.currency_to) && (
-                <div className="space-y-2 border-t border-teal-200 pt-4">
-                  <p className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                <div className="space-y-2 border-t border-zinc-200/80 pt-4">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                     Чек выплаты RUB клиенту (обязательно)
                   </p>
                   {order.operator_receipt_url ? (
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-800">
-                        <Check className="w-3.5 h-3.5" />
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-800">
+                        <Check className="w-3.5 h-3.5 text-[#C9A227]" />
                         Чек выплаты прикреплён
                       </span>
                       <a
@@ -618,7 +681,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                       </a>
                     </div>
                   ) : (
-                    <label className={`flex flex-col items-center justify-center border-2 border-dashed border-teal-300 bg-white rounded-2xl p-5 text-center transition-all ${staffActive && canManageProcess ? "hover:bg-teal-50/50 cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
+                    <label className={`flex flex-col items-center justify-center border border-dashed border-amber-200 bg-white rounded-2xl p-5 text-center transition-all ${staffActive && canManageProcess ? "hover:bg-[#FFF8D6] cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
                       <input
                         type="file"
                         accept="application/pdf"
@@ -627,10 +690,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                         className="sr-only"
                       />
                       {uploadingPayout ? (
-                        <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
+                        <Loader2 className="w-6 h-6 animate-spin text-[#C9A227]" />
                       ) : (
                         <>
-                          <Upload className="w-6 h-6 text-teal-600 mb-2" />
+                          <Upload className="w-6 h-6 text-[#C9A227] mb-2" />
                           <span className="text-xs font-bold text-zinc-700">
                             Прикрепить PDF-чек перевода рублей
                           </span>
@@ -652,14 +715,14 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                       !order.operator_receipt_url)
                   }
                   onClick={() => handleComplete("completed")}
-                  className="rounded-xl h-10 font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-none disabled:opacity-50"
+                  className="rounded-xl h-10 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none disabled:opacity-50"
                 >
                   Успешно
                 </Button>
                 <Button
                   disabled={saving || uploadingPayout || !staffActive || !canManageProcess}
                   onClick={() => handleComplete("cancelled")}
-                  className="rounded-xl h-10 font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-none"
+                  className="rounded-xl h-10 font-bold bg-white border border-zinc-200 text-zinc-800 hover:bg-zinc-50 shadow-none"
                 >
                   Отклонить
                 </Button>
@@ -673,16 +736,14 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               <Button
                 disabled={saving || !staffActive}
                 onClick={() => handleComplete("cancelled")}
-                className="rounded-xl h-10 px-5 font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-none max-w-xl"
+                className="rounded-xl h-10 px-5 font-bold bg-white border border-zinc-200 text-zinc-800 hover:bg-zinc-50 shadow-none max-w-xl"
               >
                 Отменить заявку
               </Button>
             )}
 
           {(order.status === "completed" || order.status === "cancelled") && (
-            <div
-              className={`p-5 rounded-2xl border text-sm font-medium ${orderStatusBannerClass(order.status)}`}
-            >
+            <div className="p-5 rounded-2xl bg-[#F4F5F7] text-sm font-medium text-zinc-600">
               Заявка закрыта со статусом «{statusLabel(order.status)}».
             </div>
           )}

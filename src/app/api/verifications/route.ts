@@ -10,6 +10,8 @@ const VERIFICATION_TABS = ["pending", "verified", "rejected"] as const;
 type VerificationTab = (typeof VERIFICATION_TABS)[number];
 
 const PROFILE_FIELDS =
+  "id, email, last_name, first_name, middle_name, document_number, phone, telegram, passport_url, selfie_url, extra_document_url, verification, verification_rejection_comment, updated_at";
+const PROFILE_FIELDS_FALLBACK =
   "id, email, last_name, first_name, middle_name, phone, telegram, passport_url, verification, verification_rejection_comment, updated_at";
 
 async function requireAdmin() {
@@ -54,7 +56,7 @@ export async function GET(request: Request) {
 
     const tab = parseTab(new URL(request.url).searchParams.get("tab"));
 
-    const { data, error } = await withTimeout(
+    let { data, error } = await withTimeout(
       actor.admin
         .from("profiles")
         .select(PROFILE_FIELDS)
@@ -64,6 +66,22 @@ export async function GET(request: Request) {
       8000,
       { data: null, error: { message: "Database timeout" } } as any,
     );
+
+    if (
+      error &&
+      /document_number|selfie_url|extra_document_url/i.test(error.message)
+    ) {
+      ({ data, error } = await withTimeout(
+        actor.admin
+          .from("profiles")
+          .select(PROFILE_FIELDS_FALLBACK)
+          .eq("verification", tab)
+          .order("updated_at", { ascending: false })
+          .limit(200),
+        8000,
+        { data: null, error: { message: "Database timeout" } } as any,
+      ));
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 503 });

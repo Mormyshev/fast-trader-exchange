@@ -8,6 +8,9 @@ import type { ChatConversation } from "@/src/utils/chat/types";
 import ChatPanel from "@/src/components/Chat/ChatPanel";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/src/app/context/AuthContext";
+import StaffSearchInput, {
+  matchesSearchQuery,
+} from "@/src/components/staff/StaffSearchInput";
 import {
   countUnreadClientMessages,
   getClientMessagePreview,
@@ -99,6 +102,7 @@ export default function OperatorSupportPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [hasPseudonym, setHasPseudonym] = useState(false);
   const [readAtById, setReadAtById] = useState<Record<string, string>>({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setReadAtById(loadStaffChatReadMap());
@@ -188,6 +192,25 @@ export default function OperatorSupportPage() {
     (c) => c.operator_id && c.operator_id !== user?.id,
   );
 
+  function matchesConversation(conversation: ChatConversation) {
+    return matchesSearchQuery(
+      searchQuery,
+      getUserLabel(conversation),
+      conversation.user?.email,
+      conversation.user?.first_name,
+      conversation.user?.last_name,
+      conversation.last_message?.body,
+      conversation.last_message?.attachment_name,
+      conversation.assigned_operator?.operator_pseudonym,
+    );
+  }
+
+  const visibleUnassigned = unassigned.filter(matchesConversation);
+  const visibleMine = mine.filter(matchesConversation);
+  const visibleOthers = others.filter(matchesConversation);
+  const hasVisibleChats =
+    visibleUnassigned.length + visibleMine.length + visibleOthers.length > 0;
+
   function getAssignmentLabel(conversation: ChatConversation) {
     if (!conversation.operator_id) {
       return "Ожидает поддержки";
@@ -246,8 +269,13 @@ export default function OperatorSupportPage() {
             selectedId ? "hidden lg:flex" : "flex"
           }`}
         >
-          <div className="px-4 py-3 border-b border-zinc-100 bg-[#FFF8D6] font-bold text-zinc-900 shrink-0">
-            Чаты поддержки
+          <div className="px-4 py-3 border-b border-zinc-100 bg-[#FFF8D6] shrink-0 space-y-2.5">
+            <p className="font-bold text-zinc-900">Чаты поддержки</p>
+            <StaffSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Имя, почта, сообщение"
+            />
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {loading ? (
@@ -256,14 +284,18 @@ export default function OperatorSupportPage() {
               </div>
             ) : conversations.length === 0 ? (
               <p className="text-sm text-zinc-500 p-4">Нет открытых чатов</p>
+            ) : !hasVisibleChats ? (
+              <p className="text-sm text-zinc-500 p-4">
+                Ничего не найдено. Измените запрос или очистите поиск.
+              </p>
             ) : (
               <>
-                {unassigned.length > 0 && (
+                {visibleUnassigned.length > 0 && (
                   <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-amber-600">
-                    Новые ({unassigned.length})
+                    Новые ({visibleUnassigned.length})
                   </div>
                 )}
-                {unassigned.map((conversation) => (
+                {visibleUnassigned.map((conversation) => (
                   <ConversationRow
                     key={conversation.id}
                     conversation={conversation}
@@ -275,12 +307,12 @@ export default function OperatorSupportPage() {
                   />
                 ))}
 
-                {mine.length > 0 && (
+                {visibleMine.length > 0 && (
                   <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                    Мои ({mine.length})
+                    Мои ({visibleMine.length})
                   </div>
                 )}
-                {mine.map((conversation) => (
+                {visibleMine.map((conversation) => (
                   <ConversationRow
                     key={conversation.id}
                     conversation={conversation}
@@ -292,12 +324,12 @@ export default function OperatorSupportPage() {
                   />
                 ))}
 
-                {others.length > 0 && (
+                {visibleOthers.length > 0 && (
                   <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                    У других ({others.length})
+                    У других ({visibleOthers.length})
                   </div>
                 )}
-                {others.map((conversation) => (
+                {visibleOthers.map((conversation) => (
                   <ConversationRow
                     key={conversation.id}
                     conversation={conversation}

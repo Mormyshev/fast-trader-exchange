@@ -85,6 +85,15 @@ export default function StaffScheduleBoard() {
   }, [load]);
 
   const grid = useMemo(() => shiftsByOperator(shifts), [shifts]);
+  const myOperator = useMemo(
+    () => operators.find((operator) => operator.id === user?.id) ?? null,
+    [operators, user?.id],
+  );
+  const otherOperators = useMemo(
+    () => operators.filter((operator) => operator.id !== user?.id),
+    [operators, user?.id],
+  );
+  const splitForOperator = !canEdit;
 
   const openCell = (operator: ScheduleOperator, weekday: number) => {
     if (!canEdit) return;
@@ -161,6 +170,145 @@ export default function StaffScheduleBoard() {
     );
   };
 
+  const operatorName = (operator: ScheduleOperator) =>
+    operator.operator_pseudonym || operator.email;
+
+  const todayStatus = (operator: ScheduleOperator) => {
+    const shift = grid.get(operator.id)?.get(today) ?? null;
+    if (shift && isShiftActiveNow(shift)) return "Сейчас на смене";
+    if (shift) return `Сегодня ${formatShiftRange(shift)}`;
+    return "Сегодня выходной";
+  };
+
+  const renderOperatorIdentity = (
+    operator: ScheduleOperator,
+    { showMeBadge = false }: { showMeBadge?: boolean } = {},
+  ) => {
+    const name = operatorName(operator);
+    const isMe = operator.id === user?.id;
+    return (
+      <div className="flex items-center gap-3 min-w-0">
+        <OperatorAvatar name={name} className="w-9 h-9" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="truncate text-sm font-bold text-zinc-900">{name}</p>
+            {showMeBadge && isMe ? (
+              <span className="shrink-0 rounded-full bg-[#FFF4C2] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#C9A227]">
+                Вы
+              </span>
+            ) : null}
+          </div>
+          <p className="text-[11px] font-medium text-zinc-400 truncate">
+            {operator.email}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMobileCards = (list: ScheduleOperator[]) => (
+    <div className="md:hidden space-y-3">
+      {list.map((operator) => (
+        <div
+          key={operator.id}
+          className="rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.04)] space-y-3"
+        >
+          {renderOperatorIdentity(operator)}
+          <div className="grid grid-cols-2 gap-2">
+            {WEEKDAYS.map((day) => (
+              <div key={day.id} className="space-y-1">
+                <p
+                  className={`text-[10px] font-bold uppercase tracking-wider ${
+                    day.id === today ? "text-[#C9A227]" : "text-zinc-400"
+                  }`}
+                >
+                  {day.short}
+                  {day.id === today ? " · сегодня" : ""}
+                </p>
+                {renderCell(operator, day.id)}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderDesktopTable = (list: ScheduleOperator[]) => (
+    <div className="hidden md:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[920px] text-left">
+          <thead>
+            <tr className="bg-zinc-50/80 border-b border-zinc-100">
+              <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 w-56">
+                Оператор
+              </th>
+              {WEEKDAYS.map((day) => (
+                <th
+                  key={day.id}
+                  className={`px-2 py-3 text-center text-[10px] font-semibold uppercase tracking-wider ${
+                    day.id === today ? "text-[#C9A227]" : "text-zinc-400"
+                  }`}
+                >
+                  {day.short}
+                  {day.id === today ? " · сегодня" : ""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((operator) => (
+              <tr
+                key={operator.id}
+                className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50/50"
+              >
+                <td className="px-5 py-3">{renderOperatorIdentity(operator)}</td>
+                {WEEKDAYS.map((day) => (
+                  <td key={day.id} className="px-2 py-2">
+                    {renderCell(operator, day.id)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderOperatorList = (list: ScheduleOperator[]) => (
+    <>
+      {renderMobileCards(list)}
+      {renderDesktopTable(list)}
+    </>
+  );
+
+  const renderMySchedule = (operator: ScheduleOperator) => (
+    <div className="rounded-2xl bg-white p-4 sm:p-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)] space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        {renderOperatorIdentity(operator, { showMeBadge: true })}
+        <p className="text-xs font-bold text-zinc-500 sm:text-right">
+          {todayStatus(operator)}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        {WEEKDAYS.map((day) => (
+          <div key={day.id} className="space-y-1.5">
+            <p
+              className={`text-[10px] font-bold uppercase tracking-wider ${
+                day.id === today ? "text-[#C9A227]" : "text-zinc-400"
+              }`}
+            >
+              {day.short}
+              {day.id === today ? " · сегодня" : ""}
+            </p>
+            {renderCell(operator, day.id)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -181,7 +329,7 @@ export default function StaffScheduleBoard() {
             description={
               canEdit
                 ? "Нажмите на ячейку, чтобы поставить смену или выходной. Операторы видят этот график целиком."
-                : "Общий график смен всех операторов на неделю"
+                : "Сначала ваши смены, ниже — график остальных операторов"
             }
           />
         </div>
@@ -200,120 +348,37 @@ export default function StaffScheduleBoard() {
             Сначала добавьте операторов в разделе «Операторы»
           </p>
         </div>
-      ) : (
-        <>
-          <div className="md:hidden space-y-3">
-            {operators.map((operator) => {
-              const name = operator.operator_pseudonym || operator.email;
-              const isMe = operator.id === user?.id;
-              return (
-                <div
-                  key={operator.id}
-                  className={`rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.04)] space-y-3 ${
-                    isMe ? "ring-1 ring-[#FFDD2D]" : ""
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <OperatorAvatar name={name} className="w-10 h-10" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-zinc-900 truncate">
-                        {name}
-                      </p>
-                      <p className="text-xs font-medium text-zinc-400 truncate">
-                        {operator.email}
-                      </p>
-                    </div>
-                    {isMe ? (
-                      <span className="ml-auto shrink-0 rounded-full bg-[#FFF4C2] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#C9A227]">
-                        Вы
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {WEEKDAYS.map((day) => (
-                      <div key={day.id} className="space-y-1">
-                        <p
-                          className={`text-[10px] font-bold uppercase tracking-wider ${
-                            day.id === today ? "text-[#C9A227]" : "text-zinc-400"
-                          }`}
-                        >
-                          {day.short}
-                          {day.id === today ? " · сегодня" : ""}
-                        </p>
-                        {renderCell(operator, day.id)}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      ) : splitForOperator ? (
+        <div className="space-y-6 sm:space-y-8">
+          <section className="space-y-3">
+            <h2 className="px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              Мой график
+            </h2>
+            {myOperator ? (
+              renderMySchedule(myOperator)
+            ) : (
+              <div className="rounded-2xl bg-white p-6 text-sm font-medium text-zinc-500 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                Ваша смена в общем графике не найдена
+              </div>
+            )}
+          </section>
 
-          <div className="hidden md:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[920px] text-left">
-                <thead>
-                  <tr className="bg-zinc-50/80 border-b border-zinc-100">
-                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 w-56">
-                      Оператор
-                    </th>
-                    {WEEKDAYS.map((day) => (
-                      <th
-                        key={day.id}
-                        className={`px-2 py-3 text-center text-[10px] font-semibold uppercase tracking-wider ${
-                          day.id === today ? "text-[#C9A227]" : "text-zinc-400"
-                        }`}
-                      >
-                        {day.short}
-                        {day.id === today ? " · сегодня" : ""}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {operators.map((operator) => {
-                    const name = operator.operator_pseudonym || operator.email;
-                    const isMe = operator.id === user?.id;
-                    return (
-                      <tr
-                        key={operator.id}
-                        className={`border-b border-zinc-100 last:border-0 ${
-                          isMe ? "bg-[#FFFEEB]" : "hover:bg-zinc-50/50"
-                        }`}
-                      >
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <OperatorAvatar name={name} className="w-9 h-9" />
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <p className="truncate text-sm font-bold text-zinc-900">
-                                  {name}
-                                </p>
-                                {isMe ? (
-                                  <span className="shrink-0 rounded-full bg-[#FFF4C2] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#C9A227]">
-                                    Вы
-                                  </span>
-                                ) : null}
-                              </div>
-                              <p className="text-[11px] font-medium text-zinc-400 truncate">
-                                {operator.email}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        {WEEKDAYS.map((day) => (
-                          <td key={day.id} className="px-2 py-2">
-                            {renderCell(operator, day.id)}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
+          <section className="space-y-3">
+            <h2 className="px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              Остальные операторы
+              {otherOperators.length > 0 ? ` (${otherOperators.length})` : ""}
+            </h2>
+            {otherOperators.length === 0 ? (
+              <div className="rounded-2xl bg-white p-6 text-sm font-medium text-zinc-500 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                Других операторов пока нет
+              </div>
+            ) : (
+              renderOperatorList(otherOperators)
+            )}
+          </section>
+        </div>
+      ) : (
+        renderOperatorList(operators)
       )}
 
       <Dialog

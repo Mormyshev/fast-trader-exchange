@@ -42,7 +42,10 @@ model Profiles {
   middle_name  String?
   phone        String?
   telegram     String?
+  document_number String?
   passport_url String?
+  selfie_url String?
+  extra_document_url String?
   verification_rejection_comment String?
   operator_pseudonym String?
   staff_active Boolean @default(false)
@@ -53,6 +56,10 @@ model Profiles {
   chat_conversations_as_operator ChatConversation[] @relation("OperatorConversations")
   chat_messages      ChatMessage[]
   staff_schedule     StaffSchedule[]
+  staff_messages     StaffMessage[]
+  staff_conversation_reads StaffConversationRead[]
+  staff_dm_as_peer_a StaffConversation[] @relation("StaffDmPeerA")
+  staff_dm_as_peer_b StaffConversation[] @relation("StaffDmPeerB")
 
   @@index([id, role], name: "idx_profiles_id_role")
   @@map("profiles")
@@ -71,6 +78,53 @@ model StaffSchedule {
   @@unique([operator_id, weekday], name: "staff_schedule_operator_weekday")
   @@index([operator_id], name: "idx_staff_schedule_operator_id")
   @@map("staff_schedule")
+}
+
+model StaffConversation {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @db.Timestamptz
+  kind       String
+  peer_a     String?  @db.Uuid
+  peer_b     String?  @db.Uuid
+
+  peerA    Profiles?               @relation("StaffDmPeerA", fields: [peer_a], references: [id], onDelete: Cascade)
+  peerB    Profiles?               @relation("StaffDmPeerB", fields: [peer_b], references: [id], onDelete: Cascade)
+  messages StaffMessage[]
+  reads    StaffConversationRead[]
+
+  @@index([kind], name: "idx_staff_conversations_kind")
+  @@index([peer_a, peer_b], name: "idx_staff_conversations_peers")
+  @@map("staff_conversations")
+}
+
+model StaffConversationRead {
+  conversation_id String   @db.Uuid
+  profile_id      String   @db.Uuid
+  last_read_at    DateTime @default(now()) @db.Timestamptz
+
+  conversation StaffConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  profile      Profiles          @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@id([conversation_id, profile_id], name: "staff_conversation_reads_pkey")
+  @@map("staff_conversation_reads")
+}
+
+model StaffMessage {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at      DateTime @default(now()) @db.Timestamptz
+  conversation_id String   @db.Uuid
+  sender_id       String   @db.Uuid
+  body            String?
+  attachment_url  String?
+  attachment_name String?
+  attachment_type String?
+
+  conversation StaffConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender       Profiles          @relation(fields: [sender_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id, created_at(sort: Asc)], name: "idx_staff_messages_conversation_id")
+  @@map("staff_messages")
 }
 
 model ChatConversation {
@@ -126,6 +180,7 @@ model Orders {
   receipt_url     String?
   operator_receipt_url String?
   operator_pseudonym_snapshot String?
+  order_number Int? @unique
 
   user            Profiles?   @relation("UserOrders", fields: [user_id], references: [id], onDelete: SetNull)
   operator        Profiles?   @relation("OperatorOrders", fields: [operator_id], references: [id], onDelete: SetNull)

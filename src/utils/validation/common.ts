@@ -8,6 +8,21 @@ const TELEGRAM_RE = /^@[a-zA-Z][a-zA-Z0-9_]{4,31}$/;
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const COUPON_RE = /^[a-zA-Z0-9_-]{0,32}$/;
 
+const DOCUMENT_NUMBER_RE = /^[A-Za-zА-Яа-яЁё0-9\s-]{5,24}$/;
+
+export function validateDocumentNumber(value: string): ValidationResult {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) {
+    return validationError("Укажите серию и номер документа");
+  }
+  if (!DOCUMENT_NUMBER_RE.test(trimmed)) {
+    return validationError(
+      "Серия и номер: 5–24 символа, буквы, цифры, пробел или дефис",
+    );
+  }
+  return validationOk(trimmed);
+}
+
 export function validatePersonName(
   value: string,
   label: string,

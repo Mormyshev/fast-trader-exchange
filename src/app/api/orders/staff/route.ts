@@ -5,9 +5,98 @@ import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
 import { attachClientsToOrders } from "@/src/utils/orders/attach-client";
 import { STAFF_OPEN_ORDER_STATUSES } from "@/src/utils/staff/duty";
+import {
+  isOrderNumberColumnMissing,
+  stripOrderNumberField,
+} from "@/src/utils/orders/public-number";
 
 const ORDER_FIELDS =
-  "id, created_at, status, user_id, operator_id, operator_pseudonym_snapshot, currency_from, currency_to, amount_from, amount_to, wallet_from, wallet_to, tx_hash, payment_details, receipt_url, operator_receipt_url";
+  "id, created_at, status, user_id, operator_id, operator_pseudonym_snapshot, order_number, currency_from, currency_to, amount_from, amount_to, wallet_from, wallet_to, tx_hash, payment_details, receipt_url, operator_receipt_url";
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+async function loadStaffOrders(
+  admin: AdminClient,
+  userId: string,
+  isAdmin: boolean,
+  fields: string,
+) {
+  const completedQuery = admin
+    .from("orders")
+    .select(fields)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const completedCountQuery = admin
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "completed");
+
+  const cancelledBase = admin
+    .from("orders")
+    .select(fields)
+    .eq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  const [pendingRes, mineRes, completedRes, completedCountRes, cancelledRes] =
+    await Promise.all([
+      admin
+        .from("orders")
+        .select(fields)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
+      admin
+        .from("orders")
+        .select(fields)
+        .in("status", [...STAFF_OPEN_ORDER_STATUSES])
+        .eq("operator_id", userId)
+        .order("created_at", { ascending: false }),
+      isAdmin ? completedQuery : completedQuery.eq("operator_id", userId),
+      isAdmin
+        ? completedCountQuery
+        : completedCountQuery.eq("operator_id", userId),
+      isAdmin
+        ? cancelledBase
+        : cancelledBase.or(`operator_id.eq.${userId},operator_id.is.null`),
+    ]);
+
+  const firstError =
+    pendingRes.error ||
+    mineRes.error ||
+    completedRes.error ||
+    completedCountRes.error ||
+    cancelledRes.error;
+
+  if (firstError) {
+    return { error: firstError };
+  }
+
+  let teamRows: typeof mineRes.data = [];
+  if (isAdmin) {
+    const teamRes = await admin
+      .from("orders")
+      .select(fields)
+      .in("status", [...STAFF_OPEN_ORDER_STATUSES])
+      .not("operator_id", "is", null)
+      .order("created_at", { ascending: false });
+    if (teamRes.error) {
+      return { error: teamRes.error };
+    }
+    teamRows = teamRes.data ?? [];
+  }
+
+  return {
+    error: null,
+    pendingRes,
+    mineRes,
+    completedRes,
+    completedCountRes,
+    cancelledRes,
+    teamRows,
+  };
+}
 
 export async function GET() {
   try {
@@ -33,84 +122,39 @@ export async function GET() {
 
     await cancelExpiredOrders(admin);
 
-    const completedQuery = admin
-      .from("orders")
-      .select(ORDER_FIELDS)
-      .eq("status", "completed")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    let bundle = await loadStaffOrders(admin, user.id, isAdmin, ORDER_FIELDS);
+    if (bundle.error && isOrderNumberColumnMissing(bundle.error)) {
+      bundle = await loadStaffOrders(
+        admin,
+        user.id,
+        isAdmin,
+        stripOrderNumberField(ORDER_FIELDS),
+      );
+    }
 
-    const completedCountQuery = admin
-      .from("orders")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "completed");
+    if (bundle.error || !("pendingRes" in bundle)) {
+      return NextResponse.json(
+        { error: bundle.error?.message ?? "Failed to load orders" },
+        { status: 500 },
+      );
+    }
 
-    const [pendingRes, mineRes, completedRes, completedCountRes, cancelledRes] =
+    const [pending, mine, completed, cancelled, teamInProgress] =
       await Promise.all([
-        admin
-          .from("orders")
-          .select(ORDER_FIELDS)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false }),
-        admin
-          .from("orders")
-          .select(ORDER_FIELDS)
-          .in("status", [...STAFF_OPEN_ORDER_STATUSES])
-          .eq("operator_id", user.id)
-          .order("created_at", { ascending: false }),
+        attachClientsToOrders(admin, bundle.pendingRes.data ?? []),
+        attachClientsToOrders(admin, bundle.mineRes.data ?? []),
+        attachClientsToOrders(admin, bundle.completedRes.data ?? []),
+        attachClientsToOrders(admin, bundle.cancelledRes.data ?? []),
         isAdmin
-          ? completedQuery
-          : completedQuery.eq("operator_id", user.id),
-        isAdmin
-          ? completedCountQuery
-          : completedCountQuery.eq("operator_id", user.id),
-        admin
-          .from("orders")
-          .select(ORDER_FIELDS)
-          .eq("status", "cancelled")
-          .or(`operator_id.eq.${user.id},operator_id.is.null`)
-          .order("created_at", { ascending: false })
-          .limit(100),
+          ? attachClientsToOrders(admin, bundle.teamRows ?? [])
+          : Promise.resolve([]),
       ]);
-
-    const firstError =
-      pendingRes.error ||
-      mineRes.error ||
-      completedRes.error ||
-      completedCountRes.error ||
-      cancelledRes.error;
-
-    if (firstError) {
-      return NextResponse.json({ error: firstError.message }, { status: 500 });
-    }
-
-    let teamRows: typeof mineRes.data = [];
-    if (isAdmin) {
-      const teamRes = await admin
-        .from("orders")
-        .select(ORDER_FIELDS)
-        .in("status", [...STAFF_OPEN_ORDER_STATUSES])
-        .not("operator_id", "is", null)
-        .order("created_at", { ascending: false });
-      if (teamRes.error) {
-        return NextResponse.json({ error: teamRes.error.message }, { status: 500 });
-      }
-      teamRows = teamRes.data ?? [];
-    }
-
-    const [pending, mine, completed, cancelled, teamInProgress] = await Promise.all([
-      attachClientsToOrders(admin, pendingRes.data ?? []),
-      attachClientsToOrders(admin, mineRes.data ?? []),
-      attachClientsToOrders(admin, completedRes.data ?? []),
-      attachClientsToOrders(admin, cancelledRes.data ?? []),
-      isAdmin ? attachClientsToOrders(admin, teamRows ?? []) : Promise.resolve([]),
-    ]);
 
     return NextResponse.json({
       pending,
       mine,
       completed,
-      completedCount: completedCountRes.count ?? 0,
+      completedCount: bundle.completedCountRes.count ?? 0,
       cancelled,
       ...(isAdmin ? { teamInProgress } : {}),
     });

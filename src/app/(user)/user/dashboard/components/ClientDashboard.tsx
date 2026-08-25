@@ -1,9 +1,9 @@
 import React from "react";
 import Link from "next/link";
 import { ArrowLeftRight, Clock, CheckCircle2 } from "lucide-react";
-import ExchangeCalculator from "@/src/components/ExchangeCalculator/ExchangeCalculator";
 import { Button } from "@/components/ui/button";
 import { orderStatusBadgeClass } from "@/src/utils/orders/status-style";
+import { orderPublicTitle } from "@/src/utils/orders/public-number";
 
 type ActiveOrder = {
   id: string;
@@ -13,6 +13,7 @@ type ActiveOrder = {
   currency_to: string;
   amount_from: number;
   amount_to: number;
+  order_number?: number | null;
 };
 
 function statusLabel(status: string) {
@@ -41,7 +42,14 @@ export default function ClientDashboard({
 }) {
   return (
     <div className="space-y-6 animate-fade-in">
-      <ExchangeCalculator />
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900">
+          Кабинет
+        </h1>
+        <p className="mt-1 text-sm font-medium text-zinc-400">
+          Активные заявки и статус обменов
+        </p>
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <Link
           href="/user/orders"
@@ -111,6 +119,9 @@ export default function ClientDashboard({
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-400">
+                    <span className="text-sm font-bold text-zinc-900">
+                      {orderPublicTitle(order)}
+                    </span>
                     <span>
                       {new Date(order.created_at).toLocaleString("ru-RU", {
                         day: "numeric",

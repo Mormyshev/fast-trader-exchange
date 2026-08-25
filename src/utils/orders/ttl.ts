@@ -34,3 +34,12 @@ export function formatOrderTimeLeft(
   const seconds = Math.floor((diff % 60_000) / 1000);
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
+
+/** 1 = полный срок, 0 = время вышло. */
+export function orderTtlProgress(
+  createdAt: string | Date,
+  now = Date.now(),
+): number {
+  const remaining = orderExpiresAt(createdAt) - now;
+  return Math.min(1, Math.max(0, remaining / ORDER_TTL_MS));
+}

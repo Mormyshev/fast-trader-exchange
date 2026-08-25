@@ -34,6 +34,7 @@ import {
   mergeOrderClient,
   type OrderClient,
 } from "@/src/utils/orders/client-info";
+import { orderPublicTitle } from "@/src/utils/orders/public-number";
 import {
   OrderTtlBadge,
   useNowTick,
@@ -64,6 +65,7 @@ interface Order {
   amount_to: number;
   operator_pseudonym_snapshot?: string | null;
   client?: OrderClient | null;
+  order_number?: number | null;
 }
 
 type TabId = "all" | "pending" | "in_progress" | "completed" | "cancelled";
@@ -100,10 +102,6 @@ function statusLabel(status: OrderStatus) {
     case "cancelled":
       return "Отменена";
   }
-}
-
-function shortId(id: string) {
-  return id.slice(0, 8);
 }
 
 function dashboardTone(status: OrderStatus): OperatorOrderCardTone {
@@ -246,9 +244,12 @@ export default function OperatorDashboard() {
 
       setCancelledOrders((prev) => {
         const without = prev.filter((o) => o.id !== next.id);
+        const isAdmin = roleRef.current === "admin";
         const visible =
           next.status === "cancelled" &&
-          (next.operator_id === currentUserId || next.operator_id == null);
+          (isAdmin ||
+            next.operator_id === currentUserId ||
+            next.operator_id == null);
         return visible ? [next, ...without].slice(0, 100) : without;
       });
     };
@@ -521,8 +522,8 @@ export default function OperatorDashboard() {
                             aria-hidden
                             className={`absolute inset-y-0 left-0 w-1 ${orderStatusAccentClass(order.status)}`}
                           />
-                          <p className="font-mono text-[11px] font-semibold text-zinc-400">
-                            #{shortId(order.id)}
+                          <p className="text-[11px] font-semibold text-zinc-500">
+                            {orderPublicTitle(order)}
                           </p>
                           <p className="text-sm font-semibold text-zinc-900 mt-0.5">
                             {formatCreatedAt(order.created_at)}

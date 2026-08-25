@@ -25,10 +25,10 @@ import {
   parsePaymentDetails,
 } from "@/src/utils/orders/payment-details";
 import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
-import {
-  OrderTtlBadge,
-  useNowTick,
-} from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import { useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
+import RateFixationBar from "@/src/components/OrderTtlBadge/RateFixationBar";
+import OrderProgressStepper from "@/src/components/OrderProgress/OrderProgressStepper";
+import OrderNumberTitle from "@/src/components/OrderNumberTitle/OrderNumberTitle";
 import {
   orderStatusBadgeClass,
   orderStatusBannerClass,
@@ -289,7 +289,7 @@ export default function OrderStatusClient({
   const status = order.status as OrderStatus;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-5 text-zinc-900 dark:text-zinc-50 font-sans">
+    <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4 text-zinc-900 dark:text-zinc-50 font-sans">
       <Link
         href="/user/orders"
         className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
@@ -297,41 +297,35 @@ export default function OrderStatusClient({
         <ArrowLeft className="w-4 h-4" />К моим заявкам
       </Link>
 
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_28px_rgba(15,23,42,0.04)] dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-5 sm:space-y-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-4 sm:pb-5 border-b border-zinc-100 dark:border-zinc-800">
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight">
-                Заявка на обмен
-              </h1>
-              <p className="text-[11px] sm:text-xs font-mono font-semibold text-zinc-400 mt-1">
-                #{order.id.slice(0, 8)}
-              </p>
-              <p className="text-[11px] sm:text-xs font-medium text-zinc-500 mt-1">
-                {new Date(order.created_at).toLocaleString("ru-RU", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
-            </div>
-            <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 flex-wrap">
-              <span
-                className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${orderStatusBadgeClass(status, true)}`}
-              >
-                {statusLabel(status)}
-              </span>
-              <OrderTtlBadge
-                createdAt={order.created_at}
-                status={status}
-                now={now}
-              />
-            </div>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <OrderNumberTitle order={order} />
+        <span
+          className={`inline-flex self-start items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${orderStatusBadgeClass(status, true)}`}
+        >
+          {statusLabel(status)}
+        </span>
+      </div>
 
-          <div className="rounded-2xl bg-zinc-100 border border-zinc-200 px-3.5 sm:px-5 py-4 dark:bg-zinc-800/70 dark:border-zinc-700">
+      <RateFixationBar
+        createdAt={order.created_at}
+        status={status}
+        now={now}
+      />
+      <OrderProgressStepper status={status} />
+
+      <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)] dark:bg-zinc-900">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-5 sm:space-y-6">
+          <p className="text-[11px] sm:text-xs font-medium text-zinc-500">
+            {new Date(order.created_at).toLocaleString("ru-RU", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+
+          <div className="rounded-2xl bg-[#FFF8D6] px-3.5 sm:px-5 py-4">
             <OrderExchangePair
               amountFrom={order.amount_from}
               amountTo={order.amount_to}

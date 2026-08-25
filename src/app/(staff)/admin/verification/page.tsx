@@ -43,6 +43,9 @@ interface ProfileRequest {
   phone: string | null;
   telegram: string | null;
   passport_url: string | null;
+  selfie_url?: string | null;
+  extra_document_url?: string | null;
+  document_number?: string | null;
   verification: string | null;
   verification_rejection_comment: string | null;
   updated_at: string | null;
@@ -435,6 +438,11 @@ export default function AdminVerificationPage() {
                   </p>
                 </div>
                 <p className="text-sm font-medium">{fullName(req)}</p>
+                {req.document_number ? (
+                  <p className="text-xs font-medium text-zinc-500">
+                    Документ: {req.document_number}
+                  </p>
+                ) : null}
                 <div className="space-y-1 text-xs text-zinc-600">
                   <div className="flex items-center gap-1.5">
                     <Phone className="h-3 w-3 text-zinc-400" />
@@ -454,15 +462,41 @@ export default function AdminVerificationPage() {
                     {req.verification_rejection_comment}
                   </div>
                 )}
-                {req.passport_url ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPhoto(req.passport_url)}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    Открыть документ
-                  </button>
+                {req.passport_url || req.selfie_url || req.extra_document_url ? (
+                  <div className="flex flex-wrap gap-2">
+                    {req.passport_url ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPhoto(req.passport_url)}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Документ
+                      </button>
+                    ) : null}
+                    {req.selfie_url ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPhoto(req.selfie_url ?? null)}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Селфи
+                      </button>
+                    ) : null}
+                    {req.extra_document_url ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedPhoto(req.extra_document_url ?? null)
+                        }
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Доп. файл
+                      </button>
+                    ) : null}
+                  </div>
                 ) : (
                   <span className="text-xs text-zinc-400">Нет файла</span>
                 )}
@@ -504,7 +538,14 @@ export default function AdminVerificationPage() {
                       <td className="px-6 py-4 text-xs text-gray-600 dark:text-zinc-300 whitespace-nowrap">
                         {formatSubmittedAt(req.updated_at)}
                       </td>
-                      <td className="px-6 py-4 font-medium">{fullName(req)}</td>
+                      <td className="px-6 py-4 font-medium">
+                        <div>{fullName(req)}</div>
+                        {req.document_number ? (
+                          <div className="mt-1 text-xs font-medium text-zinc-400">
+                            {req.document_number}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="px-6 py-4 space-y-1">
                         <div className="flex items-center text-xs text-gray-600 dark:text-zinc-300">
                           <Phone className="mr-1.5 h-3 w-3 text-gray-400" />
@@ -521,15 +562,41 @@ export default function AdminVerificationPage() {
                         </td>
                       )}
                       <td className="px-6 py-4">
-                        {req.passport_url ? (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPhoto(req.passport_url)}
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline cursor-pointer"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            Открыть
-                          </button>
+                        {req.passport_url || req.selfie_url || req.extra_document_url ? (
+                          <div className="flex flex-col items-start gap-1">
+                            {req.passport_url ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhoto(req.passport_url)}
+                                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline cursor-pointer"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                Документ
+                              </button>
+                            ) : null}
+                            {req.selfie_url ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhoto(req.selfie_url ?? null)}
+                                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline cursor-pointer"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                Селфи
+                              </button>
+                            ) : null}
+                            {req.extra_document_url ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedPhoto(req.extra_document_url ?? null)
+                                }
+                                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9A227] hover:underline cursor-pointer"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                Доп. файл
+                              </button>
+                            ) : null}
+                          </div>
                         ) : (
                           <span className="text-xs text-zinc-400">Нет файла</span>
                         )}

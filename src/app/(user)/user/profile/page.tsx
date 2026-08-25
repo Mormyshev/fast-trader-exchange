@@ -1,723 +1,797 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  User,
-  UploadCloud,
-  CheckCircle2,
-  Clock,
-  FileText,
-  X,
-  Phone,
-  Send,
-  AlertTriangle,
-  Shield,
-  Star,
-  BadgeCheck,
-} from "lucide-react";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
+import { CheckCircle2, Clock, AlertTriangle, FileText, X } from "lucide-react";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
 import {
-  canEditVerification,
-  normalizeVerificationStatus,
-  type VerificationStatus,
+    canEditVerification,
+    normalizeVerificationStatus,
+    type VerificationStatus,
 } from "@/src/utils/verification";
 import {
-  formatPhoneInput,
-  formatTelegramInput,
-  validateProfileFormField,
-  validateProfileFormFields,
-  type ProfileFormErrors,
+    formatPhoneInput,
+    formatTelegramInput,
+    validateProfileFormField,
+    validateProfileFormFields,
+    type ProfileFormErrors,
 } from "@/src/utils/validation";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
+import { Button } from "@/components/ui/button";
 
-function inputClass(hasError: boolean, base: string) {
-  return hasError
-    ? `${base} border-red-400 focus:border-red-500`
-    : base;
+const supabase = createClient();
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const FILE_ACCEPT = ".gif,.jpg,.jpeg,.jpe,.png,image/gif,image/jpeg,image/png";
+const FILE_HINT = "(.GIF, .JPG, .JPEG, .JPE, .PNG, макс. 20 МБ)";
+
+const INPUT_CLASS =
+    "mt-1.5 block h-16 w-full rounded-2xl border-2 border-[#FFDD2D] bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#e6c628] focus:ring-2 focus:ring-[#FFDD2D]/40 disabled:cursor-not-allowed disabled:opacity-60";
+
+function inputClass(hasError: boolean) {
+    return hasError
+        ? `${INPUT_CLASS} border-rose-400 focus:border-rose-500 focus:ring-rose-200`
+        : INPUT_CLASS;
 }
 
 function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <p className="mt-1 text-xs font-medium text-red-500">{message}</p>;
+    if (!message) return null;
+    return <p className="mt-1 text-xs font-medium text-rose-500">{message}</p>;
 }
 
-const supabase = createClient();
+function RequiredMark() {
+    return <span className="text-rose-500"> *</span>;
+}
+
+function statusLabel(status: VerificationStatus) {
+    switch (status) {
+        case "pending":
+            return "На проверке";
+        case "verified":
+            return "Принята";
+        case "rejected":
+            return "Отклонена";
+        default:
+            return "Нет значения";
+    }
+}
+
+function SelfieIllustration() {
+    return (
+        <svg
+            viewBox="0 0 220 170"
+            className="mx-auto h-auto w-full max-w-[200px]"
+            aria-hidden
+        >
+            <rect
+                x="8"
+                y="18"
+                width="204"
+                height="140"
+                rx="18"
+                fill="#FFF8D6"
+            />
+            <circle cx="88" cy="78" r="28" fill="#FFDD2D" />
+            <rect
+                x="68"
+                y="108"
+                width="40"
+                height="36"
+                rx="16"
+                fill="#FFDD2D"
+            />
+            <rect
+                x="118"
+                y="54"
+                width="70"
+                height="86"
+                rx="8"
+                fill="white"
+                stroke="#C9A227"
+                strokeWidth="3"
+            />
+            <rect x="128" y="66" width="50" height="28" rx="4" fill="#FFF4C2" />
+            <rect x="128" y="102" width="50" height="6" rx="3" fill="#E5E7EB" />
+            <rect x="128" y="114" width="36" height="6" rx="3" fill="#E5E7EB" />
+        </svg>
+    );
+}
+
+function FilePicker({
+    label,
+    required,
+    file,
+    previewUrl,
+    disabled,
+    error,
+    onChange,
+    onClear,
+    hint,
+}: {
+    label: string;
+    required?: boolean;
+    file: File | null;
+    previewUrl: string | null;
+    disabled: boolean;
+    error?: string;
+    onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    onClear: () => void;
+    hint?: string;
+}) {
+    const name = file?.name || (previewUrl ? "Файл загружен" : null);
+
+    return (
+        <div className="space-y-2">
+            <p className="text-sm font-semibold text-zinc-800">
+                {label}
+                {required ? <RequiredMark /> : null}
+            </p>
+            <p className="text-xs font-medium text-zinc-400">{FILE_HINT}</p>
+            {disabled ? (
+                <p className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500">
+                    <FileText className="h-4 w-4 text-[#C9A227]" />
+                    {name || "Файл отправлен"}
+                </p>
+            ) : (
+                <label className="inline-flex h-16 cursor-pointer items-center rounded-full border-2 border-[#FFDD2D] bg-white px-6 text-sm font-bold text-zinc-900 transition-colors hover:bg-[#FFF8D6]">
+                    Выбрать файл
+                    <input
+                        type="file"
+                        accept={FILE_ACCEPT}
+                        className="sr-only"
+                        onChange={onChange}
+                    />
+                </label>
+            )}
+            {name && !disabled ? (
+                <div className="flex items-center gap-2 text-xs font-medium text-zinc-600">
+                    <FileText className="h-4 w-4 shrink-0 text-[#C9A227]" />
+                    <span className="truncate">{name}</span>
+                    <button
+                        type="button"
+                        onClick={onClear}
+                        className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-800"
+                        aria-label="Удалить файл"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            ) : null}
+            {previewUrl ? (
+                <div className="relative mt-2 h-40 w-full overflow-hidden rounded-xl bg-zinc-50">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={previewUrl}
+                        alt="Превью"
+                        className="h-full w-full object-contain"
+                    />
+                </div>
+            ) : null}
+            {hint ? (
+                <p className="text-xs font-medium leading-relaxed text-zinc-400">
+                    {hint}
+                </p>
+            ) : null}
+            <FieldError message={error} />
+        </div>
+    );
+}
 
 export default function ProfilePage() {
-  const { user } = useAuth();
-  const { confirm, ConfirmDialogHost } = useConfirmDialog();
+    const { user } = useAuth();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
-  const [verificationStatus, setVerificationStatus] =
-    useState<VerificationStatus>("not_started");
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+    const [verificationStatus, setVerificationStatus] =
+        useState<VerificationStatus>("not_started");
+    const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submittedAt, setSubmittedAt] = useState<string | null>(null);
 
-  const [lastName, setLastName] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [middleName, setMiddleName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [telegram, setTelegram] = useState("");
+    const [lastName, setLastName] = useState("");
+    const [firstName, setFirstName] = useState("");
+    const [middleName, setMiddleName] = useState("");
+    const [documentNumber, setDocumentNumber] = useState("");
+    const [phone, setPhone] = useState("");
+    const [telegram, setTelegram] = useState("");
 
-  const [passportFile, setPassportFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<ProfileFormErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  const [rejectionComment, setRejectionComment] = useState<string | null>(null);
-
-  const editable = canEditVerification(verificationStatus);
-
-  useEffect(() => {
-    if (!user?.id) return;
-
-    let cancelled = false;
-
-    async function fetchProfile() {
-      try {
-        const res = await fetch("/api/profile", { cache: "no-store" });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
-        const data = json.profile;
-        if (cancelled) return;
-        if (!data) {
-          setVerificationStatus("not_started");
-          return;
-        }
-        setLastName(data.last_name || "");
-        setFirstName(data.first_name || "");
-        setMiddleName(data.middle_name || "");
-        setPhone(formatPhoneInput(data.phone || ""));
-        setTelegram(data.telegram || "");
-        setVerificationStatus(
-          normalizeVerificationStatus(data.verification),
-        );
-        setRejectionComment(
-          typeof data.verification_rejection_comment === "string"
-            ? data.verification_rejection_comment
-            : null,
-        );
-        if (data.passport_url) setPreviewUrl(data.passport_url);
-      } catch (err) {
-        console.error("Ошибка загрузки профиля:", err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void fetchProfile();
-
-    const profileSubscription = supabase
-      .channel(`profile-changes-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          const updatedProfile = payload.new as Record<string, unknown>;
-          if (updatedProfile?.verification != null) {
-            setVerificationStatus(
-              normalizeVerificationStatus(String(updatedProfile.verification)),
-            );
-          }
-          if (typeof updatedProfile.verification_rejection_comment === "string") {
-            setRejectionComment(updatedProfile.verification_rejection_comment);
-          } else if (updatedProfile.verification_rejection_comment === null) {
-            setRejectionComment(null);
-          }
-          // Подтягиваем поля с сервера, не затирая их пустыми значениями
-          if (typeof updatedProfile.last_name === "string") {
-            setLastName(updatedProfile.last_name);
-          }
-          if (typeof updatedProfile.first_name === "string") {
-            setFirstName(updatedProfile.first_name);
-          }
-          if (typeof updatedProfile.middle_name === "string") {
-            setMiddleName(updatedProfile.middle_name);
-          }
-          if (updatedProfile.middle_name === null) {
-            setMiddleName("");
-          }
-          if (typeof updatedProfile.phone === "string") {
-            setPhone(formatPhoneInput(updatedProfile.phone));
-          }
-          if (typeof updatedProfile.telegram === "string") {
-            setTelegram(updatedProfile.telegram);
-          }
-          if (typeof updatedProfile.passport_url === "string") {
-            setPreviewUrl(updatedProfile.passport_url);
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(profileSubscription);
-    };
-  }, [user?.id]);
-
-  const getFormInput = () => ({
-    lastName,
-    firstName,
-    middleName,
-    phone,
-    telegram,
-  });
-
-  const touchField = (field: Exclude<keyof ProfileFormErrors, "passport">) => {
-    const result = validateProfileFormField(field, getFormInput());
-    setFieldErrors((prev) => ({
-      ...prev,
-      [field]: result && !result.ok ? result.error : undefined,
-    }));
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-
-    if (file) {
-      const maxSize = 10 * 1024 * 1024;
-      if (file.size > maxSize) {
-        alert(
-          "Файл слишком большой! Пожалуйста, загрузите фото размером менее 10 МБ.",
-        );
-        e.target.value = "";
-        return;
-      }
-
-      setPassportFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setFieldErrors((prev) => ({ ...prev, passport: undefined }));
-    }
-  };
-
-  const removeFile = async () => {
-    const ok = await confirm({
-      title: "Удалить фото паспорта?",
-      description: "Документ нужно будет загрузить заново перед отправкой.",
-      confirmLabel: "Удалить",
-      variant: "destructive",
-    });
-    if (!ok) return;
-
-    setPassportFile(null);
-    if (previewUrl && !previewUrl.startsWith("http")) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    } else {
-      setPreviewUrl(null);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user?.id) return alert("Пользователь не авторизован");
-
-    const validation = validateProfileFormFields(getFormInput(), {
-      hasPassport: Boolean(passportFile || previewUrl),
-    });
-
-    if (!validation.ok) {
-      setFieldErrors(validation.errors);
-      setFormError(
-        Object.values(validation.errors).find(Boolean) ||
-          "Проверьте заполнение полей",
-      );
-      return;
-    }
-
-    setFieldErrors({});
-    setFormError(null);
-
-    const ok = await confirm({
-      title:
-        verificationStatus === "rejected"
-          ? "Отправить исправленную анкету?"
-          : "Отправить анкету на проверку?",
-      description:
-        "После отправки форма будет заблокирована до решения оператора. Проверьте, что все данные совпадают с документом.",
-      confirmLabel: "Отправить",
-    });
-    if (!ok) return;
-
-    setIsSubmitting(true);
-    const prevStatus = verificationStatus;
-
-    try {
-      const form = new FormData();
-      form.append("last_name", validation.values.lastName);
-      form.append("first_name", validation.values.firstName);
-      form.append("middle_name", validation.values.middleName);
-      form.append("phone", validation.values.phone);
-      form.append("telegram", validation.values.telegram);
-      if (previewUrl && !passportFile && previewUrl.startsWith("http")) {
-        form.append("passport_url", previewUrl);
-      }
-      if (passportFile) {
-        form.append("passport", passportFile);
-      }
-
-      setVerificationStatus("pending");
-
-      const res = await fetch("/api/profile", {
-        method: "PATCH",
-        body: form,
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setVerificationStatus(prevStatus);
-        throw new Error(json.error || "Не удалось сохранить");
-      }
-
-      const profile = json.profile;
-      if (profile) {
-        setLastName(profile.last_name || lastName);
-        setFirstName(profile.first_name || firstName);
-        setMiddleName(profile.middle_name || middleName);
-        setPhone(formatPhoneInput(profile.phone || phone));
-        setTelegram(profile.telegram || telegram);
-        if (profile.passport_url) setPreviewUrl(profile.passport_url);
-        setVerificationStatus(
-          normalizeVerificationStatus(profile.verification),
-        );
-        setRejectionComment(
-          typeof profile.verification_rejection_comment === "string"
-            ? profile.verification_rejection_comment
-            : null,
-        );
-      }
-      setPassportFile(null);
-      alert("Данные успешно сохранены и отправлены на проверку!");
-    } catch (err: unknown) {
-      console.error("Ошибка при отправке анкеты:", err);
-      alert(
-        `Произошла ошибка: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`,
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#FFDD2D] border-t-transparent"></div>
-      </div>
+    const [passportFile, setPassportFile] = useState<File | null>(null);
+    const [selfieFile, setSelfieFile] = useState<File | null>(null);
+    const [extraFile, setExtraFile] = useState<File | null>(null);
+    const [passportUrl, setPassportUrl] = useState<string | null>(null);
+    const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
+    const [extraUrl, setExtraUrl] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<ProfileFormErrors>({});
+    const [formError, setFormError] = useState<string | null>(null);
+    const [rejectionComment, setRejectionComment] = useState<string | null>(
+        null,
     );
-  }
 
-  const statusMeta =
-    verificationStatus === "verified"
-      ? {
-          label: "Верифицирован",
-          className: "text-emerald-600",
-          icon: CheckCircle2,
+    const editable = canEditVerification(verificationStatus);
+
+    const applyProfile = (data: Record<string, unknown>) => {
+        if (typeof data.last_name === "string") setLastName(data.last_name);
+        if (typeof data.first_name === "string") setFirstName(data.first_name);
+        if (typeof data.middle_name === "string")
+            setMiddleName(data.middle_name);
+        if (data.middle_name === null) setMiddleName("");
+        if (typeof data.document_number === "string") {
+            setDocumentNumber(data.document_number);
         }
-      : verificationStatus === "pending"
-        ? { label: "На проверке", className: "text-amber-600", icon: Clock }
-        : {
-            label: "Не верифицирован",
-            className: "text-amber-600",
-            icon: AlertTriangle,
-          };
-  const StatusIcon = statusMeta.icon;
+        if (typeof data.phone === "string")
+            setPhone(formatPhoneInput(data.phone));
+        if (typeof data.telegram === "string") setTelegram(data.telegram);
+        if (typeof data.passport_url === "string")
+            setPassportUrl(data.passport_url);
+        if (typeof data.selfie_url === "string") setSelfieUrl(data.selfie_url);
+        if (typeof data.extra_document_url === "string") {
+            setExtraUrl(data.extra_document_url);
+        }
+        if (data.verification != null) {
+            setVerificationStatus(
+                normalizeVerificationStatus(String(data.verification)),
+            );
+        }
+        if (typeof data.verification_rejection_comment === "string") {
+            setRejectionComment(data.verification_rejection_comment);
+        } else if (data.verification_rejection_comment === null) {
+            setRejectionComment(null);
+        }
+        if (typeof data.updated_at === "string")
+            setSubmittedAt(data.updated_at);
+    };
 
-  return (
-    <div className="w-full space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
-              Профиль
-            </h1>
-            <p className="mt-1 text-sm font-medium text-zinc-500">
-              {user?.email || "Аккаунт"}
-            </p>
-          </div>
-          <span
-            className={`inline-flex items-center gap-1.5 text-sm font-semibold ${statusMeta.className}`}
-          >
-            <StatusIcon className="h-4 w-4" />
-            {statusMeta.label}
-          </span>
-        </div>
+    useEffect(() => {
+        if (!user?.id) return;
+        let cancelled = false;
 
-        {editable && (
-          <div className="relative overflow-hidden rounded-2xl bg-[#FFF8D6] px-6 py-7 sm:px-8 sm:py-8">
-            <div className="relative z-10 max-w-xl">
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900">
-                Пройдите верификацию, чтобы пользоваться всеми возможностями
-              </h2>
-              <ul className="mt-5 space-y-3">
-                <li className="flex items-center gap-3 text-sm font-medium text-zinc-700">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80">
-                    <Shield className="h-4 w-4 text-[#C9A227]" />
-                  </span>
-                  Безопасный обмен после проверки оператором
-                </li>
-                <li className="flex items-center gap-3 text-sm font-medium text-zinc-700">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80">
-                    <BadgeCheck className="h-4 w-4 text-[#C9A227]" />
-                  </span>
-                  Полный доступ к заявкам и выплатам
-                </li>
-                <li className="flex items-center gap-3 text-sm font-medium text-zinc-700">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80">
-                    <Star className="h-4 w-4 text-[#C9A227]" />
-                  </span>
-                  Приоритетная обработка анкеты
-                </li>
-              </ul>
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <a
-                  href="#verification-form"
-                  className="inline-flex h-11 items-center rounded-xl bg-[#FFDD2D] px-5 text-sm font-bold text-zinc-900 hover:bg-[#e6c628] transition-colors"
-                >
-                  Пройти верификацию
-                </a>
-                <span className="text-xs font-semibold text-zinc-500">
-                  ~1 минута
-                </span>
-              </div>
-            </div>
-            <div className="pointer-events-none absolute -right-4 top-1/2 hidden h-40 w-40 -translate-y-1/2 sm:block lg:right-8">
-              <div className="flex h-28 w-28 items-center justify-center rounded-[28px] bg-[#FFDD2D] shadow-[0_8px_30px_rgba(201,162,39,0.25)]">
-                <User className="h-14 w-14 text-zinc-900" />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {verificationStatus === "pending" && (
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-6 text-center shadow-sm dark:border-blue-900/30 dark:bg-blue-950/20 mb-6">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400">
-              <Clock className="h-6 w-6 animate-pulse" />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold">
-              Данные отправлены администратору
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400 max-w-md mx-auto">
-              Форма заблокирована и находится на проверке. Обычно это занимает
-              от 15 минут до нескольких часов.
-            </p>
-          </div>
-        )}
-
-        {verificationStatus === "rejected" && (
-          <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-6 text-center shadow-sm dark:border-rose-900/30 dark:bg-rose-950/20 mb-6">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/50 dark:text-rose-400">
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold">Анкета отклонена</h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400 max-w-md mx-auto">
-              Проверьте данные и фото паспорта, при необходимости исправьте и
-              отправьте анкету повторно. Ранее введённые поля сохранены.
-            </p>
-            {rejectionComment && (
-              <div className="mt-4 mx-auto max-w-md rounded-xl border border-rose-200 bg-white/80 px-4 py-3 text-left text-sm text-rose-800 dark:bg-zinc-900/50 dark:text-rose-300">
-                <p className="text-xs font-bold uppercase tracking-wide text-rose-500 mb-1">
-                  Комментарий администратора
-                </p>
-                {rejectionComment}
-              </div>
-            )}
-          </div>
-        )}
-
-        {verificationStatus === "verified" && (
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-6 text-center shadow-sm dark:border-emerald-900/30 dark:bg-emerald-950/20 mb-6">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold">
-              Профиль верифицирован
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400 max-w-md mx-auto">
-              Ваша анкета успешно подтверждена. Все операции на платформе
-              полностью доступны.
-            </p>
-          </div>
-        )}
-
-        <div
-          id="verification-form"
-          className="rounded-2xl bg-white p-6 sm:p-8 shadow-[0_4px_24px_rgba(15,23,42,0.04)]"
-        >
-          <div className="flex items-center space-x-3 border-b border-gray-100 pb-5 dark:border-zinc-800">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFDD2D]/10 text-zinc-900 dark:text-[#FFDD2D]">
-              <User className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">Верификация аккаунта</h1>
-              <p className="text-xs text-gray-500 dark:text-zinc-400">
-                Пожалуйста, вводите реальные данные, совпадающие с вашим
-                документом
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
-            {formError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                {formError}
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
-                Фамилия
-              </label>
-              <input
-                type="text"
-                required
-                disabled={!editable}
-                value={lastName}
-                onChange={(e) => {
-                  setLastName(e.target.value);
-                  if (fieldErrors.lastName) {
-                    setFieldErrors((prev) => ({ ...prev, lastName: undefined }));
-                  }
-                }}
-                onBlur={() => touchField("lastName")}
-                placeholder="Иванов"
-                className={inputClass(
-                  !!fieldErrors.lastName,
-                  "mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
-                )}
-              />
-              <FieldError message={fieldErrors.lastName} />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
-                Имя
-              </label>
-              <input
-                type="text"
-                required
-                disabled={!editable}
-                value={firstName}
-                onChange={(e) => {
-                  setFirstName(e.target.value);
-                  if (fieldErrors.firstName) {
-                    setFieldErrors((prev) => ({ ...prev, firstName: undefined }));
-                  }
-                }}
-                onBlur={() => touchField("firstName")}
-                placeholder="Иван"
-                className={inputClass(
-                  !!fieldErrors.firstName,
-                  "mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
-                )}
-              />
-              <FieldError message={fieldErrors.firstName} />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
-                Отчество
-              </label>
-              <input
-                type="text"
-                disabled={!editable}
-                value={middleName}
-                onChange={(e) => {
-                  setMiddleName(e.target.value);
-                  if (fieldErrors.middleName) {
-                    setFieldErrors((prev) => ({ ...prev, middleName: undefined }));
-                  }
-                }}
-                onBlur={() => touchField("middleName")}
-                placeholder="Иванович"
-                className={inputClass(
-                  !!fieldErrors.middleName,
-                  "mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
-                )}
-              />
-              <FieldError message={fieldErrors.middleName} />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
-                Телефон
-              </label>
-              <div className="relative mt-1.5">
-                <Phone className="absolute left-4 top-3.5 h-4 w-4 text-gray-400" />
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  required
-                  disabled={!editable}
-                  value={phone}
-                  onChange={(e) => {
-                    setPhone(formatPhoneInput(e.target.value));
-                    if (fieldErrors.phone) {
-                      setFieldErrors((prev) => ({ ...prev, phone: undefined }));
-                    }
-                  }}
-                  onBlur={() => touchField("phone")}
-                  placeholder="+7 (999) 000-00-00"
-                  className={inputClass(
-                    !!fieldErrors.phone,
-                    "block w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
-                  )}
-                />
-              </div>
-              <FieldError message={fieldErrors.phone} />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400">
-                Telegram
-              </label>
-              <div className="relative mt-1.5">
-                <Send className="absolute left-4 top-3.5 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  required
-                  disabled={!editable}
-                  value={telegram}
-                  onChange={(e) => {
-                    setTelegram(formatTelegramInput(e.target.value));
-                    if (fieldErrors.telegram) {
-                      setFieldErrors((prev) => ({ ...prev, telegram: undefined }));
-                    }
-                  }}
-                  onBlur={() => touchField("telegram")}
-                  placeholder="@username"
-                  className={inputClass(
-                    !!fieldErrors.telegram,
-                    "block w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#FFDD2D] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-[#FFDD2D]",
-                  )}
-                />
-              </div>
-              <FieldError message={fieldErrors.telegram} />
-            </div>
-
-            <div className="pt-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300">
-                Фото паспорта рядом с лицом
-              </label>
-              <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
-                Загрузите селфи, где вы держите раскрытый паспорт. Текст
-                документа должен быть читаемым.
-              </p>
-
-              {editable ? (
-                <div className="mt-3">
-                  {!previewUrl ? (
-                    <label className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-6 text-center transition-all hover:border-[#FFDD2D] hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900/30 dark:hover:border-[#FFDD2D]">
-                      <UploadCloud className="h-7 w-7 text-gray-400" />
-                      <span className="mt-2 text-sm font-medium text-gray-700 dark:text-zinc-300">
-                        Нажмите для выбора снимка
-                      </span>
-                      <span className="mt-1 text-xs text-gray-400">
-                        PNG или JPG
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        required={!previewUrl}
-                        className="hidden"
-                        onChange={handleFileChange}
-                      />
-                    </label>
-                  ) : (
-                    <div className="relative mt-2 rounded-xl border border-gray-200 p-4 dark:border-zinc-800">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <FileText className="h-8 w-8 text-gray-400" />
-                          <div className="max-w-[180px] sm:max-w-xs truncate">
-                            <p className="text-sm font-medium text-gray-900 dark:text-zinc-100 truncate">
-                              {passportFile?.name || "Загруженный паспорт.jpg"}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void removeFile()}
-                          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <div className="relative mt-4 h-64 w-full overflow-hidden rounded-lg border border-gray-100 dark:border-zinc-800">
-                        <Image
-                          src={previewUrl}
-                          alt="Превью документа"
-                          fill
-                          className="object-contain bg-zinc-900"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-3 space-y-4">
-                  <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-zinc-400 bg-gray-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-gray-100 dark:border-zinc-800">
-                    <FileText className="h-4 w-4 text-emerald-500" />
-                    <span>
-                      Фотография документа успешно отправлена в систему.
-                    </span>
-                  </div>
-                  {previewUrl && (
-                    <div className="relative h-64 w-full overflow-hidden rounded-lg border border-gray-100 dark:border-zinc-800">
-                      <Image
-                        src={previewUrl}
-                        alt="Документ"
-                        fill
-                        className="object-contain bg-zinc-900"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <FieldError message={fieldErrors.passport} />
-            </div>
-
-            {editable && (
-              <Button
-                type="submit"
-                disabled={
-                  isSubmitting ||
-                  !lastName ||
-                  !firstName ||
-                  !phone ||
-                  !telegram ||
-                  (!passportFile && !previewUrl)
+        async function fetchProfile() {
+            try {
+                const res = await fetch("/api/profile", { cache: "no-store" });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
+                if (cancelled) return;
+                if (!json.profile) {
+                    setVerificationStatus("not_started");
+                    return;
                 }
-                className="w-full rounded-xl bg-[#FFDD2D] py-6 text-sm font-bold text-black hover:bg-[#e6c625] transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSubmitting
-                  ? "Отправка..."
-                  : verificationStatus === "rejected"
-                    ? "Исправить и отправить снова"
-                    : "Сохранить и отправить на проверку"}
-              </Button>
-            )}
-          </form>
-        </div>
+                applyProfile(json.profile);
+            } catch (err) {
+                console.error("Ошибка загрузки профиля:", err);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
 
-        <div className="flex gap-3 rounded-2xl bg-[#FFF8D6] px-5 py-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#C9A227]" />
-          <div>
-            <p className="text-sm font-bold text-zinc-900">
-              Отключите VPN перед отправкой документов
-            </p>
-            <p className="mt-1 text-sm font-medium leading-relaxed text-zinc-600">
-              Иначе проверка личности может затянуться. Данные должны совпадать
-              с паспортом — оператор сверяет анкету вручную.
-            </p>
-          </div>
+        void fetchProfile();
+
+        const profileSubscription = supabase
+            .channel(`profile-changes-${user.id}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "UPDATE",
+                    schema: "public",
+                    table: "profiles",
+                    filter: `id=eq.${user.id}`,
+                },
+                (payload) => {
+                    applyProfile(payload.new as Record<string, unknown>);
+                },
+            )
+            .subscribe();
+
+        return () => {
+            cancelled = true;
+            supabase.removeChannel(profileSubscription);
+        };
+    }, [user?.id]);
+
+    const getFormInput = () => ({
+        lastName,
+        firstName,
+        middleName,
+        documentNumber,
+        phone,
+        telegram,
+    });
+
+    const touchField = (
+        field: Exclude<keyof ProfileFormErrors, "passport" | "selfie">,
+    ) => {
+        const result = validateProfileFormField(field, getFormInput());
+        setFieldErrors((prev) => ({
+            ...prev,
+            [field]: result && !result.ok ? result.error : undefined,
+        }));
+    };
+
+    const pickFile = (
+        e: ChangeEvent<HTMLInputElement>,
+        setter: (file: File | null) => void,
+        urlSetter: (url: string | null) => void,
+        errorKey?: "passport" | "selfie",
+    ) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        if (file.size > MAX_FILE_BYTES) {
+            alert("Файл слишком большой. Максимум 20 МБ.");
+            return;
+        }
+        setter(file);
+        urlSetter(URL.createObjectURL(file));
+        if (errorKey) {
+            setFieldErrors((prev) => ({ ...prev, [errorKey]: undefined }));
+        }
+    };
+
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!user?.id) return alert("Пользователь не авторизован");
+
+        const validation = validateProfileFormFields(getFormInput(), {
+            hasPassport: Boolean(passportFile || passportUrl),
+            hasSelfie: Boolean(selfieFile || selfieUrl),
+        });
+
+        if (!validation.ok) {
+            setFieldErrors(validation.errors);
+            setFormError(
+                Object.values(validation.errors).find(Boolean) ||
+                    "Проверьте заполнение полей",
+            );
+            return;
+        }
+
+        setFieldErrors({});
+        setFormError(null);
+
+        const ok = await confirm({
+            title:
+                verificationStatus === "rejected"
+                    ? "Отправить исправленную анкету?"
+                    : "Отправить запрос на верификацию?",
+            description:
+                "После отправки форма будет заблокирована до решения оператора.",
+            confirmLabel: "Отправить запрос",
+        });
+        if (!ok) return;
+
+        setIsSubmitting(true);
+        const prevStatus = verificationStatus;
+
+        try {
+            const form = new FormData();
+            form.append("last_name", validation.values.lastName);
+            form.append("first_name", validation.values.firstName);
+            form.append("middle_name", validation.values.middleName);
+            form.append("document_number", validation.values.documentNumber);
+            form.append("phone", validation.values.phone);
+            form.append("telegram", validation.values.telegram);
+            if (
+                passportUrl &&
+                !passportFile &&
+                passportUrl.startsWith("http")
+            ) {
+                form.append("passport_url", passportUrl);
+            }
+            if (selfieUrl && !selfieFile && selfieUrl.startsWith("http")) {
+                form.append("selfie_url", selfieUrl);
+            }
+            if (extraUrl && !extraFile && extraUrl.startsWith("http")) {
+                form.append("extra_document_url", extraUrl);
+            }
+            if (passportFile) form.append("passport", passportFile);
+            if (selfieFile) form.append("selfie", selfieFile);
+            if (extraFile) form.append("extra", extraFile);
+
+            setVerificationStatus("pending");
+
+            const res = await fetch("/api/profile", {
+                method: "PATCH",
+                body: form,
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                setVerificationStatus(prevStatus);
+                throw new Error(json.error || "Не удалось сохранить");
+            }
+            if (json.profile) applyProfile(json.profile);
+            setPassportFile(null);
+            setSelfieFile(null);
+            setExtraFile(null);
+            alert("Запрос на верификацию отправлен.");
+        } catch (err: unknown) {
+            alert(
+                `Произошла ошибка: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`,
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex min-h-[40vh] items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#FFDD2D] border-t-transparent" />
+            </div>
+        );
+    }
+
+    const hasRequest = verificationStatus !== "not_started";
+
+    return (
+        <div className="w-full space-y-5 sm:space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900">
+                    Верификация аккаунта
+                </h1>
+                <span className="text-sm font-semibold text-zinc-500">
+                    {user?.email}
+                </span>
+            </div>
+
+            {verificationStatus === "pending" && (
+                <div className="rounded-2xl bg-white px-5 py-4 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <div className="flex items-start gap-3">
+                        <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+                        <div>
+                            <p className="text-sm font-bold text-zinc-900">
+                                Заявка на проверке
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-zinc-500">
+                                Форма заблокирована до решения оператора. Обычно
+                                это занимает от 15 минут до нескольких часов.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {verificationStatus === "rejected" && (
+                <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-500" />
+                        <div>
+                            <p className="text-sm font-bold text-rose-900">
+                                Анкета отклонена
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-rose-800">
+                                Исправьте данные и отправьте запрос повторно.
+                            </p>
+                            {rejectionComment ? (
+                                <p className="mt-2 text-sm font-medium text-rose-700">
+                                    {rejectionComment}
+                                </p>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {verificationStatus === "verified" && (
+                <div className="rounded-2xl bg-white px-5 py-4 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <div className="flex items-start gap-3">
+                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+                        <div>
+                            <p className="text-sm font-bold text-zinc-900">
+                                Профиль верифицирован
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-zinc-500">
+                                Обмен на платформе полностью доступен.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+                {formError ? (
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                        {formError}
+                    </div>
+                ) : null}
+
+                <div className="rounded-2xl bg-white p-5 sm:p-7 shadow-[0_4px_24px_rgba(15,23,42,0.04)] space-y-4">
+                    <div>
+                        <label className="text-sm font-semibold text-zinc-800">
+                            Фамилия
+                            <RequiredMark />:
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            disabled={!editable}
+                            value={lastName}
+                            onChange={(e) => {
+                                setLastName(e.target.value);
+                                if (fieldErrors.lastName) {
+                                    setFieldErrors((prev) => ({
+                                        ...prev,
+                                        lastName: undefined,
+                                    }));
+                                }
+                            }}
+                            onBlur={() => touchField("lastName")}
+                            className={inputClass(!!fieldErrors.lastName)}
+                        />
+                        <FieldError message={fieldErrors.lastName} />
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-zinc-800">
+                            Имя
+                            <RequiredMark />:
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            disabled={!editable}
+                            value={firstName}
+                            onChange={(e) => {
+                                setFirstName(e.target.value);
+                                if (fieldErrors.firstName) {
+                                    setFieldErrors((prev) => ({
+                                        ...prev,
+                                        firstName: undefined,
+                                    }));
+                                }
+                            }}
+                            onBlur={() => touchField("firstName")}
+                            className={inputClass(!!fieldErrors.firstName)}
+                        />
+                        <FieldError message={fieldErrors.firstName} />
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-zinc-800">
+                            Серия номер паспорта или водительского удостоверения
+                            <RequiredMark />:
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            disabled={!editable}
+                            value={documentNumber}
+                            onChange={(e) => {
+                                setDocumentNumber(e.target.value);
+                                if (fieldErrors.documentNumber) {
+                                    setFieldErrors((prev) => ({
+                                        ...prev,
+                                        documentNumber: undefined,
+                                    }));
+                                }
+                            }}
+                            onBlur={() => touchField("documentNumber")}
+                            className={inputClass(!!fieldErrors.documentNumber)}
+                        />
+                        <FieldError message={fieldErrors.documentNumber} />
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-zinc-800">
+                            Отчество
+                            <RequiredMark />:
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            disabled={!editable}
+                            value={middleName}
+                            onChange={(e) => {
+                                setMiddleName(e.target.value);
+                                if (fieldErrors.middleName) {
+                                    setFieldErrors((prev) => ({
+                                        ...prev,
+                                        middleName: undefined,
+                                    }));
+                                }
+                            }}
+                            onBlur={() => touchField("middleName")}
+                            className={inputClass(!!fieldErrors.middleName)}
+                        />
+                        <FieldError message={fieldErrors.middleName} />
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-zinc-800">
+                            Телефон
+                            <RequiredMark />:
+                        </label>
+                        <input
+                            type="tel"
+                            required
+                            disabled={!editable}
+                            value={phone}
+                            onChange={(e) => {
+                                setPhone(formatPhoneInput(e.target.value));
+                                if (fieldErrors.phone) {
+                                    setFieldErrors((prev) => ({
+                                        ...prev,
+                                        phone: undefined,
+                                    }));
+                                }
+                            }}
+                            onBlur={() => touchField("phone")}
+                            placeholder="+7 (999) 000-00-00"
+                            className={inputClass(!!fieldErrors.phone)}
+                        />
+                        <FieldError message={fieldErrors.phone} />
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-zinc-800">
+                            Telegram
+                            <RequiredMark />:
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            disabled={!editable}
+                            value={telegram}
+                            onChange={(e) => {
+                                setTelegram(
+                                    formatTelegramInput(e.target.value),
+                                );
+                                if (fieldErrors.telegram) {
+                                    setFieldErrors((prev) => ({
+                                        ...prev,
+                                        telegram: undefined,
+                                    }));
+                                }
+                            }}
+                            onBlur={() => touchField("telegram")}
+                            placeholder="@username"
+                            className={inputClass(!!fieldErrors.telegram)}
+                        />
+                        <FieldError message={fieldErrors.telegram} />
+                    </div>
+                </div>
+
+                <h2 className="text-xl font-bold tracking-tight text-zinc-900">
+                    Сканы или фотографии документов
+                </h2>
+
+                <div className="rounded-2xl bg-white p-5 sm:p-7 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] lg:items-start">
+                        <FilePicker
+                            label="Фото 2 и 3 страницы паспорта или водительского удостоверения на фоне сайта или листа бумаги"
+                            required
+                            file={passportFile}
+                            previewUrl={passportUrl}
+                            disabled={!editable}
+                            error={fieldErrors.passport}
+                            onChange={(e) =>
+                                pickFile(
+                                    e,
+                                    setPassportFile,
+                                    setPassportUrl,
+                                    "passport",
+                                )
+                            }
+                            onClear={() => {
+                                setPassportFile(null);
+                                setPassportUrl(null);
+                            }}
+                        />
+                        <p className="text-sm font-medium leading-relaxed text-zinc-400 lg:pt-1">
+                            «На фоне сайта или листа бумаги» означает, что на
+                            заднем фоне должен быть виден адрес сайта или лист
+                            бумаги, где указаны ваша электронная почта, номер
+                            заявки и название обменника Aurum Swap.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="rounded-2xl bg-white p-5 sm:p-7 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] lg:items-center">
+                        <FilePicker
+                            label="Селфи с разворотом 2-3 страницы паспорта или водительского удостоверения"
+                            required
+                            file={selfieFile}
+                            previewUrl={selfieUrl}
+                            disabled={!editable}
+                            error={fieldErrors.selfie}
+                            onChange={(e) =>
+                                pickFile(
+                                    e,
+                                    setSelfieFile,
+                                    setSelfieUrl,
+                                    "selfie",
+                                )
+                            }
+                            onClear={() => {
+                                setSelfieFile(null);
+                                setSelfieUrl(null);
+                            }}
+                        />
+                        <SelfieIllustration />
+                    </div>
+                </div>
+
+                <div className="rounded-2xl bg-white p-5 sm:p-7 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <FilePicker
+                        label="Дополнительное поле для загрузки"
+                        file={extraFile}
+                        previewUrl={extraUrl}
+                        disabled={!editable}
+                        onChange={(e) => pickFile(e, setExtraFile, setExtraUrl)}
+                        onClear={() => {
+                            setExtraFile(null);
+                            setExtraUrl(null);
+                        }}
+                    />
+                </div>
+
+                {editable ? (
+                    <Button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="h-16 w-full rounded-full bg-[#FFDD2D] text-sm font-bold text-zinc-900 shadow-none hover:bg-[#e6c628] disabled:opacity-50"
+                    >
+                        {isSubmitting
+                            ? "Отправка..."
+                            : verificationStatus === "rejected"
+                              ? "Отправить запрос повторно"
+                              : "Отправить запрос"}
+                    </Button>
+                ) : null}
+            </form>
+
+            <div className="space-y-3">
+                <h2 className="text-lg font-bold text-zinc-900">
+                    Заявки на верификацию:
+                </h2>
+                <div className="overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="bg-[#FFF4C2] text-xs font-bold uppercase tracking-wider text-zinc-600">
+                                <th className="px-5 py-3">Дата</th>
+                                <th className="px-5 py-3">Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {hasRequest ? (
+                                <tr className="border-t border-zinc-100">
+                                    <td className="px-5 py-3.5 font-medium text-zinc-800">
+                                        {submittedAt
+                                            ? new Date(
+                                                  submittedAt,
+                                              ).toLocaleString("ru-RU", {
+                                                  day: "numeric",
+                                                  month: "long",
+                                                  year: "numeric",
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                              })
+                                            : "—"}
+                                    </td>
+                                    <td className="px-5 py-3.5 font-semibold text-zinc-800">
+                                        {statusLabel(verificationStatus)}
+                                    </td>
+                                </tr>
+                            ) : (
+                                <tr className="border-t border-zinc-100">
+                                    <td
+                                        colSpan={2}
+                                        className="px-5 py-6 text-center text-sm font-medium text-zinc-400"
+                                    >
+                                        Нет значения
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="flex gap-3 rounded-2xl bg-[#FFF8D6] px-5 py-4">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#C9A227]" />
+                <div>
+                    <p className="text-sm font-bold text-zinc-900">
+                        Отключите VPN перед отправкой документов
+                    </p>
+                    <p className="mt-1 text-sm font-medium leading-relaxed text-zinc-600">
+                        Данные должны совпадать с документом — оператор сверяет
+                        анкету вручную.
+                    </p>
+                </div>
+            </div>
+            <ConfirmDialogHost />
         </div>
-      <ConfirmDialogHost />
-    </div>
-  );
+    );
 }

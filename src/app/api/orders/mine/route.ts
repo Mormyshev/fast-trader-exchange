@@ -3,6 +3,10 @@ import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
+import {
+  isOrderNumberColumnMissing,
+  stripOrderNumberField,
+} from "@/src/utils/orders/public-number";
 
 const IN_PROGRESS_STATUSES = [
   "processing",
@@ -41,30 +45,36 @@ export async function GET(request: NextRequest) {
 
     await cancelExpiredOrders(admin);
 
-    let query = admin
-      .from("orders")
-      .select(
-        "id, created_at, status, currency_from, currency_to, amount_from, amount_to, wallet_to, payment_details, receipt_url, operator_receipt_url",
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+    const fieldsWithNumber =
+      "id, created_at, status, currency_from, currency_to, amount_from, amount_to, wallet_to, payment_details, receipt_url, operator_receipt_url, order_number";
 
-    if (scope === "pending") {
-      query = query.eq("status", "pending");
-    } else if (scope === "in_progress" || scope === "active") {
-      // active — обратная совместимость: всё незавершённое кроме pending не требуется,
-      // для "active" оставляем прежний набор (pending + in progress)
-      query =
-        scope === "active"
-          ? query.in("status", ["pending", ...IN_PROGRESS_STATUSES])
-          : query.in("status", [...IN_PROGRESS_STATUSES]);
-    } else if (scope === "completed") {
-      query = query.eq("status", "completed");
-    } else if (scope === "cancelled") {
-      query = query.eq("status", "cancelled");
+    const buildQuery = (fields: string) => {
+      let query = admin
+        .from("orders")
+        .select(fields)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (scope === "pending") {
+        query = query.eq("status", "pending");
+      } else if (scope === "in_progress" || scope === "active") {
+        query =
+          scope === "active"
+            ? query.in("status", ["pending", ...IN_PROGRESS_STATUSES])
+            : query.in("status", [...IN_PROGRESS_STATUSES]);
+      } else if (scope === "completed") {
+        query = query.eq("status", "completed");
+      } else if (scope === "cancelled") {
+        query = query.eq("status", "cancelled");
+      }
+
+      return query;
+    };
+
+    let { data, error } = await buildQuery(fieldsWithNumber);
+    if (error && isOrderNumberColumnMissing(error)) {
+      ({ data, error } = await buildQuery(stripOrderNumberField(fieldsWithNumber)));
     }
-
-    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

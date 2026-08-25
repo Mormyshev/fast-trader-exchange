@@ -6,6 +6,64 @@ import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { broadcastVerificationEvent } from "@/src/utils/supabase/broadcast-verification";
 import { validateProfileFormFields } from "@/src/utils/validation";
 
+const ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+];
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+function isExtraColumnMissing(message: string | null | undefined) {
+  if (!message) return false;
+  return (
+    /document_number|selfie_url|extra_document_url/i.test(message) &&
+    (/does not exist/i.test(message) || /schema cache/i.test(message))
+  );
+}
+
+function readFile(form: FormData, key: string): File | null {
+  const value = form.get(key);
+  return value instanceof File && value.size > 0 ? value : null;
+}
+
+async function uploadVerificationImage(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  kind: string,
+  file: File,
+) {
+  if (!ALLOWED_TYPES.includes(file.type) && file.type !== "image/jpg") {
+    return { error: "Загрузите GIF, JPG или PNG" };
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    return { error: "Файл слишком большой (макс. 20 МБ)" };
+  }
+
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const fileName = `${kind}-${userId}-${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const uploadResult = await withTimeout(
+    admin.storage.from("verifications").upload(fileName, buffer, {
+      contentType: file.type || "image/jpeg",
+      upsert: true,
+    }),
+    20000,
+    { data: null, error: { message: "Storage timeout" } } as any,
+  );
+
+  if (uploadResult.error) {
+    return { error: uploadResult.error.message };
+  }
+
+  const { data: urlData } = admin.storage
+    .from("verifications")
+    .getPublicUrl(fileName);
+  return { url: urlData.publicUrl };
+}
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -65,155 +123,150 @@ export async function PATCH(request: Request) {
     }
 
     const form = await request.formData().catch(() => null);
+    if (!form) {
+      return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
+
     const admin = createAdminClient();
+    const lastName = String(form.get("last_name") || "").trim();
+    const firstName = String(form.get("first_name") || "").trim();
+    const middleName = String(form.get("middle_name") || "").trim();
+    const documentNumber = String(form.get("document_number") || "").trim();
+    const phone = String(form.get("phone") || "").trim();
+    const telegram = String(form.get("telegram") || "").trim();
 
-    let lastName: string | null = null;
-    let firstName: string | null = null;
-    let middleName: string | null = null;
-    let phone: string | null = null;
-    let telegram: string | null = null;
-    let passportUrl: string | null = null;
-    let file: File | null = null;
-
-    if (form) {
-      lastName = String(form.get("last_name") || "").trim();
-      firstName = String(form.get("first_name") || "").trim();
-      middleName = String(form.get("middle_name") || "").trim();
-      phone = String(form.get("phone") || "").trim();
-      telegram = String(form.get("telegram") || "").trim();
-      const existingUrl = String(form.get("passport_url") || "").trim();
-      passportUrl = existingUrl || null;
-      const maybeFile = form.get("passport");
-      if (maybeFile instanceof File && maybeFile.size > 0) {
-        file = maybeFile;
-      }
-    } else {
-      const body = await request.json().catch(() => null);
-      if (!body || typeof body !== "object") {
-        return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-      }
-      lastName = String(body.last_name || "").trim();
-      firstName = String(body.first_name || "").trim();
-      middleName = String(body.middle_name || "").trim();
-      phone = String(body.phone || "").trim();
-      telegram = String(body.telegram || "").trim();
-      passportUrl = body.passport_url ? String(body.passport_url) : null;
-    }
-
-    if (!lastName || !firstName || !phone || !telegram) {
-      return NextResponse.json(
-        { error: "Заполните все обязательные поля" },
-        { status: 400 },
-      );
-    }
+    const passportFile = readFile(form, "passport");
+    const selfieFile = readFile(form, "selfie");
+    const extraFile = readFile(form, "extra");
+    let passportUrl = String(form.get("passport_url") || "").trim() || null;
+    let selfieUrl = String(form.get("selfie_url") || "").trim() || null;
+    let extraUrl = String(form.get("extra_document_url") || "").trim() || null;
 
     const profileValidation = validateProfileFormFields(
       {
         lastName,
         firstName,
         middleName,
+        documentNumber,
         phone,
         telegram,
       },
-      { hasPassport: Boolean(file || passportUrl) },
+      {
+        hasPassport: Boolean(passportFile || passportUrl),
+        hasSelfie: Boolean(selfieFile || selfieUrl),
+      },
     );
 
     if (!profileValidation.ok) {
       const firstError =
-        profileValidation.errors.lastName ||
-        profileValidation.errors.firstName ||
-        profileValidation.errors.middleName ||
-        profileValidation.errors.phone ||
-        profileValidation.errors.telegram ||
-        profileValidation.errors.passport ||
+        Object.values(profileValidation.errors).find(Boolean) ||
         "Некорректные данные";
       return NextResponse.json({ error: firstError }, { status: 400 });
     }
 
-    ({
-      lastName,
-      firstName,
-      middleName,
-      phone,
-      telegram,
-    } = {
-      lastName: profileValidation.values.lastName,
-      firstName: profileValidation.values.firstName,
-      middleName: profileValidation.values.middleName,
-      phone: profileValidation.values.phone,
-      telegram: profileValidation.values.telegram,
-    });
-
-    if (file) {
-      const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-      if (!allowedTypes.includes(file.type)) {
-        return NextResponse.json(
-          { error: "Паспорт: загрузите JPG, PNG или WEBP" },
-          { status: 400 },
-        );
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        return NextResponse.json(
-          { error: "Файл слишком большой (макс. 10 МБ)" },
-          { status: 400 },
-        );
-      }
-    }
-
-    if (file) {
-      const ext = file.name.split(".").pop() || "jpg";
-      const fileName = `passport-${user.id}-${Date.now()}.${ext}`;
-      const buffer = Buffer.from(await file.arrayBuffer());
-
-      const uploadResult = await withTimeout(
-        admin.storage.from("verifications").upload(fileName, buffer, {
-          contentType: file.type || "image/jpeg",
-          upsert: true,
-        }),
-        15000,
-        { data: null, error: { message: "Storage timeout" } } as any,
+    if (passportFile) {
+      const uploaded = await uploadVerificationImage(
+        admin,
+        user.id,
+        "passport",
+        passportFile,
       );
-
-      if (uploadResult.error) {
+      if (uploaded.error || !uploaded.url) {
         return NextResponse.json(
-          { error: uploadResult.error.message },
+          { error: uploaded.error || "Не удалось загрузить документ" },
           { status: 503 },
         );
       }
+      passportUrl = uploaded.url;
+    }
 
-      const { data: urlData } = admin.storage
-        .from("verifications")
-        .getPublicUrl(fileName);
-      passportUrl = urlData.publicUrl;
+    if (selfieFile) {
+      const uploaded = await uploadVerificationImage(
+        admin,
+        user.id,
+        "selfie",
+        selfieFile,
+      );
+      if (uploaded.error || !uploaded.url) {
+        return NextResponse.json(
+          { error: uploaded.error || "Не удалось загрузить селфи" },
+          { status: 503 },
+        );
+      }
+      selfieUrl = uploaded.url;
+    }
+
+    if (extraFile) {
+      const uploaded = await uploadVerificationImage(
+        admin,
+        user.id,
+        "extra",
+        extraFile,
+      );
+      if (uploaded.error || !uploaded.url) {
+        return NextResponse.json(
+          { error: uploaded.error || "Не удалось загрузить дополнительный файл" },
+          { status: 503 },
+        );
+      }
+      extraUrl = uploaded.url;
     }
 
     if (!passportUrl) {
       return NextResponse.json(
-        { error: "Загрузите фото паспорта" },
+        { error: "Загрузите фото документа" },
+        { status: 400 },
+      );
+    }
+    if (!selfieUrl) {
+      return NextResponse.json(
+        { error: "Загрузите селфи с документом" },
         { status: 400 },
       );
     }
 
-    const { data, error } = await withTimeout(
+    const payload = {
+      last_name: profileValidation.values.lastName,
+      first_name: profileValidation.values.firstName,
+      middle_name: profileValidation.values.middleName || null,
+      document_number: profileValidation.values.documentNumber,
+      phone: profileValidation.values.phone,
+      telegram: profileValidation.values.telegram,
+      passport_url: passportUrl,
+      selfie_url: selfieUrl,
+      extra_document_url: extraUrl,
+      verification: "pending",
+      verification_rejection_comment: null,
+      updated_at: new Date().toISOString(),
+    };
+
+    let { data, error } = await withTimeout(
       admin
         .from("profiles")
-        .update({
-          last_name: lastName,
-          first_name: firstName,
-          middle_name: middleName || null,
-          phone,
-          telegram,
-          passport_url: passportUrl,
-          verification: "pending",
-          verification_rejection_comment: null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(payload)
         .eq("id", user.id)
         .select("*")
         .single(),
       8000,
       { data: null, error: { message: "Database timeout" } } as any,
     );
+
+    if (error && isExtraColumnMissing(error.message)) {
+      const fallback = { ...payload } as Record<string, unknown>;
+      delete fallback.document_number;
+      delete fallback.selfie_url;
+      delete fallback.extra_document_url;
+      ({ data, error } = await withTimeout(
+        admin
+          .from("profiles")
+          .update(fallback)
+          .eq("id", user.id)
+          .select("*")
+          .single(),
+        8000,
+        { data: null, error: { message: "Database timeout" } } as any,
+      ));
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 503 });

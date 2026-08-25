@@ -159,7 +159,6 @@ export default function Header() {
                         )}
                       </div>
                     )}
-
                   </div>
 
                   <div className="pt-4 border-t border-gray-100 dark:border-zinc-900 shrink-0">
