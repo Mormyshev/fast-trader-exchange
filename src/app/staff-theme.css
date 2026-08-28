@@ -1,0 +1,161 @@
+.staff-app.dark {
+  color-scheme: dark;
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-white,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-white\/90,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-white\/95 {
+  background-color: rgb(24 24 27);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-\[\#F4F5F7\] {
+  background-color: rgb(9 9 11);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-zinc-50,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-zinc-50\/80,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-zinc-50\/50 {
+  background-color: rgb(39 39 42 / 0.72);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-zinc-100 {
+  background-color: rgb(39 39 42);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-zinc-200,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .disabled\:bg-zinc-200:disabled {
+  background-color: rgb(63 63 70);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-zinc-50:hover,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-white:hover,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-zinc-100:hover {
+  background-color: rgb(39 39 42);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .focus\:bg-white:focus,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .focus-visible\:bg-white:focus-visible {
+  background-color: rgb(39 39 42);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-zinc-900,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-zinc-800,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-\[\#2A2A2A\] {
+  color: rgb(244 244 245);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:text-zinc-900:hover {
+  color: rgb(244 244 245);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-zinc-700 {
+  color: rgb(228 228 231);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-zinc-600 {
+  color: rgb(212 212 216);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-zinc-500 {
+  color: rgb(161 161 170);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-zinc-100,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-zinc-200,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-zinc-200\/80,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .sm\:border-zinc-200,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:border-zinc-300:hover {
+  border-color: rgb(63 63 70);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .divide-zinc-100 > :not([hidden]) ~ :not([hidden]),
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(63 63 70);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-\[\#FFF4C2\] {
+  background-color: rgb(234 179 8 / 0.16);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-\[\#FFF8D6\],
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-\[\#FFFEEB\],
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-\[\#FFF9E6\] {
+  background-color: rgb(234 179 8 / 0.12);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-\[\#FFF8D6\]:hover,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-\[\#FFF4C2\]:hover {
+  background-color: rgb(234 179 8 / 0.22);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-200,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-200\/80,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-200\/50,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-100 {
+  border-color: rgb(245 158 11 / 0.35);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-emerald-50 {
+  background-color: rgb(6 78 59 / 0.45);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-emerald-700,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-emerald-600 {
+  color: rgb(110 231 183);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-emerald-100 {
+  border-color: rgb(16 185 129 / 0.28);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-rose-50,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-rose-100 {
+  background-color: rgb(136 19 55 / 0.4);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-rose-700,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-rose-600 {
+  color: rgb(251 113 133);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-rose-200 {
+  border-color: rgb(244 63 94 / 0.35);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-amber-50 {
+  background-color: rgb(120 53 15 / 0.35);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-\[\#FFDD2D\],
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-\[\#e6c628\]:hover {
+  color: rgb(24 24 27);
+}
+
+.staff-app.dark .shadow-\[0_4px_24px_rgba\(15\,23\,42\,0\.04\)\],
+.staff-app.dark .shadow-\[4px_0_24px_rgba\(15\,23\,42\,0\.04\)\] {
+  --tw-shadow: 0 4px 24px rgb(0 0 0 / 0.35);
+  --tw-shadow-colored: 0 4px 24px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+html.staff-dark [data-slot="dialog-content"] {
+  background-color: rgb(24 24 27);
+  color: rgb(250 250 250);
+}
+
+html.staff-dark [data-slot="dialog-overlay"] {
+  background-color: rgb(9 9 11 / 0.72);
+}
+
+html.staff-dark [data-slot="dialog-title"] {
+  color: rgb(250 250 250);
+}
+
+html.staff-dark [data-slot="dialog-description"] {
+  color: rgb(161 161 170);
+}
+
+html.staff-dark [data-slot="dialog-close"] {
+  color: rgb(161 161 170);
+}

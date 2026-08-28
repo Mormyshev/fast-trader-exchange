@@ -34,6 +34,7 @@ import { STAFF_TEAM_CHAT_READ_EVENT } from "@/src/utils/chat/staff-internal";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import StaffDutyToggle from "@/src/components/staff/StaffDutyToggle";
+import StaffThemeSelect from "@/src/components/staff/StaffThemeSelect";
 import { staffPositionLabel } from "@/src/utils/staff/permissions";
 
 const pageTitles: { [key: string]: string } = {
@@ -509,6 +510,7 @@ export default function StaffLayoutClient({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0">
+            <StaffThemeSelect />
             <div className="flex items-center gap-2 sm:gap-3 sm:border-r sm:border-zinc-200 sm:pr-4 md:pr-6">
               {operatorPseudonym ? (
                 <>

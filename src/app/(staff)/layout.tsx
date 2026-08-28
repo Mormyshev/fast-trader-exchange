@@ -3,7 +3,10 @@ import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import StaffLayoutClient from "./StaffLayoutClient";
+import { StaffThemeProvider } from "@/src/components/staff/StaffThemeProvider";
+import { STAFF_THEME_COOKIE, parseStaffTheme } from "@/src/utils/staff/theme";
 
 export default async function StaffLayout({
   children,
@@ -39,14 +42,28 @@ export default async function StaffLayout({
   const initialStaffActive = profile?.staff_active === true;
   const initialIsSeniorOperator = profile?.is_senior_operator === true;
 
+  const cookieStore = await cookies();
+  const initialTheme = parseStaffTheme(
+    cookieStore.get(STAFF_THEME_COOKIE)?.value,
+  );
+
   return (
-    <StaffLayoutClient
-      role={role}
-      initialOperatorPseudonym={operatorPseudonym}
-      initialStaffActive={initialStaffActive}
-      initialIsSeniorOperator={initialIsSeniorOperator}
-    >
-      {children}
-    </StaffLayoutClient>
+    <>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var m=document.cookie.match(/(?:^|; )fte-staff-theme=([^;]*)/);var d=m&&m[1]==="dark";document.documentElement.classList.toggle("dark",!!d);document.documentElement.classList.toggle("staff-dark",!!d);}catch(e){}})();`,
+        }}
+      />
+      <StaffThemeProvider initialTheme={initialTheme}>
+        <StaffLayoutClient
+          role={role}
+          initialOperatorPseudonym={operatorPseudonym}
+          initialStaffActive={initialStaffActive}
+          initialIsSeniorOperator={initialIsSeniorOperator}
+        >
+          {children}
+        </StaffLayoutClient>
+      </StaffThemeProvider>
+    </>
   );
 }

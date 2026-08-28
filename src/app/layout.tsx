@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
+import "./staff-theme.css";
 import { createClient } from "@/src/utils/supabase/server";
 
 const roboto = Roboto({
