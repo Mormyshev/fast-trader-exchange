@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
-import { CheckCircle2, Clock, AlertTriangle, FileText, X } from "lucide-react";
+import { CheckCircle2, Clock, AlertTriangle, FileText, X, KeyRound } from "lucide-react";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { createClient } from "@/src/utils/supabase/client";
+import { requestPasswordReset } from "@/src/app/actions/auth";
 import {
     canEditVerification,
     normalizeVerificationStatus,
@@ -143,6 +144,13 @@ export default function ProfilePage() {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+    const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+    const [passwordResetInfo, setPasswordResetInfo] = useState<string | null>(
+        null,
+    );
+    const [passwordResetError, setPasswordResetError] = useState<string | null>(
+        null,
+    );
 
     const [lastName, setLastName] = useState("");
     const [firstName, setFirstName] = useState("");
@@ -367,6 +375,29 @@ export default function ProfilePage() {
         }
     };
 
+    const handlePasswordReset = async () => {
+        setPasswordResetError(null);
+        setPasswordResetInfo(null);
+        setPasswordResetLoading(true);
+        try {
+            const result = await requestPasswordReset("", "");
+            if (result.error) {
+                setPasswordResetError(result.error);
+                return;
+            }
+            setPasswordResetInfo(
+                result.message ??
+                    "Письмо отправлено. Перейдите по ссылке из почты, чтобы задать новый пароль.",
+            );
+        } catch {
+            setPasswordResetError(
+                "Не удалось отправить письмо. Попробуйте ещё раз.",
+            );
+        } finally {
+            setPasswordResetLoading(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex min-h-[40vh] items-center justify-center">
@@ -386,6 +417,47 @@ export default function ProfilePage() {
                 <span className="text-sm font-semibold text-zinc-500">
                     {user?.email}
                 </span>
+            </div>
+
+            <div className="rounded-2xl bg-white px-5 py-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)] sm:px-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+                            <KeyRound className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-zinc-900">
+                                Пароль
+                            </p>
+                            <p className="mt-1 text-sm font-medium leading-relaxed text-zinc-500">
+                                Ссылка для смены пароля придёт на{" "}
+                                <span className="font-semibold text-zinc-700">
+                                    {user?.email}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                    <Button
+                        type="button"
+                        onClick={handlePasswordReset}
+                        disabled={passwordResetLoading}
+                        className="h-11 shrink-0 rounded-full bg-[#FFDD2D] px-5 text-sm font-bold text-zinc-900 hover:bg-[#e6c628]"
+                    >
+                        {passwordResetLoading
+                            ? "Отправка…"
+                            : "Отправить ссылку"}
+                    </Button>
+                </div>
+                {passwordResetError ? (
+                    <p className="mt-3 text-xs font-medium text-rose-500">
+                        {passwordResetError}
+                    </p>
+                ) : null}
+                {passwordResetInfo ? (
+                    <p className="mt-3 text-xs font-medium text-emerald-600">
+                        {passwordResetInfo}
+                    </p>
+                ) : null}
             </div>
 
             {verificationStatus === "pending" && (

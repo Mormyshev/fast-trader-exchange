@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { loginAndGetRoute } from "@/src/app/actions/auth";
+import { loginAndGetRoute, requestPasswordReset } from "@/src/app/actions/auth";
 import { validateEmail, validatePassword } from "@/src/utils/validation";
 import {
   RecaptchaV2,
@@ -29,6 +29,8 @@ export default function AuthModal({
 
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"login" | "forgot">("login");
+  const [info, setInfo] = useState("");
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -43,8 +45,10 @@ export default function AuthModal({
     }
 
     setError("");
+    setInfo("");
     setIsLoading(false);
     setCaptchaToken("");
+    setMode("login");
     recaptchaRef.current?.reset();
     setShouldRender(true);
     lockPageScroll();
@@ -118,6 +122,59 @@ export default function AuthModal({
     }
   };
 
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setInfo("");
+
+    const emailCheck = validateEmail(login);
+    if (!emailCheck.ok) {
+      setError(emailCheck.error);
+      return;
+    }
+
+    const token = captchaToken || recaptchaRef.current?.getToken() || "";
+    if (isRecaptchaEnabled() && !token) {
+      setError("Подтвердите, что вы не робот");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await requestPasswordReset(emailCheck.value, token);
+      setCaptchaToken("");
+      recaptchaRef.current?.reset();
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setInfo(result.message ?? "Письмо отправлено, проверьте почту.");
+    } catch {
+      setError("Не удалось отправить письмо. Попробуйте ещё раз.");
+      setCaptchaToken("");
+      recaptchaRef.current?.reset();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const switchToForgot = () => {
+    setError("");
+    setInfo("");
+    setPassword("");
+    setCaptchaToken("");
+    recaptchaRef.current?.reset();
+    setMode("forgot");
+  };
+
+  const switchToLogin = () => {
+    setError("");
+    setInfo("");
+    setCaptchaToken("");
+    recaptchaRef.current?.reset();
+    setMode("login");
+  };
+
   return (
     <div
       data-lenis-prevent
@@ -142,9 +199,54 @@ export default function AuthModal({
         </button>
 
         <h2 className="text-xl font-bold tracking-tight text-zinc-900 mb-5">
-          Вход в аккаунт
+          {mode === "forgot" ? "Восстановление пароля" : "Вход в аккаунт"}
         </h2>
 
+        {mode === "forgot" ? (
+          <form onSubmit={handleForgotSubmit} className="space-y-5">
+            <p className="text-sm font-medium leading-relaxed text-zinc-500">
+              Укажите email аккаунта — отправим ссылку для смены пароля.
+            </p>
+
+            {error && (
+              <div className="text-xs font-bold text-red-500 text-center bg-red-50 py-2 rounded-full px-4">
+                {error}
+              </div>
+            )}
+            {info && (
+              <div className="text-xs font-bold text-green-600 text-center bg-green-50 py-3 rounded-2xl px-4">
+                {info}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-zinc-500 pl-1">
+                E-mail *
+              </label>
+              <input
+                type="email"
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D]"
+                required
+                disabled={isLoading}
+                placeholder="example@mail.com"
+              />
+            </div>
+
+            <RecaptchaV2 ref={recaptchaRef} onChange={setCaptchaToken} />
+
+            <div className="pt-1">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-3.5 rounded-xl shadow-none transition-all flex items-center justify-center"
+              >
+                {isLoading ? "Отправка..." : "Отправить ссылку"}
+              </button>
+            </div>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
             <div className="text-xs font-bold text-red-500 text-center bg-red-50 py-2 rounded-full px-4">
@@ -179,6 +281,16 @@ export default function AuthModal({
               required
               disabled={isLoading}
             />
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={switchToForgot}
+                className="text-xs font-semibold text-[#C9A227] hover:underline"
+                disabled={isLoading}
+              >
+                Забыли пароль?
+              </button>
+            </div>
           </div>
 
           <RecaptchaV2 ref={recaptchaRef} onChange={setCaptchaToken} />
@@ -214,16 +326,30 @@ export default function AuthModal({
             </p>
           </div>
         </form>
+        )}
 
         <div className="mt-6 text-center text-xs font-semibold">
-          <span className="text-zinc-400">Ещё нет аккаунта? </span>
-          <button
-            onClick={onSwitchToRegister}
-            className="text-[#C9A227] hover:underline"
-            disabled={isLoading}
-          >
-            Создать аккаунт
-          </button>
+          {mode === "forgot" ? (
+            <button
+              type="button"
+              onClick={switchToLogin}
+              className="text-[#C9A227] hover:underline"
+              disabled={isLoading}
+            >
+              Вернуться ко входу
+            </button>
+          ) : (
+            <>
+              <span className="text-zinc-400">Ещё нет аккаунта? </span>
+              <button
+                onClick={onSwitchToRegister}
+                className="text-[#C9A227] hover:underline"
+                disabled={isLoading}
+              >
+                Создать аккаунт
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

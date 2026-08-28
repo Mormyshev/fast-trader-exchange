@@ -47,6 +47,11 @@ export default async function RootLayout({
       <body
         className={`${roboto.className} font-sans min-h-full flex flex-col bg-white text-zinc-900`}
       >
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=location.pathname;if(p==="/auth/callback"||p==="/auth/confirm")return;var s=location.search;if(s.indexOf("code=")<0&&s.indexOf("token_hash=")<0)return;var u=new URL("/auth/callback"+s,location.origin);if(!u.searchParams.get("next")&&(p.indexOf("/auth/reset-password")===0||u.searchParams.get("type")==="recovery"))u.searchParams.set("next","/auth/reset-password");location.replace(u.pathname+u.search);}catch(e){}})();`,
+          }}
+        />
         <Providers initialUser={user} initialRole={initialRole}>
           {children}
         </Providers>

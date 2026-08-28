@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { createClient } from "@/src/utils/supabase/client";
+import { sessionHasRecoveryAmr } from "@/src/utils/supabase/recovery-session";
 import { useRouter } from "next/navigation";
 
 type AppRole = "guest" | "user" | "operator" | "admin";
@@ -70,8 +71,26 @@ export function AuthProvider({
 
       setUser(session.user);
 
+      const onResetPage =
+        typeof window !== "undefined" &&
+        window.location.pathname.startsWith("/auth/reset-password");
+      const isRecovery =
+        event === "PASSWORD_RECOVERY" ||
+        sessionHasRecoveryAmr(session.access_token);
+
+      if (isRecovery && !onResetPage) {
+        setIsLoading(false);
+        router.replace("/auth/reset-password");
+        return;
+      }
+
       // Не трогаем isLoading на INITIAL_SESSION / TOKEN_REFRESHED —
       // иначе все страницы с зависимостью isAuthLoading рвут Realtime-каналы
+      if (event === "PASSWORD_RECOVERY") {
+        setIsLoading(false);
+        return;
+      }
+
       if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
         setIsLoading(false);
         return;
@@ -100,7 +119,7 @@ export function AuthProvider({
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, router]);
 
   const logoutUser = async () => {
     setIsLoading(true);
