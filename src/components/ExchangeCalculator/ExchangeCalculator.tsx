@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, type ReactNode } from "react";
-import { ArrowLeftRight, ChevronDown, Wallet, BadgeRussianRuble, TrendingUp } from "lucide-react";
+import { ArrowLeftRight, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
@@ -431,70 +431,57 @@ export default function ExchangeCalculator() {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-3 sm:items-center sm:gap-x-6">
-          <div className="flex items-center gap-3 sm:justify-self-end">
-            <div
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                isBelowMin
-                  ? "bg-rose-100 text-rose-500"
-                  : "bg-[#FFF4C2] text-[#C9A227]"
+        <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-2xl bg-[#F4F5F7] dark:bg-zinc-800/80">
+          <div
+            className={`flex min-w-0 flex-col items-center justify-center px-2 py-3.5 text-center sm:px-4 ${
+              isBelowMin ? "bg-rose-50 dark:bg-rose-950/25" : ""
+            }`}
+          >
+            <p
+              className={`text-[10px] font-semibold uppercase tracking-[0.14em] sm:text-[11px] ${
+                isBelowMin ? "text-rose-400" : "text-zinc-400"
               }`}
             >
-              <BadgeRussianRuble className="h-5 w-5 stroke-[1.75]" />
-            </div>
-            <div className="min-w-0">
+              Минимум
+            </p>
+            <p
+              className={`mt-1.5 text-[13px] font-bold tabular-nums leading-tight sm:text-sm ${
+                isBelowMin ? "text-rose-600" : "text-zinc-900 dark:text-zinc-100"
+              }`}
+            >
+              {MIN_RUB.toLocaleString("ru-RU")}{" "}
+              <span className="font-semibold text-zinc-400">RUB</span>
+            </p>
+            {minCryptoEquivalent && cryptoCode ? (
               <p
-                className={`text-[11px] font-semibold uppercase tracking-wider ${
+                className={`mt-1 text-[11px] font-medium ${
                   isBelowMin ? "text-rose-400" : "text-zinc-400"
                 }`}
               >
-                Минимум
+                ≈ {minCryptoEquivalent} {cryptoCode}
               </p>
-              <p
-                className={`text-sm font-bold tabular-nums ${
-                  isBelowMin ? "text-rose-600" : "text-zinc-900"
-                }`}
-              >
-                {MIN_RUB.toLocaleString("ru-RU")} RUB
-              </p>
-              {minCryptoEquivalent && cryptoCode ? (
-                <p
-                  className={`text-[11px] font-medium ${
-                    isBelowMin ? "text-rose-400" : "text-zinc-400"
-                  }`}
-                >
-                  ≈ {minCryptoEquivalent} {cryptoCode}
-                </p>
-              ) : null}
-            </div>
+            ) : null}
           </div>
 
-          <div className="flex items-center gap-3 sm:justify-self-center">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
-              <TrendingUp className="h-5 w-5 stroke-[1.75]" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Курс
-              </p>
-              <p className="whitespace-nowrap text-sm font-bold tabular-nums text-zinc-900">
-                {rateDisplayText.replace(/^Курс:\s*/, "")}
-              </p>
-            </div>
+          <div className="flex min-w-0 flex-col items-center justify-center border-x border-zinc-200/80 px-2 py-3.5 text-center sm:px-4 dark:border-zinc-700/80">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C9A227] sm:text-[11px]">
+              Курс
+            </p>
+            <p className="mt-1.5 text-[13px] font-bold tabular-nums leading-snug text-zinc-900 sm:text-sm dark:text-zinc-100">
+              {rateDisplayText.replace(/^Курс:\s*/, "")}
+            </p>
           </div>
 
-          <div className="flex items-center gap-3 sm:justify-self-start">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
-              <Wallet className="h-5 w-5 stroke-[1.75]" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Резерв
-              </p>
-              <p className="text-sm font-bold tabular-nums text-zinc-900">
-                {RESERVE.toLocaleString("ru-RU")} {selectedReceive.code}
-              </p>
-            </div>
+          <div className="flex min-w-0 flex-col items-center justify-center px-2 py-3.5 text-center sm:px-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:text-[11px]">
+              Резерв
+            </p>
+            <p className="mt-1.5 text-[13px] font-bold tabular-nums leading-tight text-zinc-900 sm:text-sm dark:text-zinc-100">
+              {RESERVE.toLocaleString("ru-RU")}{" "}
+              <span className="font-semibold text-zinc-400">
+                {selectedReceive.code}
+              </span>
+            </p>
           </div>
         </div>
 

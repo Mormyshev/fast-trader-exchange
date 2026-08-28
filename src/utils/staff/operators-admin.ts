@@ -2,7 +2,7 @@ import { OPERATOR_PSEUDONYMS } from "@/src/utils/staff/pseudonyms";
 import { validateOperatorPseudonym } from "@/src/utils/validation";
 
 export const OPERATOR_PROFILE_FIELDS =
-  "id, email, role, operator_pseudonym, staff_active, updated_at";
+  "id, email, role, operator_pseudonym, staff_active, is_senior_operator, updated_at";
 
 export async function isPseudonymTaken(
   admin: { from: (table: string) => any },

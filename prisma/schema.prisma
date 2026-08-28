@@ -49,6 +49,7 @@ model Profiles {
   verification_rejection_comment String?
   operator_pseudonym String?
   staff_active Boolean @default(false)
+  is_senior_operator Boolean @default(false)
 
   orders_as_user     Orders[]     @relation("UserOrders")
   orders_as_operator Orders[]     @relation("OperatorOrders")

@@ -38,9 +38,13 @@ export async function GET() {
       role: string;
       operator_pseudonym: string | null;
       staff_active: boolean | null;
+      is_senior_operator: boolean | null;
       updated_at: string | null;
     }>).sort((a, b) => {
       if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
+      if (!!a.is_senior_operator !== !!b.is_senior_operator) {
+        return a.is_senior_operator ? -1 : 1;
+      }
       const nameA = (a.operator_pseudonym || a.email || "").toLocaleLowerCase("ru");
       const nameB = (b.operator_pseudonym || b.email || "").toLocaleLowerCase("ru");
       return nameA.localeCompare(nameB, "ru");
@@ -125,6 +129,7 @@ export async function POST(request: Request) {
             role: "operator",
             operator_pseudonym: pseudonymCheck.value,
             staff_active: false,
+            is_senior_operator: body?.is_senior_operator === true,
             updated_at: now,
           },
           { onConflict: "id" },

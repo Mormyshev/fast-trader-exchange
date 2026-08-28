@@ -132,6 +132,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       authPatch.password = passwordCheck.value;
     }
 
+    if (isOperator && body.is_senior_operator !== undefined) {
+      patch.is_senior_operator = body.is_senior_operator === true;
+    }
+
     if (Object.keys(authPatch).length > 0) {
       const authResult = await actor.admin.auth.admin.updateUserById(
         current.id,
@@ -236,6 +240,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
           role: "user",
           operator_pseudonym: null,
           staff_active: false,
+          is_senior_operator: false,
           updated_at: new Date().toISOString(),
         })
         .eq("id", current.id),

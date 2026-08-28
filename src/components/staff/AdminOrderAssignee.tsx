@@ -5,17 +5,19 @@ import { UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
+import { staffPositionLabelShort } from "@/src/utils/staff/permissions";
 
 type StaffMember = {
   id: string;
   role: "operator" | "admin";
   operator_pseudonym: string | null;
   staff_active: boolean;
+  is_senior_operator?: boolean | null;
 };
 
 function memberLabel(member: StaffMember) {
   const name = member.operator_pseudonym?.trim() || "Без псевдонима";
-  const role = member.role === "admin" ? "админ" : "оператор";
+  const role = staffPositionLabelShort(member);
   return member.staff_active
     ? `${name} (${role})`
     : `${name} (${role}, неактивен)`;
@@ -114,8 +116,8 @@ export default function AdminOrderAssignee({
           </p>
         </div>
         <p className="text-sm font-medium text-zinc-600">
-          Админ может сменить оператора и вести заявку до завершения. Назначить
-          можно только активного сотрудника.
+          Можно передать заявку другому активному оператору. Он продолжит
+          обработку: реквизиты, проверка чека и завершение.
         </p>
         <select
           value={selectedId}

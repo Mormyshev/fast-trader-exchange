@@ -61,7 +61,7 @@ type TabId = "new" | "in_work" | "awaiting" | "review" | "completed" | "cancelle
 
 export default function OperatorOrdersPage() {
   const supabase = createClient();
-  const { user, staffActive, role, isLoading: isAuthLoading } = useAuth();
+  const { user, staffActive, role, canReassignOrders, isLoading: isAuthLoading } = useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [newOrders, setNewOrders] = useState<Order[]>([]);
@@ -77,11 +77,13 @@ export default function OperatorOrdersPage() {
 
   const userIdRef = useRef<string | null>(null);
   const roleRef = useRef(role);
+  const canReassignRef = useRef(canReassignOrders);
   const clientCacheRef = useRef(new Map<string, OrderClient>());
   if (user?.id) {
     userIdRef.current = user.id;
   }
   roleRef.current = role;
+  canReassignRef.current = canReassignOrders;
 
   const now = useNowTick(!loading && !!user?.id);
   const expiredHandledRef = useRef<Set<string>>(new Set());
@@ -105,7 +107,7 @@ export default function OperatorOrdersPage() {
     if (
       ["processing", "awaiting_payment", "paid"].includes(next.status) &&
       next.operator_id &&
-      (roleRef.current === "admin" || next.operator_id === userIdRef.current)
+      (canReassignRef.current || next.operator_id === userIdRef.current)
     ) {
       setMyOrders((prev) => [next, ...prev]);
       return;
@@ -170,8 +172,7 @@ export default function OperatorOrdersPage() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
         const pending = ((json.pending || []) as Order[]).map(rememberClient);
-        const isAdmin = roleRef.current === "admin";
-        const inWork = isAdmin
+        const inWork = canReassignRef.current
           ? ((json.teamInProgress || json.mine || []) as Order[])
           : ((json.mine || []) as Order[]);
         const cancelled = ((json.cancelled || []) as Order[]).map(rememberClient);
@@ -188,7 +189,7 @@ export default function OperatorOrdersPage() {
     }
 
     void fetchInitialOrders();
-  }, [user?.id, isAuthLoading, role]);
+  }, [user?.id, isAuthLoading, role, canReassignOrders]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -622,7 +623,7 @@ export default function OperatorOrdersPage() {
           ? "Ожидает оплаты"
           : "Клиент оплатил";
     const isForeign =
-      role === "admin" &&
+      canReassignOrders &&
       !!order.operator_id &&
       order.operator_id !== user?.id;
 
@@ -829,8 +830,8 @@ export default function OperatorOrdersPage() {
       <StaffPageHeader
         title="Активные ордера"
         description={
-          role === "admin"
-            ? "Все заявки команды. Можно подключиться к сделке на любом этапе"
+          canReassignOrders
+            ? "Все заявки команды. Можно передать ордер другому оператору или подключиться к сделке"
             : "Очередь и ваши заявки по этапам"
         }
       />
@@ -922,7 +923,7 @@ export default function OperatorOrdersPage() {
         renderStageList(
           visibleInWorkOrders,
           emptyText(
-            role === "admin"
+            canReassignOrders
               ? "Нет заявок в работе у команды."
               : "Нет заявки в работе. Возьмите ордер из вкладки «Новые».",
           ),

@@ -13,7 +13,7 @@ export async function GET() {
     const { data, error } = await withTimeout(
       staff.admin
         .from("profiles")
-        .select("id, role, operator_pseudonym, staff_active")
+        .select("id, role, operator_pseudonym, staff_active, is_senior_operator")
         .in("role", ["operator", "admin"]),
       8000,
       { data: null, error: { message: "Database timeout" } } as any,
@@ -28,6 +28,7 @@ export async function GET() {
       role: string;
       operator_pseudonym: string | null;
       staff_active: boolean | null;
+      is_senior_operator: boolean | null;
     }>)
       .filter((row) => row.role === "operator" || row.role === "admin")
       .map((row) => ({
@@ -35,10 +36,14 @@ export async function GET() {
         role: row.role as "operator" | "admin",
         operator_pseudonym: row.operator_pseudonym?.trim() || null,
         staff_active: isStaffOnDuty(row),
+        is_senior_operator: row.is_senior_operator === true,
       }))
       .sort((a, b) => {
         if (a.staff_active !== b.staff_active) return a.staff_active ? -1 : 1;
         if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
+        if (a.is_senior_operator !== b.is_senior_operator) {
+          return a.is_senior_operator ? -1 : 1;
+        }
         const nameA = (a.operator_pseudonym || "").toLocaleLowerCase("ru");
         const nameB = (b.operator_pseudonym || "").toLocaleLowerCase("ru");
         return nameA.localeCompare(nameB, "ru");

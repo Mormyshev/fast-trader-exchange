@@ -12,6 +12,9 @@ interface AuthContextType {
   role: AppRole;
   staffActive: boolean;
   setStaffActive: (value: boolean) => void;
+  isSeniorOperator: boolean;
+  setIsSeniorOperator: (value: boolean) => void;
+  canReassignOrders: boolean;
   isLoading: boolean;
   logoutUser: () => Promise<void>;
 }
@@ -21,6 +24,9 @@ const AuthContext = createContext<AuthContextType>({
   role: "guest",
   staffActive: false,
   setStaffActive: () => {},
+  isSeniorOperator: false,
+  setIsSeniorOperator: () => {},
+  canReassignOrders: false,
   isLoading: true,
   logoutUser: async () => {},
 });
@@ -35,16 +41,22 @@ export function AuthProvider({
   initialUser,
   initialRole,
   initialStaffActive = false,
+  initialIsSeniorOperator = false,
 }: {
   children: React.ReactNode;
   initialUser: any;
   initialRole: AppRole;
   initialStaffActive?: boolean;
+  initialIsSeniorOperator?: boolean;
 }) {
   const [user, setUser] = useState<any | null>(initialUser);
   const [role, setRole] = useState<AppRole>(initialRole);
   const [staffActive, setStaffActive] = useState(initialStaffActive);
+  const [isSeniorOperator, setIsSeniorOperator] = useState(
+    initialIsSeniorOperator,
+  );
   const [isLoading, setIsLoading] = useState(!initialUser);
+  const canReassignOrders = role === "admin" || isSeniorOperator;
 
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -63,6 +75,7 @@ export function AuthProvider({
         setUser(null);
         setRole("guest");
         setStaffActive(false);
+        setIsSeniorOperator(false);
         setIsLoading(false);
         return;
       }
@@ -108,8 +121,10 @@ export function AuthProvider({
           const json = await res.json();
           setRole(normalizeRole(json.role));
           setStaffActive(Boolean(json.staffActive));
+          setIsSeniorOperator(Boolean(json.isSeniorOperator));
         } catch {
           setRole("user");
+          setIsSeniorOperator(false);
         } finally {
           setIsLoading(false);
         }
@@ -137,6 +152,7 @@ export function AuthProvider({
     setUser(null);
     setRole("guest");
     setStaffActive(false);
+    setIsSeniorOperator(false);
     setIsLoading(false);
 
     if (typeof window !== "undefined") {
@@ -148,7 +164,17 @@ export function AuthProvider({
 
   return (
     <AuthContext.Provider
-      value={{ user, role, staffActive, setStaffActive, isLoading, logoutUser }}
+      value={{
+        user,
+        role,
+        staffActive,
+        setStaffActive,
+        isSeniorOperator,
+        setIsSeniorOperator,
+        canReassignOrders,
+        isLoading,
+        logoutUser,
+      }}
     >
       {children}
     </AuthContext.Provider>

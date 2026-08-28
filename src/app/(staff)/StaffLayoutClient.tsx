@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -122,6 +122,7 @@ interface StaffLayoutClientProps {
   role: string;
   initialOperatorPseudonym?: string | null;
   initialStaffActive?: boolean;
+  initialIsSeniorOperator?: boolean;
 }
 
 export default function StaffLayoutClient({
@@ -129,6 +130,7 @@ export default function StaffLayoutClient({
   role,
   initialOperatorPseudonym = null,
   initialStaffActive = false,
+  initialIsSeniorOperator = false,
 }: StaffLayoutClientProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -139,7 +141,8 @@ export default function StaffLayoutClient({
     initialOperatorPseudonym,
   );
   const pathname = usePathname();
-  const { logoutUser, staffActive, setStaffActive } = useAuth();
+  const { logoutUser, staffActive, setStaffActive, setIsSeniorOperator } =
+    useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const conversationsRef = useRef<ChatConversation[]>([]);
@@ -211,9 +214,13 @@ export default function StaffLayoutClient({
     setOperatorPseudonym(initialOperatorPseudonym);
   }, [initialOperatorPseudonym]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setStaffActive(initialStaffActive);
   }, [initialStaffActive, setStaffActive]);
+
+  useLayoutEffect(() => {
+    setIsSeniorOperator(initialIsSeniorOperator);
+  }, [initialIsSeniorOperator, setIsSeniorOperator]);
 
   useEffect(() => {
     const handleProfileUpdate = (event: Event) => {

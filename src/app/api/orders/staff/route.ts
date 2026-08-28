@@ -5,6 +5,7 @@ import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
 import { attachClientsToOrders } from "@/src/utils/orders/attach-client";
 import { STAFF_OPEN_ORDER_STATUSES } from "@/src/utils/staff/duty";
+import { canReassignOrders } from "@/src/utils/staff/permissions";
 import {
   isOrderNumberColumnMissing,
   stripOrderNumberField,
@@ -19,6 +20,7 @@ async function loadStaffOrders(
   admin: AdminClient,
   userId: string,
   isAdmin: boolean,
+  includeTeamQueue: boolean,
   fields: string,
 ) {
   const completedQuery = admin
@@ -74,7 +76,7 @@ async function loadStaffOrders(
   }
 
   let teamRows: typeof mineRes.data = [];
-  if (isAdmin) {
+  if (includeTeamQueue) {
     const teamRes = await admin
       .from("orders")
       .select(fields)
@@ -110,7 +112,7 @@ export async function GET() {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("role")
+      .select("role, is_senior_operator")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -119,15 +121,23 @@ export async function GET() {
     }
 
     const isAdmin = profile.role === "admin";
+    const includeTeamQueue = canReassignOrders(profile);
 
     await cancelExpiredOrders(admin);
 
-    let bundle = await loadStaffOrders(admin, user.id, isAdmin, ORDER_FIELDS);
+    let bundle = await loadStaffOrders(
+      admin,
+      user.id,
+      isAdmin,
+      includeTeamQueue,
+      ORDER_FIELDS,
+    );
     if (bundle.error && isOrderNumberColumnMissing(bundle.error)) {
       bundle = await loadStaffOrders(
         admin,
         user.id,
         isAdmin,
+        includeTeamQueue,
         stripOrderNumberField(ORDER_FIELDS),
       );
     }
@@ -148,7 +158,7 @@ export async function GET() {
         attachClientsToOrders(admin, asOrderRows(bundle.mineRes.data)),
         attachClientsToOrders(admin, asOrderRows(bundle.completedRes.data)),
         attachClientsToOrders(admin, asOrderRows(bundle.cancelledRes.data)),
-        isAdmin
+        includeTeamQueue
           ? attachClientsToOrders(admin, asOrderRows(bundle.teamRows))
           : Promise.resolve([]),
       ]);
@@ -159,7 +169,7 @@ export async function GET() {
       completed,
       completedCount: bundle.completedCountRes.count ?? 0,
       cancelled,
-      ...(isAdmin ? { teamInProgress } : {}),
+      ...(includeTeamQueue ? { teamInProgress } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";

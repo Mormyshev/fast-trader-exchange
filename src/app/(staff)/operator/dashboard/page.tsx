@@ -130,7 +130,7 @@ const ACTIVE_STATUSES: OrderStatus[] = [
 
 export default function OperatorDashboard() {
   const supabase = createClient();
-  const { user, role, isLoading: isAuthLoading } = useAuth();
+  const { user, role, canReassignOrders, isLoading: isAuthLoading } = useAuth();
 
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
@@ -146,11 +146,13 @@ export default function OperatorDashboard() {
 
   const userIdRef = useRef<string | null>(null);
   const roleRef = useRef(role);
+  const canReassignRef = useRef(canReassignOrders);
   const clientCacheRef = useRef(new Map<string, OrderClient>());
   if (user?.id) {
     userIdRef.current = user.id;
   }
   roleRef.current = role;
+  canReassignRef.current = canReassignOrders;
 
   const rememberClient = (order: Order): Order =>
     mergeOrderClient(clientCacheRef.current, order);
@@ -169,9 +171,8 @@ export default function OperatorDashboard() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Ошибка загрузки");
         setPendingOrders(((json.pending || []) as Order[]).map(rememberClient));
-        const isAdmin = roleRef.current === "admin";
-        const inWork = isAdmin
-          ? ((json.teamInProgress || []) as Order[])
+        const inWork = canReassignRef.current
+          ? ((json.teamInProgress || json.mine || []) as Order[])
           : ((json.mine || []) as Order[]);
         setMyOrders(inWork.map(rememberClient));
         setCompletedOrders(((json.completed || []) as Order[]).map(rememberClient));
@@ -187,10 +188,10 @@ export default function OperatorDashboard() {
     }
 
     void fetchOrders();
-  }, [user?.id, isAuthLoading, role]);
+  }, [user?.id, isAuthLoading, role, canReassignOrders]);
 
   useEffect(() => {
-    if (role !== "admin" || !user?.id) return;
+    if (!canReassignOrders || !user?.id) return;
 
     const timer = window.setInterval(() => {
       void fetch("/api/orders/staff", { cache: "no-store" })
@@ -205,7 +206,7 @@ export default function OperatorDashboard() {
     }, 15000);
 
     return () => window.clearInterval(timer);
-  }, [role, user?.id]);
+  }, [canReassignOrders, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -224,10 +225,10 @@ export default function OperatorDashboard() {
 
       setMyOrders((prev) => {
         const without = prev.filter((o) => o.id !== next.id);
-        const isAdmin = roleRef.current === "admin";
+        const canSeeTeam = canReassignRef.current;
         const inWork =
           IN_PROGRESS_STATUSES.includes(next.status) &&
-          (isAdmin
+          (canSeeTeam
             ? !!next.operator_id
             : next.operator_id === currentUserId);
         return inWork ? [next, ...without] : without;
@@ -357,8 +358,8 @@ export default function OperatorDashboard() {
         <StaffPageHeader
           title="Панель оператора"
           description={
-            role === "admin"
-              ? "Мониторинг очереди и заявок в работе. Можно открыть карточку и вести процесс до завершения."
+            canReassignOrders
+              ? "Мониторинг очереди и заявок в работе. Можно открыть карточку и передать ордер другому оператору."
               : "Мониторинг заявок Aurum Swap Demo"
           }
         />
@@ -402,7 +403,7 @@ export default function OperatorDashboard() {
             <div className="text-4xl font-bold text-zinc-900">
               {myOrders.length}
             </div>
-            {role === "admin" ? (
+            {canReassignOrders ? (
               <p className="mt-1 text-[11px] font-semibold text-zinc-400">
                 все заявки команды в работе
               </p>
@@ -599,7 +600,7 @@ export default function OperatorDashboard() {
               </div>
               <p className="text-sm font-semibold text-zinc-700">Нет заявок</p>
               <p className="text-xs font-medium text-zinc-400 mt-1">
-                {activeTab === "in_progress" && role === "admin"
+                {activeTab === "in_progress" && canReassignOrders
                   ? "Сейчас нет заявок в работе"
                   : "В этой вкладке пока пусто или ничего не нашлось по запросу"}
               </p>
@@ -640,7 +641,7 @@ export default function OperatorDashboard() {
             <div className="py-12 text-center">
               <p className="text-sm font-semibold text-zinc-700">Нет заявок</p>
               <p className="text-xs font-medium text-zinc-400 mt-1">
-                {activeTab === "in_progress" && role === "admin"
+                {activeTab === "in_progress" && canReassignOrders
                   ? "Сейчас нет заявок в работе"
                   : "В этой вкладке пока пусто"}
               </p>

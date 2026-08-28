@@ -24,6 +24,7 @@ import { useAuth } from "@/src/app/context/AuthContext";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { OPERATOR_PSEUDONYMS } from "@/src/utils/staff/pseudonyms";
 import { availablePseudonyms } from "@/src/utils/staff/operators-admin";
+import { staffPositionLabel } from "@/src/utils/staff/permissions";
 import {
   validateEmail,
   validatePassword,
@@ -36,6 +37,7 @@ type StaffRow = {
   role: "operator" | "admin";
   operator_pseudonym: string | null;
   staff_active: boolean | null;
+  is_senior_operator: boolean | null;
 };
 
 type FormState = {
@@ -43,6 +45,7 @@ type FormState = {
   password: string;
   passwordConfirm: string;
   pseudonym: string;
+  isSeniorOperator: boolean;
 };
 
 const emptyForm: FormState = {
@@ -50,13 +53,14 @@ const emptyForm: FormState = {
   password: "",
   passwordConfirm: "",
   pseudonym: "",
+  isSeniorOperator: false,
 };
 
 const fieldClass =
   "w-full h-12 rounded-2xl border bg-[#F4F5F7] px-4 text-sm font-semibold text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#FFDD2D] focus:bg-white";
 
-function roleLabel(role: StaffRow["role"]) {
-  return role === "admin" ? "Админ" : "Оператор";
+function positionLabel(row: StaffRow) {
+  return staffPositionLabel(row);
 }
 
 function StatusBadge({ active }: { active: boolean }) {
@@ -150,6 +154,9 @@ export default function AdminOperatorsManager() {
       const without = prev.filter((row) => row.id !== next.id);
       return [...without, next].sort((a, b) => {
         if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
+        if (!!a.is_senior_operator !== !!b.is_senior_operator) {
+          return a.is_senior_operator ? -1 : 1;
+        }
         const nameA = (a.operator_pseudonym || a.email).toLocaleLowerCase("ru");
         const nameB = (b.operator_pseudonym || b.email).toLocaleLowerCase("ru");
         return nameA.localeCompare(nameB, "ru");
@@ -204,6 +211,7 @@ export default function AdminOperatorsManager() {
       password: "",
       passwordConfirm: "",
       pseudonym: row.operator_pseudonym || "",
+      isSeniorOperator: row.role === "operator" && !!row.is_senior_operator,
     });
     setFormError(null);
     setDialog("edit");
@@ -265,17 +273,19 @@ export default function AdminOperatorsManager() {
             password: form.password,
             password_confirm: form.passwordConfirm,
             operator_pseudonym: form.pseudonym,
+            is_senior_operator: form.isSeniorOperator,
           }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Не удалось создать");
         applyRow(json.operator as StaffRow);
       } else if (editing) {
-        const payload: Record<string, string> = {
+        const payload: Record<string, string | boolean> = {
           operator_pseudonym: form.pseudonym,
         };
         if (editing.role === "operator") {
           payload.email = form.email;
+          payload.is_senior_operator = form.isSeniorOperator;
           if (form.password) payload.password = form.password;
         }
         const res = await fetch(`/api/admin/operators/${editing.id}`, {
@@ -388,7 +398,7 @@ export default function AdminOperatorsManager() {
           </div>
           <StaffPageHeader
             title="Операторы"
-            description="Псевдонимы из списка и доступ операторов к панели"
+            description="Псевдонимы, должности и доступ операторов к панели"
           />
         </div>
         <Button
@@ -453,6 +463,9 @@ export default function AdminOperatorsManager() {
                       </div>
                       <p className="mt-0.5 text-xs font-medium text-zinc-500 break-all">
                         {row.email}
+                      </p>
+                      <p className="mt-0.5 text-[11px] font-semibold text-zinc-400">
+                        {positionLabel(row)}
                       </p>
                     </div>
                     <StatusBadge active={!!row.staff_active} />
@@ -534,7 +547,7 @@ export default function AdminOperatorsManager() {
                                 ) : null}
                               </div>
                               <p className="mt-0.5 text-[11px] font-semibold text-zinc-400">
-                                {roleLabel(row.role)}
+                                {positionLabel(row)}
                               </p>
                             </div>
                           </div>
@@ -588,10 +601,10 @@ export default function AdminOperatorsManager() {
               </DialogTitle>
               <DialogDescription>
                 {isCreate
-                  ? "Создайте доступ и сразу назначьте псевдоним из списка."
+                  ? "Создайте доступ, назначьте псевдоним и при необходимости должность старшего оператора."
                   : editing?.role === "admin"
                     ? "Администратору можно назначить только псевдоним."
-                    : "Можно сменить e-mail, пароль и псевдоним."}
+                    : "Можно сменить e-mail, пароль, псевдоним и должность."}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -679,6 +692,30 @@ export default function AdminOperatorsManager() {
                 }
               />
             </div>
+
+            {accountFields ? (
+              <label className="flex items-start gap-3 rounded-2xl bg-[#F4F5F7] px-4 py-3.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isSeniorOperator}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      isSeniorOperator: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 size-4 rounded border-zinc-300 accent-[#FFDD2D]"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-zinc-900">
+                    Старший оператор
+                  </span>
+                  <span className="mt-0.5 block text-xs font-medium text-zinc-500">
+                    Может передавать заявку другому оператору
+                  </span>
+                </span>
+              </label>
+            ) : null}
 
             {formError ? (
               <p className="text-sm font-medium text-rose-600">{formError}</p>

@@ -8,17 +8,20 @@ export function Providers({
   initialUser = null,
   initialRole = "guest",
   initialStaffActive = false,
+  initialIsSeniorOperator = false,
 }: {
   children: React.ReactNode;
   initialUser?: any;
   initialRole?: "guest" | "user" | "operator" | "admin";
   initialStaffActive?: boolean;
+  initialIsSeniorOperator?: boolean;
 }) {
   return (
     <AuthProvider
       initialUser={initialUser}
       initialRole={initialRole}
       initialStaffActive={initialStaffActive}
+      initialIsSeniorOperator={initialIsSeniorOperator}
     >
       <AuthDialogProvider>
         <SmoothScroll>{children}</SmoothScroll>

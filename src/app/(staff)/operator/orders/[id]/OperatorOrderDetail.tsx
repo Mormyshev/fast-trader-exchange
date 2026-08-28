@@ -91,7 +91,7 @@ function statusBadgeClass(status: OrderStatus) {
 export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const router = useRouter();
   const supabase = createClient();
-  const { user, role, staffActive, isLoading: isAuthLoading } = useAuth();
+  const { user, role, staffActive, canReassignOrders, isLoading: isAuthLoading } = useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -446,7 +446,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const canManageProcess =
     role === "admin" || order.operator_id === user?.id;
   const canJoinDeal =
-    role === "admin" &&
+    canReassignOrders &&
     !!order.operator_id &&
     order.operator_id !== user?.id &&
     (order.status === "processing" ||
@@ -557,7 +557,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             </div>
           ) : null}
 
-          {role === "admin" &&
+          {canReassignOrders &&
             (order.status === "processing" ||
               order.status === "awaiting_payment" ||
               order.status === "paid") && (

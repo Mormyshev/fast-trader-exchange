@@ -4,22 +4,23 @@ import { useCallback, useEffect, useState } from "react";
 import { Users } from "lucide-react";
 import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
 import { useAuth } from "@/src/app/context/AuthContext";
+import { staffPositionLabel } from "@/src/utils/staff/permissions";
 
 type StaffMember = {
   id: string;
   role: "operator" | "admin";
   operator_pseudonym: string | null;
   staff_active: boolean;
+  is_senior_operator?: boolean | null;
 };
-
-function roleLabel(role: StaffMember["role"]) {
-  return role === "admin" ? "Админ" : "Оператор";
-}
 
 function sortMembers(list: StaffMember[]) {
   return [...list].sort((a, b) => {
     if (a.staff_active !== b.staff_active) return a.staff_active ? -1 : 1;
     if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
+    if (!!a.is_senior_operator !== !!b.is_senior_operator) {
+      return a.is_senior_operator ? -1 : 1;
+    }
     const nameA = (a.operator_pseudonym || "").toLocaleLowerCase("ru");
     const nameB = (b.operator_pseudonym || "").toLocaleLowerCase("ru");
     return nameA.localeCompare(nameB, "ru");
@@ -117,7 +118,7 @@ export default function StaffRoster() {
                     ) : null}
                   </div>
                   <p className="mt-0.5 text-[11px] font-semibold text-zinc-400">
-                    {roleLabel(member.role)}
+                    {staffPositionLabel(member)}
                   </p>
                 </div>
                 <span

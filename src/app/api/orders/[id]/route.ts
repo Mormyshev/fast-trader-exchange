@@ -19,6 +19,7 @@ import {
   staffInactiveResponse,
   STAFF_OPEN_ORDER_STATUSES,
 } from "@/src/utils/staff/duty";
+import { canReassignOrders } from "@/src/utils/staff/permissions";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -34,7 +35,7 @@ async function getActor() {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("role, staff_active")
+      .select("role, staff_active, is_senior_operator")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -44,6 +45,7 @@ async function getActor() {
       role: profile?.role || "user",
       isStaff: profile?.role === "operator" || profile?.role === "admin",
       staffActive: isStaffOnDuty(profile),
+      canReassignOrders: canReassignOrders(profile),
     };
   } catch {
     return null;
@@ -193,7 +195,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           const isReassign =
             !!current.operator_id && current.operator_id !== body.operator_id;
 
-          if (isReassign && actor.role !== "admin") {
+          if (isReassign && !actor.canReassignOrders) {
             return NextResponse.json(
               { error: "Эту заявку уже забрал другой оператор" },
               { status: 409 },
