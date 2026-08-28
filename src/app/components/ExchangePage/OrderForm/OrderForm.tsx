@@ -275,7 +275,11 @@ export default function OrderForm() {
         if (!cancelled) {
           const profile = json.profile as Record<string, unknown> | undefined;
           setVerificationStatus(
-            normalizeVerificationStatus(profile?.verification),
+            normalizeVerificationStatus(
+              typeof profile?.verification === "string"
+                ? profile.verification
+                : undefined,
+            ),
           );
           if (profile) {
             setFio(
