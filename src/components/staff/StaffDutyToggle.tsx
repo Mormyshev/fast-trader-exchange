@@ -121,10 +121,17 @@ export default function StaffDutyToggle({
       <>
         <div className="flex items-center gap-2">
           <span
-            className={`hidden sm:inline text-[10px] font-bold uppercase tracking-wide ${
-              staffActive ? "text-emerald-600" : "text-zinc-400"
+            className={`hidden sm:inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+              staffActive
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-zinc-100 text-zinc-500"
             }`}
           >
+            <span
+              className={`size-1.5 rounded-full ${
+                staffActive ? "bg-emerald-500" : "bg-zinc-300"
+              }`}
+            />
             {staffActive ? "Активный" : "Неактивный"}
           </span>
           {switchControl}
@@ -166,10 +173,17 @@ export default function StaffDutyToggle({
         </div>
         <div className="flex items-center gap-3 self-start sm:self-center">
           <span
-            className={`text-sm font-bold ${
-              staffActive ? "text-emerald-700" : "text-zinc-400"
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+              staffActive
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-zinc-100 text-zinc-500"
             }`}
           >
+            <span
+              className={`size-1.5 rounded-full ${
+                staffActive ? "bg-emerald-500" : "bg-zinc-300"
+              }`}
+            />
             {staffActive ? "Активный" : "Неактивный"}
           </span>
           {switchControl}

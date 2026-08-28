@@ -34,6 +34,7 @@ import { STAFF_TEAM_CHAT_READ_EVENT } from "@/src/utils/chat/staff-internal";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import StaffDutyToggle from "@/src/components/staff/StaffDutyToggle";
+import { staffPositionLabel } from "@/src/utils/staff/permissions";
 
 const pageTitles: { [key: string]: string } = {
   "/operator/dashboard": "Дашборд статистики",
@@ -278,6 +279,10 @@ export default function StaffLayoutClient({
 
   const isAdmin = role === "admin";
   const canVerifyClients = isAdmin || isSeniorOperator;
+  const positionLabel = staffPositionLabel({
+    role,
+    is_senior_operator: isSeniorOperator,
+  });
   const currentTitle = getPageTitle(pathname);
   const collapsed = isDesktop && !sidebarOpen;
 
@@ -508,17 +513,28 @@ export default function StaffLayoutClient({
               {operatorPseudonym ? (
                 <>
                   <div className="hidden sm:block text-right min-w-0">
-                    <p className="text-sm font-bold text-zinc-800 leading-none truncate max-w-[120px] md:max-w-[200px]">
+                    <p className="text-sm font-bold text-zinc-800 leading-none truncate max-w-[140px] md:max-w-[240px]">
                       {operatorPseudonym}
                     </p>
-                    <span
-                      className={`text-[10px] font-bold uppercase tracking-wide mt-1 block ${
-                        staffActive ? "text-emerald-600" : "text-zinc-400"
-                      }`}
-                    >
-                      {isAdmin ? "Админ" : "Оператор"} ·{" "}
-                      {staffActive ? "Активный" : "Неактивный"}
-                    </span>
+                    <div className="mt-1.5 flex items-center justify-end gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 whitespace-nowrap">
+                        {positionLabel}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${
+                          staffActive
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-zinc-100 text-zinc-500"
+                        }`}
+                      >
+                        <span
+                          className={`size-1.5 rounded-full ${
+                            staffActive ? "bg-emerald-500" : "bg-zinc-300"
+                          }`}
+                        />
+                        {staffActive ? "Активный" : "Неактивный"}
+                      </span>
+                    </div>
                   </div>
                   <OperatorAvatar
                     name={operatorPseudonym}
