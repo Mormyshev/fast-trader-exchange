@@ -9,10 +9,18 @@ export type OrderClient = {
 
 export function formatClientName(client: OrderClient | null | undefined): string {
   if (!client) return "—";
-  const name = [client.last_name, client.first_name, client.middle_name]
+  return formatVerifiedFio(client) || client.email || "—";
+}
+
+export function formatVerifiedFio(profile: {
+  last_name?: string | null;
+  first_name?: string | null;
+  middle_name?: string | null;
+}): string {
+  return [profile.last_name, profile.first_name, profile.middle_name]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
     .filter(Boolean)
     .join(" ");
-  return name || client.email || "—";
 }
 
 export function mergeOrderClient<T extends { id: string; client?: OrderClient | null }>(

@@ -7,6 +7,7 @@ import {
   ORDER_CREATED_EVENT,
 } from "@/src/utils/supabase/broadcast";
 import { attachClientToOrder } from "@/src/utils/orders/attach-client";
+import { formatVerifiedFio } from "@/src/utils/orders/client-info";
 import {
   isCryptoOrderCode,
   orderCodeToCurrencyId,
@@ -78,7 +79,9 @@ export async function POST(request: Request) {
 
     const { data: profile } = await admin
       .from("profiles")
-      .select("verification")
+      .select(
+        "verification, email, last_name, first_name, middle_name, telegram",
+      )
       .eq("id", user.id)
       .maybeSingle();
 
@@ -89,6 +92,23 @@ export async function POST(request: Request) {
             "Перед обменом необходимо пройти верификацию. Откройте профиль и отправьте анкету.",
         },
         { status: 403 },
+      );
+    }
+
+    const verifiedFio = formatVerifiedFio(profile ?? {});
+    const verifiedEmail =
+      (typeof profile?.email === "string" ? profile.email.trim() : "") ||
+      (typeof user.email === "string" ? user.email.trim() : "");
+    const verifiedTelegram =
+      typeof profile?.telegram === "string" ? profile.telegram.trim() : "";
+
+    if (!verifiedFio || !verifiedEmail || !verifiedTelegram) {
+      return NextResponse.json(
+        {
+          error:
+            "В верификации не хватает ФИО, e-mail или Telegram. Обновите анкету в профиле.",
+        },
+        { status: 400 },
       );
     }
 

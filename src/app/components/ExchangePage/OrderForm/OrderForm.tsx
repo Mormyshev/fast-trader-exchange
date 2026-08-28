@@ -42,6 +42,7 @@ import {
 } from "@/src/utils/validation";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { useAuthDialog } from "@/src/components/AuthDialog/AuthDialogProvider";
+import { formatVerifiedFio } from "@/src/utils/orders/client-info";
 
 type RateRow = { symbol: string; exchange_price: number };
 
@@ -55,6 +56,33 @@ function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return (
     <p className="text-xs font-semibold text-red-500 pl-4 pt-1">{message}</p>
+  );
+}
+
+function LockedPersonalField({
+  label,
+  value,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
+        {label} <span className="text-red-500 font-bold ml-0.5"> * </span> :
+      </label>
+      <input
+        type="text"
+        value={value}
+        readOnly
+        aria-readonly="true"
+        tabIndex={-1}
+        placeholder={placeholder}
+        className="w-full bg-zinc-50 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-100 shadow-none placeholder:text-zinc-300 dark:placeholder:text-zinc-600 cursor-not-allowed"
+      />
+    </div>
   );
 }
 
@@ -245,9 +273,36 @@ export default function OrderForm() {
         }
         const json = await res.json();
         if (!cancelled) {
+          const profile = json.profile as Record<string, unknown> | undefined;
           setVerificationStatus(
-            normalizeVerificationStatus(json.profile?.verification),
+            normalizeVerificationStatus(profile?.verification),
           );
+          if (profile) {
+            setFio(
+              formatVerifiedFio({
+                last_name:
+                  typeof profile.last_name === "string"
+                    ? profile.last_name
+                    : null,
+                first_name:
+                  typeof profile.first_name === "string"
+                    ? profile.first_name
+                    : null,
+                middle_name:
+                  typeof profile.middle_name === "string"
+                    ? profile.middle_name
+                    : null,
+              }),
+            );
+            setEmail(
+              typeof profile.email === "string" ? profile.email.trim() : "",
+            );
+            setTelegram(
+              typeof profile.telegram === "string"
+                ? formatTelegramInput(profile.telegram)
+                : "",
+            );
+          }
         }
       } catch {
         if (!cancelled) setVerificationStatus("not_started");
@@ -437,7 +492,8 @@ export default function OrderForm() {
       receiveCurrencyId: selectedReceive.id,
       isReceiveCrypto,
       isCashSelected: false,
-      requireFio: !isSendCrypto,
+      requireFio: false,
+      lockPersonalData: true,
     }),
     [
       fio,
@@ -448,7 +504,6 @@ export default function OrderForm() {
       coupon,
       selectedReceive.id,
       isReceiveCrypto,
-      isSendCrypto,
     ],
   );
 
@@ -467,13 +522,6 @@ export default function OrderForm() {
     setWallet(formatWalletInput(val, selectedReceive.id));
     if (fieldErrors.wallet) {
       setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
-    }
-  };
-
-  const handleTelegramChange = (val: string) => {
-    setTelegram(formatTelegramInput(val));
-    if (fieldErrors.telegram) {
-      setFieldErrors((prev) => ({ ...prev, telegram: undefined }));
     }
   };
 
@@ -517,6 +565,14 @@ export default function OrderForm() {
 
     if (!verified) {
       alert("Перед обменом необходимо пройти верификацию.");
+      router.push("/user/profile");
+      return;
+    }
+
+    if (!fio.trim() || !email.trim() || !telegram.trim()) {
+      alert(
+        "В верификации не хватает ФИО, e-mail или Telegram. Обновите анкету в профиле.",
+      );
       router.push("/user/profile");
       return;
     }
@@ -622,6 +678,11 @@ export default function OrderForm() {
         router.push("/user/profile");
         return;
       }
+      if (res.status === 400 && typeof json.error === "string" && json.error.includes("верификации")) {
+        alert(json.error);
+        router.push("/user/profile");
+        return;
+      }
       if (!res.ok) {
         throw new Error(json.error || "Не удалось создать заявку");
       }
@@ -630,11 +691,8 @@ export default function OrderForm() {
       }
 
       if (dontRemember) {
-        setFio("");
         setWallet("");
         setSbpBankId("");
-        setTelegram("");
-        setEmail("");
       }
 
       router.push(`/order/${json.order.id}`);
@@ -763,31 +821,7 @@ export default function OrderForm() {
               />
             </div>
 
-            {!isSendCrypto && (
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
-                  ФИО <span className="text-red-500 font-bold ml-0.5"> * </span> :
-                </label>
-                <input
-                  type="text"
-                  value={fio}
-                  onChange={(e) => {
-                    setFio(e.target.value);
-                    if (fieldErrors.fio) {
-                      setFieldErrors((prev) => ({ ...prev, fio: undefined }));
-                    }
-                  }}
-                  onBlur={() => touchField("fio")}
-                  placeholder="Иванов Иван Иванович"
-                  className={inputClass(
-                    !!fieldErrors.fio,
-                    "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all",
-                  )}
-                  required
-                />
-                <FieldError message={fieldErrors.fio} />
-              </div>
-            )}
+            </div>
           </div>
 
           <div className="flex items-center justify-center py-1">
@@ -945,54 +979,30 @@ export default function OrderForm() {
           <div className="h-[1px] bg-zinc-100 dark:bg-zinc-800 w-full" />
           {/* ================= СЕКЦИЯ 3: ПЕРСОНАЛЬНЫЕ ДАННЫЕ ================= */}
           <div className="space-y-5">
-            <h2 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-2">
-              Персональные данные
-            </h2>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
-                E-mail{" "}
-                <span className="text-red-500 font-bold ml-0.5"> * </span> :
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (fieldErrors.email) {
-                    setFieldErrors((prev) => ({ ...prev, email: undefined }));
-                  }
-                }}
-                onBlur={() => touchField("email")}
-                placeholder="name@example.com"
-                className={inputClass(
-                  !!fieldErrors.email,
-                  "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all",
-                )}
-                required
-              />
-              <FieldError message={fieldErrors.email} />
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-1">
+                Персональные данные
+              </h2>
+              <p className="text-xs font-medium text-zinc-400 pl-1">
+                Подставляются из верификации и не редактируются
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
-                Telegram{" "}
-                <span className="text-red-500 font-bold ml-0.5"> * </span> :
-              </label>
-              <input
-                type="text"
-                value={telegram}
-                onChange={(e) => handleTelegramChange(e.target.value)}
-                onBlur={() => touchField("telegram")}
-                placeholder="@username"
-                className={inputClass(
-                  !!fieldErrors.telegram,
-                  "w-full bg-white border border-zinc-200/80 dark:border-zinc-700 rounded-full px-6 py-4 text-sm font-medium shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden focus:border-[#FFDD2D] focus:shadow-[0_0_15px_rgba(255,221,45,0.3)] transition-all",
-                )}
-                required
-              />
-              <FieldError message={fieldErrors.telegram} />
-            </div>
+            <LockedPersonalField
+              label="ФИО"
+              value={fio}
+              placeholder="Иванов Иван Иванович"
+            />
+            <LockedPersonalField
+              label="E-mail"
+              value={email}
+              placeholder="name@example.com"
+            />
+            <LockedPersonalField
+              label="Telegram"
+              value={telegram}
+              placeholder="@username"
+            />
 
             <div className="space-y-2">
               <label className="block text-xs font-bold text-zinc-500 dark:text-zinc-500 pl-4">
@@ -1067,7 +1077,7 @@ export default function OrderForm() {
                 htmlFor="remember"
                 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 leading-relaxed cursor-pointer"
               >
-                Не запоминать введенные данные
+                Не запоминать реквизиты для получения
               </label>
             </div>
 

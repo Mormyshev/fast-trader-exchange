@@ -19,6 +19,7 @@ export type OrderFormInput = {
   isReceiveCrypto: boolean;
   isCashSelected: boolean;
   requireFio: boolean;
+  lockPersonalData?: boolean;
 };
 
 export type OrderFormErrors = Partial<
@@ -37,17 +38,23 @@ export function validateOrderFormFields(
   );
   if (!wallet.ok) errors.wallet = wallet.error;
 
-  const email = validateEmail(input.email);
-  if (!email.ok) errors.email = email.error;
-
-  const telegram = validateTelegram(input.telegram);
-  if (!telegram.ok) errors.telegram = telegram.error;
-
   const coupon = validateCoupon(input.coupon);
   if (!coupon.ok) errors.coupon = coupon.error;
 
+  let emailValue = input.email;
+  let telegramValue = input.telegram;
+  if (!input.lockPersonalData) {
+    const email = validateEmail(input.email);
+    if (!email.ok) errors.email = email.error;
+    else emailValue = email.value;
+
+    const telegram = validateTelegram(input.telegram);
+    if (!telegram.ok) errors.telegram = telegram.error;
+    else telegramValue = telegram.value;
+  }
+
   let fioValue = input.fio;
-  if (input.requireFio) {
+  if (input.requireFio && !input.lockPersonalData) {
     const fio = validateFio(input.fio);
     if (!fio.ok) errors.fio = fio.error;
     else fioValue = fio.value;
@@ -69,8 +76,8 @@ export function validateOrderFormFields(
     values: {
       ...input,
       wallet: wallet.ok ? wallet.value : input.wallet,
-      email: email.ok ? email.value : input.email,
-      telegram: telegram.ok ? telegram.value : input.telegram,
+      email: emailValue,
+      telegram: telegramValue,
       coupon: coupon.ok ? coupon.value : input.coupon,
       fio: fioValue,
       city: cityValue,
@@ -90,13 +97,15 @@ export function validateOrderFormField(
         input.isReceiveCrypto,
       );
     case "email":
-      return validateEmail(input.email);
+      return input.lockPersonalData ? null : validateEmail(input.email);
     case "telegram":
-      return validateTelegram(input.telegram);
+      return input.lockPersonalData ? null : validateTelegram(input.telegram);
     case "coupon":
       return validateCoupon(input.coupon);
     case "fio":
-      return input.requireFio ? validateFio(input.fio) : null;
+      return input.requireFio && !input.lockPersonalData
+        ? validateFio(input.fio)
+        : null;
     case "city":
       return input.isCashSelected ? validateCity(input.city, true) : null;
     default:
