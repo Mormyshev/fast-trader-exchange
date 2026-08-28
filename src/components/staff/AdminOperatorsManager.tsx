@@ -711,7 +711,7 @@ export default function AdminOperatorsManager() {
                     Старший оператор
                   </span>
                   <span className="mt-0.5 block text-xs font-medium text-zinc-500">
-                    Может передавать заявку другому оператору
+                    Может передавать заявки другим операторам и верифицировать клиентов
                   </span>
                 </span>
               </label>

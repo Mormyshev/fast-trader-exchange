@@ -9,10 +9,22 @@ export function isSeniorOperatorFlag(
   return profile?.is_senior_operator === true;
 }
 
-export function canReassignOrders(
+export function isAdminOrSeniorOperator(
   profile: StaffRoleLike | null | undefined,
 ): boolean {
   return profile?.role === "admin" || isSeniorOperatorFlag(profile);
+}
+
+export function canReassignOrders(
+  profile: StaffRoleLike | null | undefined,
+): boolean {
+  return isAdminOrSeniorOperator(profile);
+}
+
+export function canVerifyClients(
+  profile: StaffRoleLike | null | undefined,
+): boolean {
+  return isAdminOrSeniorOperator(profile);
 }
 
 export function staffPositionLabel(

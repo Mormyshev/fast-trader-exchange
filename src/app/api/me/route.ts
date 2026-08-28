@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
-import { canReassignOrders } from "@/src/utils/staff/permissions";
+import { canReassignOrders, canVerifyClients } from "@/src/utils/staff/permissions";
 
 export async function GET() {
   try {
@@ -26,6 +26,7 @@ export async function GET() {
       staffActive: profile?.staff_active === true,
       isSeniorOperator: profile?.is_senior_operator === true,
       canReassignOrders: canReassignOrders(profile),
+      canVerifyClients: canVerifyClients(profile),
     });
   } catch {
     return NextResponse.json({ user: null, role: "guest" });

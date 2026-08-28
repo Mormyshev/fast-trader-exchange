@@ -41,6 +41,7 @@ const pageTitles: { [key: string]: string } = {
   "/operator/support": "Чат поддержки",
   "/operator/team": "Чат команды",
   "/operator/schedule": "График",
+  "/operator/verification": "Верификация аккаунтов",
   "/admin/profile": "Операторы",
   "/admin/verification": "Верификация аккаунтов",
   "/admin/manage-operators": "Операторы",
@@ -141,7 +142,7 @@ export default function StaffLayoutClient({
     initialOperatorPseudonym,
   );
   const pathname = usePathname();
-  const { logoutUser, staffActive, setStaffActive, setIsSeniorOperator } =
+  const { logoutUser, staffActive, setStaffActive, setIsSeniorOperator, isSeniorOperator } =
     useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
@@ -276,6 +277,7 @@ export default function StaffLayoutClient({
   }, [loadPendingChats, loadTeamChats, loadActiveOrders, applyUnreadCount]);
 
   const isAdmin = role === "admin";
+  const canVerifyClients = isAdmin || isSeniorOperator;
   const currentTitle = getPageTitle(pathname);
   const collapsed = isDesktop && !sidebarOpen;
 
@@ -401,6 +403,16 @@ export default function StaffLayoutClient({
               collapsed={collapsed}
               onClick={handleNavClick}
             />
+            {canVerifyClients && !isAdmin ? (
+              <StaffNavLink
+                href="/operator/verification"
+                icon={UserCheck}
+                label="Верификация аккаунтов"
+                active={pathname === "/operator/verification"}
+                collapsed={collapsed}
+                onClick={handleNavClick}
+              />
+            ) : null}
 
             {isAdmin && (
               <div className="pt-4 mt-4 border-t border-zinc-100 space-y-1">

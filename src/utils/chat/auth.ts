@@ -2,6 +2,7 @@ import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
+import { canVerifyClients } from "@/src/utils/staff/permissions";
 
 export async function requireStaff() {
   const supabase = await createClient();
@@ -25,6 +26,14 @@ export async function requireStaff() {
 export async function requireAdmin() {
   const staff = await requireStaff();
   if (!staff || staff.profile?.role !== "admin") {
+    return null;
+  }
+  return staff;
+}
+
+export async function requireVerifier() {
+  const staff = await requireStaff();
+  if (!staff || !canVerifyClients(staff.profile)) {
     return null;
   }
   return staff;

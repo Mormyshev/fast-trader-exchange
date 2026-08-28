@@ -15,6 +15,7 @@ interface AuthContextType {
   isSeniorOperator: boolean;
   setIsSeniorOperator: (value: boolean) => void;
   canReassignOrders: boolean;
+  canVerifyClients: boolean;
   isLoading: boolean;
   logoutUser: () => Promise<void>;
 }
@@ -27,6 +28,7 @@ const AuthContext = createContext<AuthContextType>({
   isSeniorOperator: false,
   setIsSeniorOperator: () => {},
   canReassignOrders: false,
+  canVerifyClients: false,
   isLoading: true,
   logoutUser: async () => {},
 });
@@ -57,6 +59,7 @@ export function AuthProvider({
   );
   const [isLoading, setIsLoading] = useState(!initialUser);
   const canReassignOrders = role === "admin" || isSeniorOperator;
+  const canVerifyClients = role === "admin" || isSeniorOperator;
 
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -172,6 +175,7 @@ export function AuthProvider({
         isSeniorOperator,
         setIsSeniorOperator,
         canReassignOrders,
+        canVerifyClients,
         isLoading,
         logoutUser,
       }}

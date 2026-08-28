@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import VerificationQueue from "@/src/components/staff/VerificationQueue";
 
-export default function OperatorVerificationRedirectPage() {
-  redirect("/admin/verification");
+export default function OperatorVerificationPage() {
+  return <VerificationQueue />;
 }

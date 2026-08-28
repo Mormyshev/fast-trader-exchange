@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/src/utils/supabase/server";
-import { createAdminClient } from "@/src/utils/supabase/admin";
-import { getUserFast } from "@/src/utils/supabase/get-user-fast";
+import { requireVerifier } from "@/src/utils/chat/auth";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { broadcastVerificationEvent } from "@/src/utils/supabase/broadcast-verification";
 import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
@@ -13,25 +11,6 @@ const PROFILE_FIELDS =
   "id, email, last_name, first_name, middle_name, document_number, phone, telegram, passport_url, selfie_url, extra_document_url, verification, verification_rejection_comment, updated_at";
 const PROFILE_FIELDS_FALLBACK =
   "id, email, last_name, first_name, middle_name, phone, telegram, passport_url, verification, verification_rejection_comment, updated_at";
-
-async function requireAdmin() {
-  const supabase = await createClient();
-  const user = await getUserFast(supabase);
-  if (!user) return null;
-
-  const admin = createAdminClient();
-  const { data: profile } = await withTimeout(
-    admin.from("profiles").select("role, staff_active").eq("id", user.id).maybeSingle(),
-    5000,
-    { data: null, error: null } as any,
-  );
-
-  if (profile?.role !== "admin") {
-    return null;
-  }
-
-  return { user, admin, profile };
-}
 
 function parseTab(value: string | null): VerificationTab {
   if (value && VERIFICATION_TABS.includes(value as VerificationTab)) {
@@ -49,7 +28,7 @@ function normalizeComment(value: unknown): string | null {
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireAdmin();
+    const actor = await requireVerifier();
     if (!actor) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -96,7 +75,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const actor = await requireAdmin();
+    const actor = await requireVerifier();
     if (!actor) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
