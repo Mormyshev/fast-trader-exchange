@@ -15,7 +15,10 @@ const nextConfig: NextConfig = {
     },
     experimental: {
         serverActions: {
-            allowedOrigins: ["155.212.138.235"], // IP вашего VPS
+            allowedOrigins: [
+                "155.212.138.235",
+                "155.212.138.235:3000",
+            ],
         },
     },
 };

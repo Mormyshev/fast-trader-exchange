@@ -2,6 +2,8 @@
 
 import { cookies, headers } from "next/headers";
 import { createClient } from "@/src/utils/supabase/server";
+import { getUserFast } from "@/src/utils/supabase/get-user-fast";
+import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { verifyRecaptchaToken } from "@/src/utils/captcha/verify-recaptcha";
 import { validateEmail } from "@/src/utils/validation";
 
@@ -62,19 +64,22 @@ async function getRequestOrigin() {
   return "http://localhost:3000";
 }
 
+async function getAuthRedirectOrigin() {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
+  if (configured) return configured;
+  return getRequestOrigin();
+}
+
 export async function requestPasswordReset(
   email: string,
   captchaToken: string,
 ) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  const fromCabinet = Boolean(user?.email);
-  let targetEmail = user?.email ?? "";
+  let fromCabinet = false;
+  let targetEmail = "";
 
-  if (!targetEmail) {
+  if (email.trim()) {
     const captcha = await verifyRecaptchaToken(captchaToken);
     if (!captcha.ok) {
       return { error: captcha.error };
@@ -85,9 +90,44 @@ export async function requestPasswordReset(
       return { error: emailCheck.error };
     }
     targetEmail = emailCheck.value;
+  } else {
+    const user = await getUserFast(supabase, 4000);
+    if (!user?.email) {
+      return { error: "Укажите email" };
+    }
+    targetEmail = user.email;
+    fromCabinet = true;
   }
 
-  const origin = await getRequestOrigin();
+  const origin = await getAuthRedirectOrigin();
+  const reset = await withTimeout(
+    supabase.auth.resetPasswordForEmail(targetEmail, {
+      redirectTo: `${origin}/auth/reset-password`,
+    }),
+    12000,
+    {
+      data: {},
+      error: { message: "timeout" },
+    } as unknown as Awaited<ReturnType<typeof supabase.auth.resetPasswordForEmail>>,
+  );
+
+  if (reset.error) {
+    const message = reset.error.message || "";
+    if (/rate/i.test(message)) {
+      return {
+        error:
+          "Слишком много попыток. Подождите около часа и запросите письмо ещё раз.",
+      };
+    }
+    if (/timeout/i.test(message)) {
+      return {
+        error: "Сервер авторизации не ответил. Попробуйте ещё раз через минуту.",
+      };
+    }
+    console.error("Password reset email error:", message);
+    return { error: "Не удалось отправить письмо. Попробуйте позже." };
+  }
+
   const cookieStore = await cookies();
   cookieStore.set("fte_password_recovery", "1", {
     httpOnly: true,
@@ -95,16 +135,6 @@ export async function requestPasswordReset(
     path: "/",
     maxAge: 60 * 60,
   });
-  const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
-    redirectTo: `${origin}/auth/reset-password`,
-  });
-
-  if (error) {
-    if (/rate/i.test(error.message)) {
-      return { error: "Слишком много попыток. Подождите немного и повторите." };
-    }
-    console.error("Password reset email error:", error.message);
-  }
 
   return {
     ok: true as const,

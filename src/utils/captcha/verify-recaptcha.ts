@@ -48,6 +48,7 @@ export async function verifyRecaptchaToken(
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
       cache: "no-store",
+      signal: AbortSignal.timeout(8000),
     });
     const json = (await res.json()) as {
       success?: boolean;
