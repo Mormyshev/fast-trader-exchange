@@ -36,21 +36,25 @@ export function useAuthDialog() {
 
 function AuthQueryOpener({
   onNeedLogin,
+  onNeedLoginForm,
 }: {
   onNeedLogin: () => void;
+  onNeedLoginForm: () => void;
 }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    if (searchParams.get("auth") !== "required") return;
-    onNeedLogin();
+    const auth = searchParams.get("auth");
+    if (auth !== "required" && auth !== "login") return;
+    if (auth === "login") onNeedLoginForm();
+    else onNeedLogin();
     const params = new URLSearchParams(searchParams.toString());
     params.delete("auth");
     const next = params.toString();
     router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
-  }, [searchParams, pathname, router, onNeedLogin]);
+  }, [searchParams, pathname, router, onNeedLogin, onNeedLoginForm]);
 
   return null;
 }
@@ -96,7 +100,7 @@ export function AuthDialogProvider({ children }: { children: ReactNode }) {
     <AuthDialogContext.Provider value={{ openLogin, openRegister, requireAuth }}>
       {children}
       <Suspense fallback={null}>
-        <AuthQueryOpener onNeedLogin={requireAuth} />
+        <AuthQueryOpener onNeedLogin={requireAuth} onNeedLoginForm={openLogin} />
       </Suspense>
 
       {view === "gate" && (

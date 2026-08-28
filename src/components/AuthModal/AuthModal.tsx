@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { X, Mail } from "lucide-react";
 import { loginAndGetRoute, requestPasswordReset } from "@/src/app/actions/auth";
 import { validateEmail, validatePassword } from "@/src/utils/validation";
 import {
@@ -29,8 +29,8 @@ export default function AuthModal({
 
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"login" | "forgot">("login");
-  const [info, setInfo] = useState("");
+  const [mode, setMode] = useState<"login" | "forgot" | "forgot-sent">("login");
+  const [sentEmail, setSentEmail] = useState("");
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -45,10 +45,10 @@ export default function AuthModal({
     }
 
     setError("");
-    setInfo("");
     setIsLoading(false);
     setCaptchaToken("");
     setMode("login");
+    setSentEmail("");
     recaptchaRef.current?.reset();
     setShouldRender(true);
     lockPageScroll();
@@ -125,7 +125,6 @@ export default function AuthModal({
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setInfo("");
 
     const emailCheck = validateEmail(login);
     if (!emailCheck.ok) {
@@ -148,7 +147,8 @@ export default function AuthModal({
         setError(result.error);
         return;
       }
-      setInfo(result.message ?? "Письмо отправлено, проверьте почту.");
+      setSentEmail(emailCheck.value);
+      setMode("forgot-sent");
     } catch {
       setError("Не удалось отправить письмо. Попробуйте ещё раз.");
       setCaptchaToken("");
@@ -160,7 +160,6 @@ export default function AuthModal({
 
   const switchToForgot = () => {
     setError("");
-    setInfo("");
     setPassword("");
     setCaptchaToken("");
     recaptchaRef.current?.reset();
@@ -169,11 +168,17 @@ export default function AuthModal({
 
   const switchToLogin = () => {
     setError("");
-    setInfo("");
     setCaptchaToken("");
     recaptchaRef.current?.reset();
     setMode("login");
   };
+
+  const heading =
+    mode === "forgot-sent"
+      ? "Проверьте почту"
+      : mode === "forgot"
+        ? "Восстановление пароля"
+        : "Вход в аккаунт";
 
   return (
     <div
@@ -199,10 +204,34 @@ export default function AuthModal({
         </button>
 
         <h2 className="text-xl font-bold tracking-tight text-zinc-900 mb-5">
-          {mode === "forgot" ? "Восстановление пароля" : "Вход в аккаунт"}
+          {heading}
         </h2>
 
-        {mode === "forgot" ? (
+        {mode === "forgot-sent" ? (
+          <div className="space-y-5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+              <Mail className="h-6 w-6" />
+            </div>
+            <p className="text-sm font-medium leading-relaxed text-zinc-500">
+              Ссылка для смены пароля отправлена на{" "}
+              <span className="font-semibold text-zinc-800 break-all">
+                {sentEmail}
+              </span>
+              .
+            </p>
+            <p className="text-sm font-medium leading-relaxed text-zinc-500">
+              Откройте письмо и перейдите по ссылке. Если письма нет, проверьте
+              папку «Спам».
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 font-bold py-3.5 rounded-xl transition-all"
+            >
+              Понятно
+            </button>
+          </div>
+        ) : mode === "forgot" ? (
           <form onSubmit={handleForgotSubmit} className="space-y-5">
             <p className="text-sm font-medium leading-relaxed text-zinc-500">
               Укажите email аккаунта — отправим ссылку для смены пароля.
@@ -211,11 +240,6 @@ export default function AuthModal({
             {error && (
               <div className="text-xs font-bold text-red-500 text-center bg-red-50 py-2 rounded-full px-4">
                 {error}
-              </div>
-            )}
-            {info && (
-              <div className="text-xs font-bold text-green-600 text-center bg-green-50 py-3 rounded-2xl px-4">
-                {info}
               </div>
             )}
 
@@ -329,16 +353,7 @@ export default function AuthModal({
         )}
 
         <div className="mt-6 text-center text-xs font-semibold">
-          {mode === "forgot" ? (
-            <button
-              type="button"
-              onClick={switchToLogin}
-              className="text-[#C9A227] hover:underline"
-              disabled={isLoading}
-            >
-              Вернуться ко входу
-            </button>
-          ) : (
+          {mode === "login" ? (
             <>
               <span className="text-zinc-400">Ещё нет аккаунта? </span>
               <button
@@ -349,6 +364,15 @@ export default function AuthModal({
                 Создать аккаунт
               </button>
             </>
+          ) : (
+            <button
+              type="button"
+              onClick={switchToLogin}
+              className="text-[#C9A227] hover:underline"
+              disabled={isLoading}
+            >
+              Вернуться ко входу
+            </button>
           )}
         </div>
       </div>
