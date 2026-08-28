@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
 import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
+import StaffNativeSelect from "@/src/components/staff/StaffNativeSelect";
 import { useAuth } from "@/src/app/context/AuthContext";
 import {
   WEEKDAYS,
@@ -431,17 +432,16 @@ export default function StaffScheduleBoard() {
             <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
               Применить
             </label>
-            <select
+            <StaffNativeSelect
               value={applyTo}
               onChange={(e) =>
                 setApplyTo(e.target.value as "day" | "weekdays" | "week")
               }
-              className={fieldClass}
             >
               <option value="day">Только этот день</option>
               <option value="weekdays">Все будни (Пн–Пт)</option>
               <option value="week">Всю неделю</option>
-            </select>
+            </StaffNativeSelect>
           </div>
 
           {formError ? (

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
 import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
+import StaffNativeSelect from "@/src/components/staff/StaffNativeSelect";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { OPERATOR_PSEUDONYMS } from "@/src/utils/staff/pseudonyms";
@@ -92,11 +93,10 @@ function PseudonymSelect({
   onChange: (next: string) => void;
 }) {
   return (
-    <select
+    <StaffNativeSelect
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className={`${fieldClass} disabled:opacity-60`}
     >
       <option value="" disabled>
         Выберите из списка
@@ -109,7 +109,7 @@ function PseudonymSelect({
           {name}
         </option>
       ))}
-    </select>
+    </StaffNativeSelect>
   );
 }
 

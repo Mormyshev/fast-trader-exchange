@@ -61,8 +61,21 @@ export function StaffThemeProvider({
       // ignore
     }
     applyDocumentTheme(next);
+
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevBodyHeight = body.style.height;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    body.style.height = "100dvh";
+
     return () => {
       document.documentElement.classList.remove("staff-dark", "dark");
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      body.style.height = prevBodyHeight;
     };
     // Sync from storage once on mount; later changes go through setTheme.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,7 +87,7 @@ export function StaffThemeProvider({
     <StaffThemeContext.Provider value={value}>
       <div
         id="staff-app"
-        className={`staff-app h-dvh overflow-hidden ${
+        className={`staff-app flex h-dvh min-h-0 flex-col overflow-hidden ${
           theme === "dark" ? "dark bg-zinc-950 text-zinc-100" : "bg-[#F4F5F7]"
         }`}
       >

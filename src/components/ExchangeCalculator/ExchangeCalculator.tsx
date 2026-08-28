@@ -251,7 +251,7 @@ export default function ExchangeCalculator() {
   };
 
   const selectorClass =
-    "flex h-14 w-full cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-full border border-zinc-200 bg-white px-5 text-left dark:border-zinc-700 dark:bg-zinc-800";
+    "flex h-14 w-full cursor-pointer items-center justify-between gap-3 rounded-full border border-zinc-200 bg-white px-5 text-left dark:border-zinc-700 dark:bg-zinc-800";
   const amountInputClass = (invalid: boolean) =>
     `no-spin h-14 w-full rounded-full border-2 px-6 text-xl font-bold tabular-nums outline-none transition-colors ${
       invalid

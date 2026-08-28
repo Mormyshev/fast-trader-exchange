@@ -309,7 +309,7 @@ export default function StaffLayoutClient({
   };
 
   return (
-    <div className="flex h-dvh bg-[#F4F5F7] text-zinc-900 font-sans antialiased overflow-hidden">
+    <div className="flex min-h-0 flex-1 overflow-hidden bg-[#F4F5F7] text-zinc-900 font-sans antialiased">
       <button
         type="button"
         aria-label="Закрыть меню"
@@ -490,7 +490,7 @@ export default function StaffLayoutClient({
       </aside>
 
       <div
-        className={`flex min-h-0 min-w-0 flex-1 flex-col h-dvh transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`flex min-h-0 min-w-0 flex-1 flex-col transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           collapsed ? "md:pl-[4.5rem]" : "md:pl-64"
         }`}
       >
@@ -579,7 +579,10 @@ export default function StaffLayoutClient({
           </div>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto px-3 min-[380px]:px-3.5 sm:px-5 md:px-6 lg:px-8 xl:px-10 py-3.5 sm:py-5 md:py-6 lg:py-8 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <main
+          data-lenis-prevent
+          className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [scrollbar-gutter:stable] px-3 min-[380px]:px-3.5 sm:px-5 md:px-6 lg:px-8 xl:px-10 py-3.5 sm:py-5 md:py-6 lg:py-8 pb-[max(2.5rem,env(safe-area-inset-bottom))]"
+        >
           {!staffActive ? (
             <div className="mb-4 rounded-2xl border border-amber-200/80 bg-[#FFF8D6] px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
               <p className="min-w-0 flex-1 text-sm font-medium text-zinc-700">

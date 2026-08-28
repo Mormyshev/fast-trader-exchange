@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import StaffNativeSelect from "@/src/components/staff/StaffNativeSelect";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
 import { staffPositionLabelShort } from "@/src/utils/staff/permissions";
@@ -119,11 +120,11 @@ export default function AdminOrderAssignee({
           Можно передать заявку другому активному оператору. Он продолжит
           обработку: реквизиты, проверка чека и завершение.
         </p>
-        <select
+        <StaffNativeSelect
           value={selectedId}
           disabled={saving || !staffActive || members.length === 0}
           onChange={(e) => setSelectedId(e.target.value)}
-          className="w-full h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-900 disabled:opacity-60"
+          className="h-11 rounded-xl border-zinc-200 bg-white"
         >
           {!currentOperatorId ? (
             <option value="">Не назначен</option>
@@ -141,7 +142,7 @@ export default function AdminOrderAssignee({
               {memberLabel(member)}
             </option>
           ))}
-        </select>
+        </StaffNativeSelect>
         <Button
           type="button"
           disabled={saving || !canSubmit}

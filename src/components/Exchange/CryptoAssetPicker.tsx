@@ -37,7 +37,7 @@ export default function CryptoAssetPicker({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between gap-3 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-full px-5 py-3 shadow-[0_0_15px_rgba(255,221,45,0.08)] cursor-pointer hover:border-zinc-200 transition-colors text-left overflow-hidden"
+        className="w-full flex items-center justify-between gap-3 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-full px-5 py-3 shadow-[0_0_15px_rgba(255,221,45,0.08)] cursor-pointer hover:border-zinc-200 transition-colors text-left"
       >
         <div className="flex items-center space-x-3 min-w-0 flex-1">
           <CurrencyIcon

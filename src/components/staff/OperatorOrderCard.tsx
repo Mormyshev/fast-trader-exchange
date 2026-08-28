@@ -71,7 +71,7 @@ export default function OperatorOrderCard({
   children?: ReactNode;
 }) {
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+    <article className="min-w-0 overflow-visible rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
       <header className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
         <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -140,7 +140,7 @@ export default function OperatorOrderCard({
       </div>
 
       {children ? (
-        <div className="px-4 sm:px-5 pb-4 space-y-3 min-w-0 overflow-hidden">
+        <div className="px-4 sm:px-5 pb-4 space-y-3 min-w-0 overflow-visible">
           {children}
         </div>
       ) : null}
