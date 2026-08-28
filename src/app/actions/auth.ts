@@ -5,7 +5,7 @@ import { createClient } from "@/src/utils/supabase/server";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { verifyRecaptchaToken } from "@/src/utils/captcha/verify-recaptcha";
-import { validateEmail } from "@/src/utils/validation";
+import { validateEmail, validatePassword } from "@/src/utils/validation";
 
 export async function loginAndGetRoute(
   email: string,
@@ -51,6 +51,70 @@ export async function loginAndGetRoute(
   }
 
   return { route: "/user/orders" };
+}
+
+export async function registerAccount(
+  email: string,
+  password: string,
+  captchaToken: string,
+) {
+  const captcha = await verifyRecaptchaToken(captchaToken);
+  if (!captcha.ok) {
+    return { error: captcha.error };
+  }
+
+  const emailCheck = validateEmail(email);
+  if (!emailCheck.ok) {
+    return { error: emailCheck.error };
+  }
+
+  const passwordCheck = validatePassword(password);
+  if (!passwordCheck.ok) {
+    return { error: passwordCheck.error };
+  }
+
+  const origin = await getAuthRedirectOrigin();
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signUp({
+    email: emailCheck.value,
+    password: passwordCheck.value,
+    options: {
+      emailRedirectTo: `${origin}/auth/callback`,
+    },
+  });
+
+  if (error) {
+    const message = error.message || "";
+    if (/already/i.test(message)) {
+      return { error: "Этот email уже зарегистрирован" };
+    }
+    if (/rate/i.test(message)) {
+      return { error: "Слишком много попыток. Подождите немного и повторите." };
+    }
+    return { error: message };
+  }
+
+  if (data.session) {
+    try {
+      const userId = data.user?.id;
+      if (!userId) return { route: "/user/orders" };
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single();
+
+      if (profile?.role === "operator" || profile?.role === "admin") {
+        return { route: "/operator/dashboard" };
+      }
+    } catch (err) {
+      console.error("Server Action Register Role Error:", err);
+    }
+    return { route: "/user/orders" };
+  }
+
+  return { ok: true as const, needsConfirmation: true as const };
 }
 
 async function getRequestOrigin() {

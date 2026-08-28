@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, RefreshCw } from "lucide-react";
-import { createClient } from "@/src/utils/supabase/client";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { X } from "lucide-react";
+import { registerAccount } from "@/src/app/actions/auth";
 import {
   validateEmail,
   validatePassword,
   validatePasswordConfirm,
-  validateUsername,
 } from "@/src/utils/validation";
+import {
+  RecaptchaV2,
+  type RecaptchaV2Handle,
+} from "@/src/utils/captcha/recaptcha-v2";
+import { isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
 import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
 
 interface RegisterModalProps {
@@ -28,30 +31,16 @@ export default function RegisterModal({
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [isAnimated, setIsAnimated] = useState(isOpen);
 
-  // Поля ввода формы
-  const [login, setLogin] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [captchaInput, setCaptchaInput] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
 
-  // Статусы отправки
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  // Переменные для капчи
-  const [num1, setNum1] = useState(3);
-  const [num2, setNum2] = useState(4);
-
-  const router = useRouter();
-  const supabase = createClient();
-  const generateCaptcha = () => {
-    setNum1(Math.floor(Math.random() * 10) + 1);
-    setNum2(Math.floor(Math.random() * 10) + 1);
-    setCaptchaInput("");
-  };
+  const [captchaToken, setCaptchaToken] = useState("");
+  const recaptchaRef = useRef<RecaptchaV2Handle>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -63,7 +52,8 @@ export default function RegisterModal({
     setError("");
     setSuccessMessage("");
     setIsLoading(false);
-    generateCaptcha();
+    setCaptchaToken("");
+    recaptchaRef.current?.reset();
     setShouldRender(true);
     lockPageScroll();
     const timer = setTimeout(() => setIsAnimated(true), 10);
@@ -74,32 +64,11 @@ export default function RegisterModal({
   }, [isOpen]);
 
   if (!shouldRender) return null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccessMessage("");
-
-    if (password !== passwordConfirm) {
-      setError("Пароли не совпадают");
-      return;
-    }
-
-    if (parseInt(captchaInput) !== num1 + num2) {
-      setError("Неверный ответ на капчу");
-      generateCaptcha();
-      return;
-    }
-
-    if (!agreeTerms) {
-      setError("Необходимо согласиться с правилами");
-      return;
-    }
-
-    const usernameCheck = validateUsername(login);
-    if (!usernameCheck.ok) {
-      setError(usernameCheck.error);
-      return;
-    }
 
     const emailCheck = validateEmail(email);
     if (!emailCheck.ok) {
@@ -119,55 +88,57 @@ export default function RegisterModal({
       return;
     }
 
-    setIsLoading(true);
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: emailCheck.value,
-      password: passwordCheck.value,
-      options: {
-        data: { username: usernameCheck.value },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (signUpError) {
-      setIsLoading(false);
-      setError(signUpError.message);
-      generateCaptcha();
+    if (!agreeTerms) {
+      setError("Необходимо согласиться с правилами");
       return;
     }
 
-    // ДЕЙСТВИЯ ПРИ УСПЕХЕ:
-    setIsLoading(false);
+    const token = captchaToken || recaptchaRef.current?.getToken() || "";
+    if (isRecaptchaEnabled() && !token) {
+      setError("Подтвердите, что вы не робот");
+      return;
+    }
 
-    if (data?.session) {
-      // Вариант А: Подтверждение отключено, юзер сразу авторизован
-      setLogin("");
-      setEmail("");
-      setPassword("");
-      setPasswordConfirm("");
-      const next = redirectTo;
-      onClose();
-      if (next) {
-        window.location.href = next;
-      } else {
-        router.refresh();
-      }
-    } else {
-      // Вариант Б: Подтверждение включено, показываем текст
-      setSuccessMessage(
-        "Регистрация успешна! Проверьте вашу почту для подтверждения аккаунта.",
+    setIsLoading(true);
+
+    try {
+      const result = await registerAccount(
+        emailCheck.value,
+        passwordCheck.value,
+        token,
       );
-      setLogin("");
+
+      if (result.error) {
+        setError(result.error);
+        setCaptchaToken("");
+        recaptchaRef.current?.reset();
+        setIsLoading(false);
+        return;
+      }
+
       setEmail("");
       setPassword("");
       setPasswordConfirm("");
-      generateCaptcha();
+      setAgreeTerms(false);
+      setCaptchaToken("");
+      recaptchaRef.current?.reset();
+      setIsLoading(false);
 
-      // (Опционально) Автоматически закрыть окно через 5 секунд, чтобы юзер успел прочитать
-      setTimeout(() => {
+      if (result.route) {
         onClose();
-      }, 5000);
+        const next = redirectTo ?? result.route;
+        window.location.href = next;
+        return;
+      }
+
+      setSuccessMessage(
+        "Регистрация успешна! Проверьте почту и перейдите по ссылке для подтверждения аккаунта.",
+      );
+    } catch {
+      setIsLoading(false);
+      setCaptchaToken("");
+      recaptchaRef.current?.reset();
+      setError("Не удалось проверить капчу. Обновите страницу и попробуйте снова.");
     }
   };
 
@@ -182,7 +153,7 @@ export default function RegisterModal({
     >
       <div className="absolute inset-0" onClick={onClose} />
       <div
-        className={`relative w-full max-w-[420px] flex flex-col overflow-hidden bg-white text-zinc-900 rounded-2xl shadow-[0_24px_80px_rgba(15,23,42,0.12)] z-10 transform transition-all duration-300 ease-in-out max-h-[90vh] ${
+        className={`relative z-10 w-full max-w-[420px] overflow-x-hidden overflow-y-auto bg-white text-zinc-900 rounded-2xl p-6 sm:p-7 shadow-[0_24px_80px_rgba(15,23,42,0.12)] transform transition-all duration-300 ease-in-out max-h-[90vh] ${
           isAnimated ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >
@@ -193,7 +164,7 @@ export default function RegisterModal({
         >
           <X className="w-4 h-4" />
         </button>
-        <div className="overflow-y-auto scrollbar-none p-6 sm:p-7">
+
         <h2 className="text-xl font-bold tracking-tight text-zinc-900 mb-5">
           Регистрация
         </h2>
@@ -213,21 +184,6 @@ export default function RegisterModal({
 
           <div className="space-y-2">
             <label className="block text-xs font-semibold text-zinc-500 pl-1">
-              Логин *
-            </label>
-            <input
-              type="text"
-              value={login}
-              onChange={(e) => setLogin(e.target.value)}
-              className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D] transition-all"
-              required
-              disabled={isLoading}
-              placeholder="my_username"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-zinc-500 pl-1">
               E-mail *
             </label>
             <input
@@ -236,8 +192,9 @@ export default function RegisterModal({
               onChange={(e) => setEmail(e.target.value)}
               className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D] transition-all"
               required
-              disabled={isLoading}
+              disabled={isLoading || Boolean(successMessage)}
               placeholder="example@mail.com"
+              autoComplete="email"
             />
           </div>
 
@@ -251,7 +208,8 @@ export default function RegisterModal({
               onChange={(e) => setPassword(e.target.value)}
               className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D] transition-all"
               required
-              disabled={isLoading}
+              disabled={isLoading || Boolean(successMessage)}
+              autoComplete="new-password"
             />
           </div>
 
@@ -265,32 +223,14 @@ export default function RegisterModal({
               onChange={(e) => setPasswordConfirm(e.target.value)}
               className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D] transition-all"
               required
-              disabled={isLoading}
+              disabled={isLoading || Boolean(successMessage)}
+              autoComplete="new-password"
             />
-          </div>
-          <div className="flex items-center space-x-4 pt-2">
-            <div className="flex items-center bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2 font-bold text-lg text-zinc-700 select-none">
-              {num1} + {num2} =
-            </div>
-            <input
-              type="number"
-              value={captchaInput}
-              onChange={(e) => setCaptchaInput(e.target.value)}
-              className="w-16 h-12 bg-white border border-zinc-200 rounded-full text-center font-bold focus:outline-hidden focus:border-[#FFDD2D] transition-all"
-              required
-              disabled={isLoading}
-            />
-            <button
-              type="button"
-              onClick={generateCaptcha}
-              className="p-2 text-[#C9A227] hover:text-[#a8861b] transition-colors"
-              disabled={isLoading}
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
           </div>
 
-          <div className="flex items-start space-x-2.5 pt-2">
+          <RecaptchaV2 ref={recaptchaRef} onChange={setCaptchaToken} />
+
+          <div className="flex items-start space-x-2.5 pt-1">
             <input
               type="checkbox"
               id="agreeTerms"
@@ -298,7 +238,7 @@ export default function RegisterModal({
               onChange={(e) => setAgreeTerms(e.target.checked)}
               className="mt-0.5 w-4 h-4 rounded-xs border-zinc-300 text-[#FFDD2D] focus:ring-[#FFDD2D] accent-[#FFDD2D] cursor-pointer"
               required
-              disabled={isLoading}
+              disabled={isLoading || Boolean(successMessage)}
               style={{ accentColor: "#FFDD2D" }}
             />
             <label
@@ -306,19 +246,55 @@ export default function RegisterModal({
               className="text-[11px] font-medium text-zinc-500 leading-normal cursor-pointer select-none"
             >
               Я согласен с{" "}
-              <span className="text-[#C9A227]">правилами сервиса</span> и
-              обработкой персональных данных
+              <a
+                href="/tos"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#C9A227] hover:underline"
+              >
+                правилами сервиса
+              </a>{" "}
+              и{" "}
+              <a
+                href="/legal/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#C9A227] hover:underline"
+              >
+                обработкой персональных данных
+              </a>
             </label>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-1">
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || Boolean(successMessage)}
               className="w-full bg-[#FFDD2D] hover:bg-[#e6c628] disabled:bg-zinc-200 disabled:text-zinc-400 text-zinc-900 font-bold py-3.5 rounded-xl shadow-none transition-all flex items-center justify-center"
             >
               {isLoading ? "Регистрация..." : "Зарегистрироваться"}
             </button>
+            <p className="mt-3 text-center text-[10px] leading-4 text-zinc-400">
+              Этот сайт защищён reCAPTCHA Google.{" "}
+              <a
+                href="https://policies.google.com/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-zinc-600"
+              >
+                Конфиденциальность
+              </a>{" "}
+              и{" "}
+              <a
+                href="https://policies.google.com/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-zinc-600"
+              >
+                Условия
+              </a>
+              .
+            </p>
           </div>
         </form>
 
@@ -331,7 +307,6 @@ export default function RegisterModal({
           >
             Войти
           </button>
-        </div>
         </div>
       </div>
     </div>
