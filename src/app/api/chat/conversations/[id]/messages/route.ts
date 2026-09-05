@@ -13,6 +13,7 @@ import { enrichConversation } from "@/src/utils/chat/enrich-conversation";
 import {
   ensureStaffCanReply,
   getStaffPseudonym,
+  hideInternalStaffNicks,
   STAFF_PSEUDONYM_REQUIRED,
 } from "@/src/utils/chat/staff-chat";
 import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
@@ -81,7 +82,12 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
 
-    return NextResponse.json({ conversation, messages: messages ?? [] });
+    return NextResponse.json({
+      conversation: staff
+        ? conversation
+        : hideInternalStaffNicks(conversation),
+      messages: messages ?? [],
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

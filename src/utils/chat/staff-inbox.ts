@@ -86,8 +86,11 @@ export function getClientMessagePreview(
   const last = conversation.last_message;
   if (!last || last.sender_id !== conversation.user_id) return null;
 
-  const text = last.body?.replace(/\s+/g, " ").trim();
-  if (text) return text;
+  const raw = last.body?.trim();
+  if (raw) {
+    const firstLine = raw.split("\n").find((line) => line.trim()) ?? raw;
+    return firstLine.replace(/\s+/g, " ").trim();
+  }
   if (last.attachment_url || last.attachment_name) {
     return last.attachment_name?.trim() || "Вложение";
   }

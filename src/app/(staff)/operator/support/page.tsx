@@ -131,7 +131,7 @@ export default function OperatorSupportPage() {
         const res = await fetch("/api/operator/profile");
         const data = await res.json();
         if (res.ok) {
-          setHasPseudonym(!!data.profile?.operator_pseudonym?.trim());
+          setHasPseudonym(!!data.profile?.chat_pseudonym?.trim());
         }
       } catch {
         setHasPseudonym(false);
@@ -270,7 +270,7 @@ export default function OperatorSupportPage() {
           }`}
         >
           <div className="px-4 py-3 border-b border-zinc-100 bg-[#FFF8D6] shrink-0 space-y-2.5">
-            <p className="font-bold text-zinc-900">Чаты поддержки</p>
+            <p className="font-bold text-zinc-900">Служба поддержки</p>
             <StaffSearchInput
               value={searchQuery}
               onChange={setSearchQuery}

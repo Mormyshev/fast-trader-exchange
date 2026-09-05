@@ -5,6 +5,7 @@ import {
   getWalletPlaceholder,
   isCryptoOrderCode,
   orderCodeToCurrencyId,
+  type SbpPayoutMethod,
 } from "@/src/utils/validation";
 import SbpRequisitesFields from "@/src/components/Exchange/SbpRequisitesFields";
 
@@ -13,17 +14,21 @@ export default function OperatorPayInForm({
   phone,
   bankId,
   wallet,
+  method,
   onPhoneChange,
   onBankChange,
   onWalletChange,
+  onMethodChange,
 }: {
   currencyFrom: string;
   phone: string;
   bankId: string;
   wallet: string;
+  method: SbpPayoutMethod;
   onPhoneChange: (value: string) => void;
   onBankChange: (value: string) => void;
   onWalletChange: (value: string) => void;
+  onMethodChange: (method: SbpPayoutMethod) => void;
 }) {
   if (isCryptoOrderCode(currencyFrom)) {
     const currencyId = orderCodeToCurrencyId(currencyFrom);
@@ -57,11 +62,15 @@ export default function OperatorPayInForm({
         variant="staff"
         phone={phone}
         bankId={bankId}
+        method={method}
         onPhoneChange={onPhoneChange}
         onBankChange={onBankChange}
+        onMethodChange={onMethodChange}
       />
       <p className="text-[11px] text-zinc-400 font-medium pl-1 mt-1.5">
-        Клиент оплатит заявку переводом СБП на этот номер
+        {method === "card"
+          ? "Клиент оплатит заявку переводом на эту карту"
+          : "Клиент оплатит заявку переводом СБП на этот номер"}
       </p>
     </div>
   );

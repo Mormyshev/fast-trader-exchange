@@ -170,8 +170,11 @@ export default function ProfilePage() {
     const [rejectionComment, setRejectionComment] = useState<string | null>(
         null,
     );
+    const [isBlacklisted, setIsBlacklisted] = useState(false);
+    const [blacklistReason, setBlacklistReason] = useState<string | null>(null);
 
-    const editable = canEditVerification(verificationStatus);
+    const editable =
+        canEditVerification(verificationStatus) && !isBlacklisted;
 
     const applyProfile = (data: Record<string, unknown>) => {
         if (typeof data.last_name === "string") setLastName(data.last_name);
@@ -200,6 +203,12 @@ export default function ProfilePage() {
             setRejectionComment(data.verification_rejection_comment);
         } else if (data.verification_rejection_comment === null) {
             setRejectionComment(null);
+        }
+        setIsBlacklisted(data.is_blacklisted === true);
+        if (typeof data.blacklist_reason === "string") {
+            setBlacklistReason(data.blacklist_reason);
+        } else if (data.blacklist_reason === null) {
+            setBlacklistReason(null);
         }
         if (typeof data.updated_at === "string")
             setSubmittedAt(data.updated_at);
@@ -365,7 +374,13 @@ export default function ProfilePage() {
             setPassportFile(null);
             setSelfieFile(null);
             setExtraFile(null);
-            alert("Запрос на верификацию отправлен.");
+            await confirm({
+                title: "Запрос на верификацию отправлен",
+                description:
+                    "Анкета на проверке. Форма заблокирована до решения оператора.",
+                confirmLabel: "Понятно",
+                variant: "success",
+            });
         } catch (err: unknown) {
             alert(
                 `Произошла ошибка: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`,
@@ -460,7 +475,24 @@ export default function ProfilePage() {
                 ) : null}
             </div>
 
-            {verificationStatus === "pending" && (
+            {isBlacklisted ? (
+                <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-500" />
+                        <div>
+                            <p className="text-sm font-bold text-rose-900">
+                                Аккаунт в черном списке
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-rose-800">
+                                Вас добавили в черный список по причине:{" "}
+                                {blacklistReason?.trim() || "не указана"}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {verificationStatus === "pending" && !isBlacklisted && (
                 <div className="rounded-2xl bg-white px-5 py-4 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
                     <div className="flex items-start gap-3">
                         <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
@@ -477,7 +509,7 @@ export default function ProfilePage() {
                 </div>
             )}
 
-            {verificationStatus === "rejected" && (
+            {verificationStatus === "rejected" && !isBlacklisted && (
                 <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4">
                     <div className="flex items-start gap-3">
                         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-500" />
@@ -498,7 +530,7 @@ export default function ProfilePage() {
                 </div>
             )}
 
-            {verificationStatus === "verified" && (
+            {verificationStatus === "verified" && !isBlacklisted && (
                 <div className="rounded-2xl bg-white px-5 py-4 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
                     <div className="flex items-start gap-3">
                         <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />

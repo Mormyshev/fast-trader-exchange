@@ -20,23 +20,24 @@ import {
 } from "@/components/ui/dialog";
 import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
 import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
-import StaffNativeSelect from "@/src/components/staff/StaffNativeSelect";
+import PasswordInput from "@/src/components/PasswordInput/PasswordInput";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
-import { OPERATOR_PSEUDONYMS } from "@/src/utils/staff/pseudonyms";
-import { availablePseudonyms } from "@/src/utils/staff/operators-admin";
 import { staffPositionLabel } from "@/src/utils/staff/permissions";
 import {
   validateEmail,
+  validateOperatorPseudonym,
   validatePassword,
   validatePasswordConfirm,
 } from "@/src/utils/validation";
+import { CHAT_NICKS, parseChatNick } from "@/src/utils/staff/chat-nicks";
 
 type StaffRow = {
   id: string;
   email: string;
   role: "operator" | "admin";
   operator_pseudonym: string | null;
+  chat_pseudonym: string | null;
   staff_active: boolean | null;
   is_senior_operator: boolean | null;
 };
@@ -46,6 +47,7 @@ type FormState = {
   password: string;
   passwordConfirm: string;
   pseudonym: string;
+  chatPseudonym: string;
   isSeniorOperator: boolean;
 };
 
@@ -54,11 +56,44 @@ const emptyForm: FormState = {
   password: "",
   passwordConfirm: "",
   pseudonym: "",
+  chatPseudonym: "",
   isSeniorOperator: false,
 };
 
 const fieldClass =
   "w-full h-12 rounded-2xl border bg-[#F4F5F7] px-4 text-sm font-semibold text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#FFDD2D] focus:bg-white";
+
+function ChatNickSelect({
+  value,
+  disabled,
+  taken,
+  onChange,
+}: {
+  value: string;
+  disabled?: boolean;
+  taken: string[];
+  onChange: (next: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${fieldClass} ${disabled ? "opacity-60" : ""}`}
+    >
+      <option value="">Выберите ник</option>
+      {CHAT_NICKS.map((nick) => {
+        const busy = taken.includes(nick) && nick !== value;
+        return (
+          <option key={nick} value={nick} disabled={busy}>
+            {nick}
+            {busy ? " · занят" : ""}
+          </option>
+        );
+      })}
+    </select>
+  );
+}
 
 function positionLabel(row: StaffRow) {
   return staffPositionLabel(row);
@@ -79,37 +114,55 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
-function PseudonymSelect({
+function NicknameField({
   value,
-  options,
-  extraCurrent,
   disabled,
-  onChange,
+  compact,
+  onCommit,
 }: {
   value: string;
-  options: string[];
-  extraCurrent?: string | null;
   disabled?: boolean;
-  onChange: (next: string) => void;
+  compact?: boolean;
+  onCommit: (next: string) => boolean | void | Promise<boolean | void>;
 }) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commit = async () => {
+    const check = validateOperatorPseudonym(draft);
+    if (!check.ok) {
+      if (draft.trim()) alert(check.error);
+      setDraft(value);
+      return;
+    }
+    if (check.value === value.trim()) {
+      setDraft(value);
+      return;
+    }
+    const saved = await onCommit(check.value);
+    if (saved === false) setDraft(value);
+  };
+
   return (
-    <StaffNativeSelect
-      value={value}
+    <input
+      type="text"
+      value={draft}
       disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      <option value="" disabled>
-        Выберите из списка
-      </option>
-      {extraCurrent ? (
-        <option value={extraCurrent}>{extraCurrent} (текущий)</option>
-      ) : null}
-      {options.map((name) => (
-        <option key={name} value={name}>
-          {name}
-        </option>
-      ))}
-    </StaffNativeSelect>
+      maxLength={32}
+      placeholder="Например: Алекс"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+      className={`${fieldClass} ${compact ? "h-10 rounded-xl" : ""}`}
+    />
   );
 }
 
@@ -144,11 +197,6 @@ export default function AdminOperatorsManager() {
     void load();
   }, [load]);
 
-  const takenNames = useMemo(
-    () => operators.map((row) => row.operator_pseudonym),
-    [operators],
-  );
-
   const applyRow = (next: StaffRow) => {
     setOperators((prev) => {
       const without = prev.filter((row) => row.id !== next.id);
@@ -171,14 +219,22 @@ export default function AdminOperatorsManager() {
     }
   };
 
+  const takenChatNicks = useMemo(
+    () =>
+      operators
+        .map((row) => row.chat_pseudonym?.trim())
+        .filter((value): value is string => Boolean(value)),
+    [operators],
+  );
+
   const handleAssign = async (row: StaffRow, nextName: string) => {
-    if (!nextName || nextName === (row.operator_pseudonym || "")) return;
+    if (!nextName || nextName === (row.operator_pseudonym || "")) return true;
     const ok = await confirm({
-      title: "Назначить псевдоним?",
-      description: `${row.email} будет отображаться клиентам как «${nextName}».`,
-      confirmLabel: "Назначить",
+      title: "Сменить внутренний ник?",
+      description: `В панели ${row.email} будет отображаться как «${nextName}». Клиенты этот ник не увидят.`,
+      confirmLabel: "Сохранить",
     });
-    if (!ok) return;
+    if (!ok) return false;
 
     setSavingId(row.id);
     try {
@@ -190,8 +246,49 @@ export default function AdminOperatorsManager() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Не удалось сохранить");
       applyRow(json.operator as StaffRow);
+      return true;
     } catch (err) {
       alert(err instanceof Error ? err.message : "Не удалось сохранить");
+      return false;
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleAssignChatNick = async (row: StaffRow, nextName: string) => {
+    if (!nextName || nextName === (row.chat_pseudonym || "")) return;
+    const parsed = parseChatNick(nextName);
+    if (!parsed.ok) {
+      await confirm({
+        title: "Некорректный ник",
+        description: parsed.error,
+        variant: "info",
+      });
+      return;
+    }
+    const ok = await confirm({
+      title: "Сменить ник для чата?",
+      description: `Клиенты будут видеть «${parsed.value}», когда этот сотрудник возьмёт чат.`,
+      confirmLabel: "Сохранить",
+    });
+    if (!ok) return;
+
+    setSavingId(row.id);
+    try {
+      const res = await fetch(`/api/admin/operators/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_pseudonym: parsed.value }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось сохранить");
+      applyRow(json.operator as StaffRow);
+    } catch (err) {
+      await confirm({
+        title: "Не удалось сохранить",
+        description: err instanceof Error ? err.message : "Не удалось сохранить",
+        variant: "info",
+      });
     } finally {
       setSavingId(null);
     }
@@ -211,6 +308,7 @@ export default function AdminOperatorsManager() {
       password: "",
       passwordConfirm: "",
       pseudonym: row.operator_pseudonym || "",
+      chatPseudonym: row.chat_pseudonym || "",
       isSeniorOperator: row.role === "operator" && !!row.is_senior_operator,
     });
     setFormError(null);
@@ -257,8 +355,14 @@ export default function AdminOperatorsManager() {
       }
     }
 
-    if (!form.pseudonym) {
-      setFormError("Выберите псевдоним");
+    const nickCheck = validateOperatorPseudonym(form.pseudonym);
+    if (!nickCheck.ok) {
+      setFormError(nickCheck.error);
+      return;
+    }
+    const chatNickCheck = parseChatNick(form.chatPseudonym);
+    if (!chatNickCheck.ok) {
+      setFormError(chatNickCheck.error);
       return;
     }
 
@@ -272,7 +376,8 @@ export default function AdminOperatorsManager() {
             email: form.email,
             password: form.password,
             password_confirm: form.passwordConfirm,
-            operator_pseudonym: form.pseudonym,
+            operator_pseudonym: nickCheck.value,
+            chat_pseudonym: chatNickCheck.value,
             is_senior_operator: form.isSeniorOperator,
           }),
         });
@@ -281,7 +386,8 @@ export default function AdminOperatorsManager() {
         applyRow(json.operator as StaffRow);
       } else if (editing) {
         const payload: Record<string, string | boolean> = {
-          operator_pseudonym: form.pseudonym,
+          operator_pseudonym: nickCheck.value,
+          chat_pseudonym: chatNickCheck.value,
         };
         if (editing.role === "operator") {
           payload.email = form.email;
@@ -330,19 +436,7 @@ export default function AdminOperatorsManager() {
     }
   };
 
-  const dialogOptions = availablePseudonyms(
-    takenNames,
-    dialog === "edit" ? editing?.operator_pseudonym : null,
-  );
-  const extraCurrent =
-    editing?.operator_pseudonym &&
-    !OPERATOR_PSEUDONYMS.includes(
-      editing.operator_pseudonym as (typeof OPERATOR_PSEUDONYMS)[number],
-    )
-      ? editing.operator_pseudonym
-      : null;
-
-  const previewName = form.pseudonym.trim() || "Оператор";
+  const previewName = form.chatPseudonym.trim() || "Ник для чата";
   const isCreate = dialog === "create";
   const accountFields = isCreate || editing?.role === "operator";
 
@@ -398,7 +492,7 @@ export default function AdminOperatorsManager() {
           </div>
           <StaffPageHeader
             title="Операторы"
-            description="Псевдонимы, должности и доступ операторов к панели"
+            description="Внутренние ники, ники для чата и доступ операторов"
           />
         </div>
         <Button
@@ -421,24 +515,13 @@ export default function AdminOperatorsManager() {
         <div className="rounded-2xl bg-white p-8 sm:p-12 text-center shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
           <p className="text-sm font-semibold text-zinc-700">Операторов пока нет</p>
           <p className="mt-1 text-xs font-medium text-zinc-400">
-            Создайте первого оператора и назначьте псевдоним из списка
+            Создайте первого оператора и задайте ему ники
           </p>
         </div>
       ) : (
         <>
           <div className="md:hidden space-y-3">
             {operators.map((row) => {
-              const options = availablePseudonyms(
-                takenNames,
-                row.operator_pseudonym,
-              );
-              const extra =
-                row.operator_pseudonym &&
-                !OPERATOR_PSEUDONYMS.includes(
-                  row.operator_pseudonym as (typeof OPERATOR_PSEUDONYMS)[number],
-                )
-                  ? row.operator_pseudonym
-                  : null;
               const busy = savingId === row.id;
               return (
                 <div
@@ -449,11 +532,12 @@ export default function AdminOperatorsManager() {
                     <OperatorAvatar
                       name={row.operator_pseudonym || row.email}
                       className="w-11 h-11"
+                      profile={row}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <p className="truncate text-sm font-bold text-zinc-900">
-                          {row.operator_pseudonym || "Без псевдонима"}
+                          {row.operator_pseudonym || "Без ника"}
                         </p>
                         {row.id === user?.id ? (
                           <span className="shrink-0 rounded-full bg-[#FFF4C2] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#C9A227]">
@@ -470,17 +554,29 @@ export default function AdminOperatorsManager() {
                     </div>
                     <StatusBadge active={!!row.staff_active} />
                   </div>
-                  <div>
-                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                      Псевдоним для клиентов
-                    </p>
-                    <PseudonymSelect
-                      value={row.operator_pseudonym || ""}
-                      options={options}
-                      extraCurrent={extra}
-                      disabled={busy}
-                      onChange={(next) => void handleAssign(row, next)}
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        Внутренний ник
+                      </p>
+                      <NicknameField
+                        value={row.operator_pseudonym || ""}
+                        disabled={busy}
+                        compact
+                        onCommit={(next) => handleAssign(row, next)}
+                      />
+                    </div>
+                    <div>
+                      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        Ник для чата
+                      </p>
+                      <ChatNickSelect
+                        value={row.chat_pseudonym || ""}
+                        disabled={busy}
+                        taken={takenChatNicks}
+                        onChange={(next) => void handleAssignChatNick(row, next)}
+                      />
+                    </div>
                   </div>
                   {renderActions(row, true)}
                 </div>
@@ -490,7 +586,7 @@ export default function AdminOperatorsManager() {
 
           <div className="hidden md:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-left">
+              <table className="w-full min-w-[1040px] text-left">
                 <thead>
                   <tr className="bg-zinc-50/80 border-b border-zinc-100">
                     <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
@@ -503,7 +599,10 @@ export default function AdminOperatorsManager() {
                       Статус
                     </th>
                     <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                      Псевдоним
+                      Ник
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                      Ник для чата
                     </th>
                     <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 text-right">
                       Действие
@@ -512,17 +611,6 @@ export default function AdminOperatorsManager() {
                 </thead>
                 <tbody>
                   {operators.map((row) => {
-                    const options = availablePseudonyms(
-                      takenNames,
-                      row.operator_pseudonym,
-                    );
-                    const extra =
-                      row.operator_pseudonym &&
-                      !OPERATOR_PSEUDONYMS.includes(
-                        row.operator_pseudonym as (typeof OPERATOR_PSEUDONYMS)[number],
-                      )
-                        ? row.operator_pseudonym
-                        : null;
                     const busy = savingId === row.id;
                     return (
                       <tr
@@ -534,11 +622,12 @@ export default function AdminOperatorsManager() {
                             <OperatorAvatar
                               name={row.operator_pseudonym || row.email}
                               className="w-10 h-10"
+                              profile={row}
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <p className="truncate text-sm font-bold text-zinc-900">
-                                  {row.operator_pseudonym || "Без псевдонима"}
+                                  {row.operator_pseudonym || "Без ника"}
                                 </p>
                                 {row.id === user?.id ? (
                                   <span className="shrink-0 rounded-full bg-[#FFF4C2] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#C9A227]">
@@ -558,13 +647,20 @@ export default function AdminOperatorsManager() {
                         <td className="px-5 py-4">
                           <StatusBadge active={!!row.staff_active} />
                         </td>
-                        <td className="px-5 py-4 min-w-[200px]">
-                          <PseudonymSelect
+                        <td className="px-5 py-4 min-w-[180px]">
+                          <NicknameField
                             value={row.operator_pseudonym || ""}
-                            options={options}
-                            extraCurrent={extra}
                             disabled={busy}
-                            onChange={(next) => void handleAssign(row, next)}
+                            compact
+                            onCommit={(next) => handleAssign(row, next)}
+                          />
+                        </td>
+                        <td className="px-5 py-4 min-w-[180px]">
+                          <ChatNickSelect
+                            value={row.chat_pseudonym || ""}
+                            disabled={busy}
+                            taken={takenChatNicks}
+                            onChange={(next) => void handleAssignChatNick(row, next)}
                           />
                         </td>
                         <td className="px-5 py-4 text-right">
@@ -601,19 +697,26 @@ export default function AdminOperatorsManager() {
               </DialogTitle>
               <DialogDescription>
                 {isCreate
-                  ? "Создайте доступ, назначьте псевдоним и при необходимости должность старшего оператора."
+                  ? "Создайте доступ, задайте внутренний ник и ник для чата."
                   : editing?.role === "admin"
-                    ? "Администратору можно назначить только псевдоним."
-                    : "Можно сменить e-mail, пароль, псевдоним и должность."}
+                    ? "Администратору можно задать внутренний ник и ник для чата."
+                    : "Можно сменить e-mail, пароль, ники и должность."}
               </DialogDescription>
             </DialogHeader>
           </div>
 
           <div className="flex items-center gap-4 rounded-2xl bg-[#FFF8D6] px-4 py-3.5">
-            <OperatorAvatar name={previewName} className="w-11 h-11" />
+            <OperatorAvatar
+              name={previewName}
+              className="w-11 h-11"
+              profile={{
+                role: editing?.role ?? "operator",
+                is_senior_operator: form.isSeniorOperator,
+              }}
+            />
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                Как видит клиент
+                Ник в чате с клиентом
               </p>
               <p className="mt-0.5 text-base font-bold text-zinc-900 truncate">
                 {previewName}
@@ -644,8 +747,7 @@ export default function AdminOperatorsManager() {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                   {isCreate ? "Пароль" : "Новый пароль"}
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={form.password}
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, password: e.target.value }))
@@ -664,8 +766,7 @@ export default function AdminOperatorsManager() {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                   Повтор пароля
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={form.passwordConfirm}
                   onChange={(e) =>
                     setForm((prev) => ({
@@ -681,14 +782,32 @@ export default function AdminOperatorsManager() {
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                Псевдоним
+                Внутренний ник
               </label>
-              <PseudonymSelect
+              <input
+                type="text"
                 value={form.pseudonym}
-                options={dialogOptions}
-                extraCurrent={extraCurrent}
+                maxLength={32}
+                placeholder="Например: Иванов"
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, pseudonym: e.target.value }))
+                }
+                className={fieldClass}
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                Ник для чата
+              </label>
+              <ChatNickSelect
+                value={form.chatPseudonym}
+                taken={takenChatNicks.filter(
+                  (nick) => nick !== editing?.chat_pseudonym,
+                )}
                 onChange={(next) =>
-                  setForm((prev) => ({ ...prev, pseudonym: next }))
+                  setForm((prev) => ({ ...prev, chatPseudonym: next }))
                 }
               />
             </div>

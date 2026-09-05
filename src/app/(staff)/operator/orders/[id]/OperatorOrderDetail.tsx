@@ -25,6 +25,7 @@ import {
   buildOperatorPaymentDetails,
   clientPaysWithCrypto,
 } from "@/src/utils/orders/payment-details";
+import type { SbpPayoutMethod } from "@/src/utils/validation";
 import OperatorPayInForm from "@/src/components/PaymentRequisites/OperatorPayInForm";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
 import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
@@ -91,7 +92,7 @@ function statusBadgeClass(status: OrderStatus) {
 export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const router = useRouter();
   const supabase = createClient();
-  const { user, role, staffActive, canReassignOrders, isLoading: isAuthLoading } = useAuth();
+  const { user, staffActive, canReassignOrders, isLoading: isAuthLoading } = useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -99,6 +100,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const [phone, setPhone] = useState("");
   const [bankId, setBankId] = useState("");
   const [payWallet, setPayWallet] = useState("");
+  const [payoutMethod, setPayoutMethod] = useState<SbpPayoutMethod>("sbp");
   const [saving, setSaving] = useState(false);
   const [uploadingPayout, setUploadingPayout] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,7 +239,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleJoin = async () => {
     if (!user?.id || !order) return;
-    if (role !== "admin") return;
+    if (!canReassignOrders) return;
     if (!staffActive) {
       alert(STAFF_INACTIVE_ERROR);
       return;
@@ -272,8 +274,8 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleSendDetails = async () => {
     if (!order) return;
-    if (role !== "admin" && order.operator_id !== user?.id) {
-      alert("Эту заявку ведёт другой оператор.");
+    if (order.operator_id !== user?.id) {
+      alert("Сначала возьмите заявку в работу.");
       return;
     }
     if (!staffActive) {
@@ -284,6 +286,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       phone,
       bankId,
       wallet: payWallet,
+      method: payoutMethod,
     });
     if (!check.ok) {
       alert(check.error);
@@ -316,6 +319,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       setBankId("");
       setPhone("");
       setPayWallet("");
+      setPayoutMethod("sbp");
     } catch (err: any) {
       alert(err.message || "Ошибка");
     } finally {
@@ -325,8 +329,8 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
 
   const handleComplete = async (status: "completed" | "cancelled") => {
     if (!order) return;
-    if (role !== "admin" && order.operator_id !== user?.id) {
-      alert("Эту заявку ведёт другой оператор.");
+    if (order.operator_id !== user?.id) {
+      alert("Сначала возьмите заявку в работу.");
       return;
     }
     if (!staffActive) {
@@ -386,8 +390,8 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       e.target.value = "";
       return;
     }
-    if (role !== "admin" && order.operator_id !== user?.id) {
-      alert("Эту заявку ведёт другой оператор.");
+    if (order.operator_id !== user?.id) {
+      alert("Сначала возьмите заявку в работу.");
       e.target.value = "";
       return;
     }
@@ -443,8 +447,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
     );
   }
 
-  const canManageProcess =
-    role === "admin" || order.operator_id === user?.id;
+  const canManageProcess = order.operator_id === user?.id;
   const canJoinDeal =
     canReassignOrders &&
     !!order.operator_id &&
@@ -470,7 +473,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
           >
             {statusLabel(order.status)}
           </span>
-          <StaffOperatorLabel snapshot={order.operator_pseudonym_snapshot} />
+          <StaffOperatorLabel
+            snapshot={order.operator_pseudonym_snapshot}
+            emptyLabel="Оператор не назначен"
+          />
         </div>
       </div>
 
@@ -479,7 +485,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
         status={order.status}
         now={now}
       />
-      <OrderProgressStepper status={order.status} />
+      <OrderProgressStepper
+        status={order.status}
+        operatorName={order.operator_pseudonym_snapshot}
+      />
 
       <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
         <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-5 sm:space-y-6">
@@ -569,7 +578,8 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               />
             )}
 
-          {order.status === "pending" && (
+          {(order.status === "pending" ||
+            (order.status === "processing" && !order.operator_id)) && (
             <div className="space-y-3">
               <p className="text-sm text-zinc-600 font-medium">
                 Заявка ещё в общей очереди. Возьмите её в работу, чтобы выдать
@@ -591,16 +601,18 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
               <label className="block text-xs font-bold text-zinc-500 uppercase">
                 {clientPaysWithCrypto(order.currency_from)
                   ? "Адрес кошелька для оплаты клиенту"
-                  : "Реквизиты СБП для оплаты клиенту"}
+                  : "Реквизиты для оплаты клиенту"}
               </label>
               <OperatorPayInForm
                 currencyFrom={order.currency_from}
                 phone={phone}
                 bankId={bankId}
                 wallet={payWallet}
+                method={payoutMethod}
                 onPhoneChange={setPhone}
                 onBankChange={setBankId}
                 onWalletChange={setPayWallet}
+                onMethodChange={setPayoutMethod}
               />
               <Button
                 disabled={saving || !staffActive}
@@ -612,8 +624,9 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             </div>
             ) : (
               <p className="text-sm font-medium text-zinc-600">
-                Эту заявку ведёт другой оператор. Завершить её или сменить
-                исполнителя может администратор.
+                Эту заявку ведёт другой оператор. Сначала подключитесь к
+                сделке или передайте её себе, чтобы выдавать реквизиты и
+                завершать обмен.
               </p>
             ))}
 
@@ -730,7 +743,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             </div>
           )}
 
-          {role === "admin" &&
+          {canManageProcess &&
             (order.status === "processing" ||
               order.status === "awaiting_payment") && (
               <Button

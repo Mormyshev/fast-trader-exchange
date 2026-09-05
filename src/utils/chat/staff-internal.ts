@@ -11,6 +11,7 @@ export type StaffChatPeer = {
   role: "operator" | "admin";
   operator_pseudonym: string | null;
   staff_active: boolean;
+  is_senior_operator: boolean;
 };
 
 export type StaffChatMessage = ChatMessage;
@@ -26,7 +27,7 @@ export type StaffChatConversation = {
 };
 
 const STAFF_PROFILE_SELECT =
-  "id, email, role, operator_pseudonym, staff_active";
+  "id, email, role, operator_pseudonym, staff_active, is_senior_operator";
 
 const MESSAGE_SELECT =
   "id, created_at, conversation_id, sender_id, body, attachment_url, attachment_name, attachment_type";
@@ -77,6 +78,7 @@ export function mapStaffPeer(row: {
   role?: string | null;
   operator_pseudonym?: string | null;
   staff_active?: boolean | null;
+  is_senior_operator?: boolean | null;
 }): StaffChatPeer {
   return {
     id: row.id,
@@ -84,6 +86,7 @@ export function mapStaffPeer(row: {
     role: row.role === "admin" ? "admin" : "operator",
     operator_pseudonym: row.operator_pseudonym?.trim() || null,
     staff_active: row.staff_active === true,
+    is_senior_operator: row.is_senior_operator === true,
   };
 }
 

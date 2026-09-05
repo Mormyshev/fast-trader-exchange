@@ -9,10 +9,21 @@ import {
 import { attachClientToOrder } from "@/src/utils/orders/attach-client";
 import { formatVerifiedFio } from "@/src/utils/orders/client-info";
 import {
+  CLIENT_OPEN_ORDER_LIMIT,
+  CLIENT_OPEN_ORDER_LIMIT_ERROR,
+  countClientOpenOrders,
+} from "@/src/utils/orders/client-limit";
+import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
+import {
   isCryptoOrderCode,
   orderCodeToCurrencyId,
   validatePayoutDetails,
 } from "@/src/utils/validation";
+import {
+  CLIENT_BLACKLISTED_CODE,
+  formatClientBlacklistMessage,
+  isProfileBlacklisted,
+} from "@/src/utils/clients/blacklist";
 
 const MIN_RUB = 1000;
 const MAX_RUB = 15000000;
@@ -76,14 +87,43 @@ export async function POST(request: Request) {
     const normalizedWallet = walletCheck.value;
 
     const admin = createAdminClient();
+    await cancelExpiredOrders(admin);
 
-    const { data: profile } = await admin
+    const openCount = await countClientOpenOrders(admin, user.id);
+    if (openCount >= CLIENT_OPEN_ORDER_LIMIT) {
+      return NextResponse.json(
+        { error: CLIENT_OPEN_ORDER_LIMIT_ERROR, code: "OPEN_ORDER_LIMIT" },
+        { status: 409 },
+      );
+    }
+
+    let { data: profile, error: profileError } = await admin
       .from("profiles")
       .select(
-        "verification, email, last_name, first_name, middle_name, telegram",
+        "verification, email, last_name, first_name, middle_name, telegram, is_blacklisted, blacklist_reason",
       )
       .eq("id", user.id)
       .maybeSingle();
+
+    if (profileError) {
+      ({ data: profile } = await admin
+        .from("profiles")
+        .select(
+          "verification, email, last_name, first_name, middle_name, telegram",
+        )
+        .eq("id", user.id)
+        .maybeSingle());
+    }
+
+    if (isProfileBlacklisted(profile)) {
+      return NextResponse.json(
+        {
+          error: formatClientBlacklistMessage(profile?.blacklist_reason),
+          code: CLIENT_BLACKLISTED_CODE,
+        },
+        { status: 403 },
+      );
+    }
 
     if (profile?.verification !== "verified") {
       return NextResponse.json(

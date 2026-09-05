@@ -8,7 +8,7 @@ import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
 import { staffPositionLabelShort } from "@/src/utils/staff/permissions";
 
-type StaffMember = {
+export type StaffMember = {
   id: string;
   role: "operator" | "admin";
   operator_pseudonym: string | null;
@@ -16,8 +16,34 @@ type StaffMember = {
   is_senior_operator?: boolean | null;
 };
 
+export function useOperatorRoster(enabled = true) {
+  const [members, setMembers] = useState<StaffMember[]>([]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/operator/roster", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Не удалось загрузить команду");
+        if (!cancelled) {
+          setMembers((json.operators ?? []) as StaffMember[]);
+        }
+      } catch (err) {
+        if (!cancelled) console.error(err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  return members;
+}
+
 function memberLabel(member: StaffMember) {
-  const name = member.operator_pseudonym?.trim() || "Без псевдонима";
+  const name = member.operator_pseudonym?.trim() || "Без ника";
   const role = staffPositionLabelShort(member);
   return member.staff_active
     ? `${name} (${role})`
@@ -29,41 +55,25 @@ export default function AdminOrderAssignee({
   currentOperatorId,
   staffActive,
   onAssigned,
+  members: membersProp,
+  compact = false,
 }: {
   orderId: string;
   currentOperatorId: string | null;
   staffActive: boolean;
   onAssigned: (order: unknown) => void;
+  members?: StaffMember[];
+  compact?: boolean;
 }) {
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
-  const [members, setMembers] = useState<StaffMember[]>([]);
+  const loadedMembers = useOperatorRoster(!membersProp);
+  const members = membersProp ?? loadedMembers;
   const [selectedId, setSelectedId] = useState(currentOperatorId ?? "");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setSelectedId(currentOperatorId ?? "");
   }, [currentOperatorId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/operator/roster", { cache: "no-store" });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Не удалось загрузить команду");
-        if (!cancelled) {
-          setMembers((json.operators ?? []) as StaffMember[]);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error(err);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const selected = useMemo(
     () => members.find((member) => member.id === selectedId) ?? null,
@@ -107,6 +117,56 @@ export default function AdminOrderAssignee({
     }
   };
 
+  const options = (
+    <>
+      {!currentOperatorId ? <option value="">Не назначен</option> : null}
+      {currentOperatorId &&
+      !members.some((member) => member.id === currentOperatorId) ? (
+        <option value={currentOperatorId}>Текущий оператор</option>
+      ) : null}
+      {members.map((member) => (
+        <option
+          key={member.id}
+          value={member.id}
+          disabled={!member.staff_active && member.id !== currentOperatorId}
+        >
+          {memberLabel(member)}
+        </option>
+      ))}
+    </>
+  );
+
+  if (compact) {
+    return (
+      <>
+        <div className="rounded-2xl bg-[#F4F5F7] px-3.5 py-3 space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+            Передать оператору
+          </p>
+          <div className="flex flex-col min-[420px]:flex-row gap-2">
+            <StaffNativeSelect
+              value={selectedId}
+              disabled={saving || !staffActive || members.length === 0}
+              onChange={(e) => setSelectedId(e.target.value)}
+              className="h-10 rounded-xl border-zinc-200 bg-white"
+            >
+              {options}
+            </StaffNativeSelect>
+            <Button
+              type="button"
+              disabled={saving || !canSubmit}
+              onClick={() => void handleAssign()}
+              className="h-10 shrink-0 rounded-xl px-4 font-bold bg-zinc-900 hover:bg-zinc-800 text-white shadow-none disabled:opacity-50"
+            >
+              {saving ? "..." : "Передать"}
+            </Button>
+          </div>
+        </div>
+        <ConfirmDialogHost />
+      </>
+    );
+  }
+
   return (
     <>
       <div className="rounded-2xl bg-[#F4F5F7] p-4 space-y-3">
@@ -126,22 +186,7 @@ export default function AdminOrderAssignee({
           onChange={(e) => setSelectedId(e.target.value)}
           className="h-11 rounded-xl border-zinc-200 bg-white"
         >
-          {!currentOperatorId ? (
-            <option value="">Не назначен</option>
-          ) : null}
-          {currentOperatorId &&
-          !members.some((member) => member.id === currentOperatorId) ? (
-            <option value={currentOperatorId}>Текущий оператор</option>
-          ) : null}
-          {members.map((member) => (
-            <option
-              key={member.id}
-              value={member.id}
-              disabled={!member.staff_active && member.id !== currentOperatorId}
-            >
-              {memberLabel(member)}
-            </option>
-          ))}
+          {options}
         </StaffNativeSelect>
         <Button
           type="button"

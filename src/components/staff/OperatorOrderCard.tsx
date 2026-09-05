@@ -120,7 +120,11 @@ export default function OperatorOrderCard({
             currencyTo={order.currency_to}
           />
         </div>
-        <OrderProgressStepper status={order.status} embedded />
+        <OrderProgressStepper
+          status={order.status}
+          operatorName={order.operator_pseudonym_snapshot}
+          embedded
+        />
       </div>
 
       <div className="px-4 sm:px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 
-const NAV_ITEMS = [
+export const USER_NAV_ITEMS = [
   {
     href: "/user/exchange",
     label: "Обмен",
@@ -15,6 +15,11 @@ const NAV_ITEMS = [
     href: "/user/orders",
     label: "Заявки",
     match: (path: string) => path.startsWith("/user/orders"),
+  },
+  {
+    href: "/user/support",
+    label: "Служба поддержки",
+    match: (path: string) => path.startsWith("/user/support"),
   },
   {
     href: "/user/profile",
@@ -42,13 +47,13 @@ export default function UserCabinetNav() {
   return (
     <>
       <nav className="flex items-center gap-1">
-        {NAV_ITEMS.map((item) => {
+        {USER_NAV_ITEMS.map((item) => {
           const active = item.match(pathname);
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold transition-colors ${
+              className={`inline-flex h-10 items-center rounded-full px-3 lg:px-4 text-sm font-semibold transition-colors ${
                 active
                   ? "bg-[#FFF4C2] text-zinc-900"
                   : "text-gray-700 hover:bg-zinc-50 hover:text-zinc-900"

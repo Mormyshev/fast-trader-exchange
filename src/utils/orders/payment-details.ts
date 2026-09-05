@@ -1,13 +1,18 @@
-import { validatePhone } from "@/src/utils/validation/common";
+import { findSbpBank } from "@/src/utils/banks/sbp-banks";
 import {
   isCryptoOrderCode,
   orderCodeToCurrencyId,
   validateCryptoWallet,
 } from "@/src/utils/validation/wallet";
-import { findSbpBank } from "@/src/utils/banks/sbp-banks";
+import {
+  detectSbpPayoutMethod,
+  type SbpPayoutMethod,
+  validateSbpDestination,
+} from "@/src/utils/validation/sbp-payout";
 
 export type PaymentRequisites = {
   kind: "sbp" | "fiat" | "crypto" | "legacy" | "empty";
+  method: SbpPayoutMethod | "";
   card: string;
   phone: string;
   wallet: string;
@@ -18,6 +23,7 @@ export type PaymentRequisites = {
 
 const emptyRequisites = (): PaymentRequisites => ({
   kind: "empty",
+  method: "",
   card: "",
   phone: "",
   wallet: "",
@@ -26,38 +32,58 @@ const emptyRequisites = (): PaymentRequisites => ({
 });
 
 export function validateSbpPaymentRequisites(
-  phone: string,
+  destination: string,
   bankId: string,
+  method?: SbpPayoutMethod,
 ):
-  | { ok: true; phone: string; bankId: string; bankName: string }
+  | {
+      ok: true;
+      method: SbpPayoutMethod;
+      phone: string;
+      card: string;
+      bankId: string;
+      bankName: string;
+    }
   | { ok: false; error: string } {
   const bank = findSbpBank(bankId);
   if (!bank) {
-    return { ok: false, error: "Выберите банк СБП" };
+    return {
+      ok: false,
+      error:
+        method === "card" ? "Выберите банк карты" : "Выберите банк СБП",
+    };
   }
 
-  const phoneCheck = validatePhone(phone);
-  if (!phoneCheck.ok) {
-    return { ok: false, error: phoneCheck.error };
+  const resolved = method ?? detectSbpPayoutMethod(destination);
+  const destCheck = validateSbpDestination(destination, resolved);
+  if (!destCheck.ok) {
+    return { ok: false, error: destCheck.error };
   }
 
   return {
     ok: true,
-    phone: phoneCheck.value,
+    method: resolved,
+    phone: resolved === "sbp" ? destCheck.value : "",
+    card: resolved === "card" ? destCheck.value : "",
     bankId: bank.id,
     bankName: bank.name,
   };
 }
 
 export function serializeSbpPaymentDetails(
-  phone: string,
+  destination: string,
   bankId: string,
+  method?: SbpPayoutMethod,
 ): string {
   const bank = findSbpBank(bankId);
+  const resolved = method ?? detectSbpPayoutMethod(destination);
+  const value = destination.trim();
   return JSON.stringify({
     v: 2,
     kind: "sbp",
-    phone: phone.trim(),
+    method: resolved,
+    phone: resolved === "sbp" ? value : "",
+    card: resolved === "card" ? value : "",
     bankId,
     bankName: bank?.name ?? "",
   });
@@ -91,10 +117,20 @@ export function parsePaymentDetails(
       if (parsed.kind === "sbp") {
         const bankId = typeof parsed.bankId === "string" ? parsed.bankId : "";
         const bank = findSbpBank(bankId);
+        const phone = typeof parsed.phone === "string" ? parsed.phone : "";
+        const card = typeof parsed.card === "string" ? parsed.card : "";
+        const method: SbpPayoutMethod =
+          parsed.method === "card" || parsed.method === "sbp"
+            ? parsed.method
+            : card
+              ? "card"
+              : "sbp";
         return {
           ...empty,
           kind: "sbp",
-          phone: typeof parsed.phone === "string" ? parsed.phone : "",
+          method,
+          phone,
+          card,
           bankId,
           bankName:
             bank?.name ||
@@ -109,6 +145,7 @@ export function parsePaymentDetails(
         return {
           ...empty,
           kind: "fiat",
+          method: "card",
           card: parsed.card,
           phone: typeof parsed.phone === "string" ? parsed.phone : "",
         };
@@ -140,7 +177,12 @@ export function clientPaysWithCrypto(currencyFrom: string): boolean {
 
 export function buildOperatorPaymentDetails(
   currencyFrom: string,
-  input: { phone: string; wallet: string; bankId: string },
+  input: {
+    phone: string;
+    wallet: string;
+    bankId: string;
+    method?: SbpPayoutMethod;
+  },
 ): { ok: true; payload: string; summary: string } | { ok: false; error: string } {
   if (clientPaysWithCrypto(currencyFrom)) {
     const walletCheck = validateCryptoWallet(
@@ -155,11 +197,19 @@ export function buildOperatorPaymentDetails(
     };
   }
 
-  const sbp = validateSbpPaymentRequisites(input.phone, input.bankId);
+  const sbp = validateSbpPaymentRequisites(
+    input.phone,
+    input.bankId,
+    input.method,
+  );
   if (!sbp.ok) return { ok: false, error: sbp.error };
+  const destination = sbp.card || sbp.phone;
   return {
     ok: true,
-    payload: serializeSbpPaymentDetails(sbp.phone, sbp.bankId),
-    summary: `СБП ${sbp.bankName}, ${sbp.phone}`,
+    payload: serializeSbpPaymentDetails(destination, sbp.bankId, sbp.method),
+    summary:
+      sbp.method === "card"
+        ? `Карта ${sbp.bankName}, ${destination}`
+        : `СБП ${sbp.bankName}, ${destination}`,
   };
 }

@@ -8,6 +8,7 @@ import {
   validatePassword,
   validatePasswordConfirm,
 } from "@/src/utils/validation";
+import PasswordInput from "@/src/components/PasswordInput/PasswordInput";
 
 const INPUT_CLASS =
   "w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D]";
@@ -204,8 +205,7 @@ function ResetPasswordForm() {
                 <label className="block pl-1 text-xs font-semibold text-zinc-500">
                   Новый пароль *
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className={INPUT_CLASS}
@@ -220,8 +220,7 @@ function ResetPasswordForm() {
                 <label className="block pl-1 text-xs font-semibold text-zinc-500">
                   Повторите пароль *
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={passwordConfirm}
                   onChange={(e) => setPasswordConfirm(e.target.value)}
                   className={INPUT_CLASS}

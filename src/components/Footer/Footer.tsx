@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Mail } from "lucide-react";
 import ChatWidget from "@/src/components/Chat/ChatWidget";
 
 const TELEGRAM_URL = "https://t.me/FastTraderExchange";
 
 export default function Footer() {
+  const pathname = usePathname() ?? "";
   const currentYear = new Date().getFullYear();
+
+  if (pathname.startsWith("/user/support")) {
+    return null;
+  }
 
   return (
     <footer className="w-full bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-900 pt-6 pb-4 md:pt-8 md:pb-5 transition-colors duration-200 relative">

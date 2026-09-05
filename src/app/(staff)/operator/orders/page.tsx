@@ -29,6 +29,24 @@ import {
 } from "@/src/utils/orders/payment-details";
 import OperatorPayInForm from "@/src/components/PaymentRequisites/OperatorPayInForm";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
+import AdminOrderAssignee, {
+  useOperatorRoster,
+} from "@/src/components/staff/AdminOrderAssignee";
+import type { SbpPayoutMethod } from "@/src/utils/validation";
+
+type PayInDraft = {
+  bankId: string;
+  phone: string;
+  wallet: string;
+  method: SbpPayoutMethod;
+};
+
+const emptyPayInDraft = (): PayInDraft => ({
+  bankId: "",
+  phone: "",
+  wallet: "",
+  method: "sbp",
+});
 
 interface Order {
   id: string;
@@ -71,9 +89,9 @@ export default function OperatorOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("new");
   const [searchQuery, setSearchQuery] = useState("");
-  const [detailsInput, setDetailsInput] = useState<{
-    [key: string]: { bankId: string; phone: string; wallet: string };
-  }>({});
+  const [detailsInput, setDetailsInput] = useState<Record<string, PayInDraft>>(
+    {},
+  );
 
   const userIdRef = useRef<string | null>(null);
   const roleRef = useRef(role);
@@ -85,6 +103,7 @@ export default function OperatorOrdersPage() {
   roleRef.current = role;
   canReassignRef.current = canReassignOrders;
 
+  const roster = useOperatorRoster(canReassignOrders);
   const now = useNowTick(!loading && !!user?.id);
   const expiredHandledRef = useRef<Set<string>>(new Set());
 
@@ -388,11 +407,11 @@ export default function OperatorOrdersPage() {
     }
     const target = myOrders.find((o) => o.id === orderId);
     if (!target) return;
-    const current = detailsInput[orderId] ?? {
-      bankId: "",
-      phone: "",
-      wallet: "",
-    };
+    if (target.operator_id !== user?.id) {
+      alert("Сначала возьмите заявку в работу.");
+      return;
+    }
+    const current = detailsInput[orderId] ?? emptyPayInDraft();
     const check = buildOperatorPaymentDetails(target.currency_from, current);
     if (!check.ok) {
       alert(check.error);
@@ -445,6 +464,10 @@ export default function OperatorOrdersPage() {
       return;
     }
     const target = myOrders.find((o) => o.id === orderId);
+    if (!target || target.operator_id !== user?.id) {
+      alert("Сначала возьмите заявку в работу.");
+      return;
+    }
     if (
       status === "completed" &&
       target &&
@@ -508,6 +531,12 @@ export default function OperatorOrdersPage() {
   ) => {
     if (!staffActive) {
       alert(STAFF_INACTIVE_ERROR);
+      e.target.value = "";
+      return;
+    }
+    const target = myOrders.find((order) => order.id === orderId);
+    if (!target || target.operator_id !== user?.id) {
+      alert("Сначала возьмите заявку в работу.");
       e.target.value = "";
       return;
     }
@@ -580,7 +609,7 @@ export default function OperatorOrdersPage() {
       </div>
     );
 
-    if (role !== "admin") return grid(orders);
+    if (!canReassignOrders) return grid(orders);
 
     const mine = orders.filter((order) => order.operator_id === user?.id);
     const others = orders.filter((order) => order.operator_id !== user?.id);
@@ -635,7 +664,7 @@ export default function OperatorOrdersPage() {
         tone={tone}
         statusText={statusText}
         walletLabel="Куда отправить клиенту"
-        showOperator={isForeign}
+        showOperator
         actions={
           isForeign ? (
             <div className="grid grid-cols-2 gap-2">
@@ -657,6 +686,19 @@ export default function OperatorOrdersPage() {
           ) : undefined
         }
       >
+        {canReassignOrders &&
+        (order.status === "processing" ||
+          order.status === "awaiting_payment" ||
+          order.status === "paid") ? (
+          <AdminOrderAssignee
+            compact
+            orderId={order.id}
+            currentOperatorId={order.operator_id}
+            staffActive={staffActive}
+            members={roster}
+            onAssigned={(next) => applyOrderUpdate(next as Order)}
+          />
+        ) : null}
         {order.payment_details && (
           <div className="rounded-2xl bg-[#F4F5F7] px-3.5 py-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
@@ -675,25 +717,26 @@ export default function OperatorOrdersPage() {
             Чек клиента (PDF)
           </a>
         )}
-        {order.status === "processing" && (
+        {order.status === "processing" && order.operator_id === user?.id && (
           <div className="space-y-2.5">
             <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
               {clientPaysWithCrypto(order.currency_from)
                 ? "Адрес для оплаты клиентом"
-                : "Реквизиты СБП для оплаты клиентом"}
+                : "Реквизиты для оплаты клиентом"}
             </label>
             <OperatorPayInForm
               currencyFrom={order.currency_from}
               bankId={detailsInput[order.id]?.bankId ?? ""}
               phone={detailsInput[order.id]?.phone ?? ""}
               wallet={detailsInput[order.id]?.wallet ?? ""}
+              method={detailsInput[order.id]?.method ?? "sbp"}
               onBankChange={(bankId) =>
                 setDetailsInput((prev) => ({
                   ...prev,
                   [order.id]: {
+                    ...emptyPayInDraft(),
+                    ...prev[order.id],
                     bankId,
-                    phone: prev[order.id]?.phone ?? "",
-                    wallet: prev[order.id]?.wallet ?? "",
                   },
                 }))
               }
@@ -701,9 +744,9 @@ export default function OperatorOrdersPage() {
                 setDetailsInput((prev) => ({
                   ...prev,
                   [order.id]: {
-                    bankId: prev[order.id]?.bankId ?? "",
+                    ...emptyPayInDraft(),
+                    ...prev[order.id],
                     phone,
-                    wallet: prev[order.id]?.wallet ?? "",
                   },
                 }))
               }
@@ -711,9 +754,20 @@ export default function OperatorOrdersPage() {
                 setDetailsInput((prev) => ({
                   ...prev,
                   [order.id]: {
-                    bankId: prev[order.id]?.bankId ?? "",
-                    phone: prev[order.id]?.phone ?? "",
+                    ...emptyPayInDraft(),
+                    ...prev[order.id],
                     wallet,
+                  },
+                }))
+              }
+              onMethodChange={(method) =>
+                setDetailsInput((prev) => ({
+                  ...prev,
+                  [order.id]: {
+                    ...emptyPayInDraft(),
+                    ...prev[order.id],
+                    method,
+                    phone: "",
                   },
                 }))
               }
@@ -740,7 +794,7 @@ export default function OperatorOrdersPage() {
             </div>
           </div>
         )}
-        {order.status === "paid" && (
+        {order.status === "paid" && order.operator_id === user?.id && (
           <div className="rounded-2xl bg-[#F4F5F7] px-3.5 py-3 space-y-3">
             <p className="text-sm font-bold text-zinc-900">
               Проверьте поступление и чек
@@ -953,9 +1007,7 @@ export default function OperatorOrdersPage() {
                   now={now}
                   tone="completed"
                   statusText="Выполнена"
-                  showOperator={
-                    role === "admin" || !!order.operator_pseudonym_snapshot
-                  }
+                  showOperator
                   walletLabel="Реквизиты клиента"
                 />
               ))}
@@ -979,7 +1031,7 @@ export default function OperatorOrdersPage() {
                   now={now}
                   tone="cancelled"
                   statusText="Отменена"
-                  showOperator={role === "admin"}
+                  showOperator
                   walletLabel="Реквизиты клиента"
                 />
               ))}

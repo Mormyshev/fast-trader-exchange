@@ -5,6 +5,10 @@ import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { broadcastVerificationEvent } from "@/src/utils/supabase/broadcast-verification";
 import { validateProfileFormFields } from "@/src/utils/validation";
+import {
+  formatClientBlacklistMessage,
+  isProfileBlacklisted,
+} from "@/src/utils/clients/blacklist";
 
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -128,6 +132,22 @@ export async function PATCH(request: Request) {
     }
 
     const admin = createAdminClient();
+    const { data: currentProfile } = await withTimeout(
+      admin
+        .from("profiles")
+        .select("is_blacklisted, blacklist_reason")
+        .eq("id", user.id)
+        .maybeSingle(),
+      8000,
+      { data: null, error: { message: "Database timeout" } } as any,
+    );
+    if (isProfileBlacklisted(currentProfile)) {
+      return NextResponse.json(
+        { error: formatClientBlacklistMessage(currentProfile?.blacklist_reason) },
+        { status: 403 },
+      );
+    }
+
     const lastName = String(form.get("last_name") || "").trim();
     const firstName = String(form.get("first_name") || "").trim();
     const middleName = String(form.get("middle_name") || "").trim();

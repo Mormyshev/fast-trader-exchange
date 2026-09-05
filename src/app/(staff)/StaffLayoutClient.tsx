@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   LayoutDashboard,
   ClipboardList,
-  UserCheck,
+  Users,
   Settings,
   User,
   Menu,
@@ -40,12 +40,12 @@ import { staffPositionLabel } from "@/src/utils/staff/permissions";
 const pageTitles: { [key: string]: string } = {
   "/operator/dashboard": "Дашборд статистики",
   "/operator/orders": "Активные ордера",
-  "/operator/support": "Чат поддержки",
+  "/operator/support": "Служба поддержки",
   "/operator/team": "Чат команды",
   "/operator/schedule": "График",
-  "/operator/verification": "Верификация аккаунтов",
+  "/operator/verification": "Клиенты",
   "/admin/profile": "Операторы",
-  "/admin/verification": "Верификация аккаунтов",
+  "/admin/verification": "Клиенты",
   "/admin/manage-operators": "Операторы",
   "/admin/settings": "Настройки системы",
 };
@@ -386,7 +386,7 @@ export default function StaffLayoutClient({
             <StaffNavLink
               href="/operator/support"
               icon={MessageCircle}
-              label="Чат поддержки"
+              label="Служба поддержки"
               active={pathname.startsWith("/operator/support")}
               badge={pendingChats}
               collapsed={collapsed}
@@ -412,8 +412,8 @@ export default function StaffLayoutClient({
             {canVerifyClients && !isAdmin ? (
               <StaffNavLink
                 href="/operator/verification"
-                icon={UserCheck}
-                label="Верификация аккаунтов"
+                icon={Users}
+                label="Клиенты"
                 active={pathname === "/operator/verification"}
                 collapsed={collapsed}
                 onClick={handleNavClick}
@@ -431,8 +431,8 @@ export default function StaffLayoutClient({
                 </span>
                 <StaffNavLink
                   href="/admin/verification"
-                  icon={UserCheck}
-                  label="Верификация аккаунтов"
+                  icon={Users}
+                  label="Клиенты"
                   active={pathname === "/admin/verification"}
                   collapsed={collapsed}
                   onClick={handleNavClick}
@@ -542,6 +542,10 @@ export default function StaffLayoutClient({
                     name={operatorPseudonym}
                     size="sm"
                     className="w-8 h-8 sm:w-9 sm:h-9"
+                    profile={{
+                      role,
+                      is_senior_operator: isSeniorOperator,
+                    }}
                   />
                 </>
               ) : isAdmin ? (
@@ -550,7 +554,7 @@ export default function StaffLayoutClient({
                     href="/admin/profile"
                     className="hidden sm:inline-flex items-center rounded-full bg-[#FFDD2D] px-2.5 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-bold text-zinc-900 hover:bg-[#e6c628] transition-colors whitespace-nowrap max-w-[120px] sm:max-w-none truncate"
                   >
-                    Назначить псевдоним
+                    Назначить ник
                   </Link>
                   <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 shrink-0 select-none">
                     <User className="w-4 h-4" />
@@ -559,7 +563,7 @@ export default function StaffLayoutClient({
               ) : (
                 <>
                   <span className="hidden sm:inline text-[10px] sm:text-xs font-bold text-zinc-400 whitespace-nowrap">
-                    Нет псевдонима
+                    Нет ника
                   </span>
                   <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 shrink-0 select-none">
                     <User className="w-4 h-4" />

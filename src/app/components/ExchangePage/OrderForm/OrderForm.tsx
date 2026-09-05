@@ -12,12 +12,14 @@ import {
   FIAT_CURRENCIES,
   type CryptoAsset,
   type ExchangeCurrency,
+  fiatBankId,
   findCurrencyById,
   formatAmount,
   formatRateLabel,
   getAssetForCurrency,
   getDefaultCryptoCurrency,
   getPairRate,
+  isBankFiatCurrency,
   isCryptoCurrency,
   isFiatCurrency,
   resolveCurrencyVariant,
@@ -39,10 +41,16 @@ import {
   validateOrderFormField,
   validateOrderFormFields,
   type OrderFormErrors,
+  type SbpPayoutMethod,
 } from "@/src/utils/validation";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { useAuthDialog } from "@/src/components/AuthDialog/AuthDialogProvider";
 import { formatVerifiedFio } from "@/src/utils/orders/client-info";
+import {
+  CLIENT_BLACKLISTED_CODE,
+  formatClientBlacklistMessage,
+  isProfileBlacklisted,
+} from "@/src/utils/clients/blacklist";
 
 type RateRow = { symbol: string; exchange_price: number };
 
@@ -214,7 +222,8 @@ export default function OrderForm() {
 
   const [fio, setFio] = useState<string>("");
   const [wallet, setWallet] = useState<string>("");
-  const [sbpBankId, setSbpBankId] = useState<string>("");
+  const [sbpBankId, setSbpBankId] = useState<string>(() => fiatBankId(initialTo));
+  const [sbpMethod, setSbpMethod] = useState<SbpPayoutMethod>("sbp");
   const [email, setEmail] = useState<string>("");
   const [telegram, setTelegram] = useState<string>("");
   const [coupon, setCoupon] = useState<string>("");
@@ -226,6 +235,8 @@ export default function OrderForm() {
   const [verificationStatus, setVerificationStatus] =
     useState<VerificationStatus | null>(null);
   const [verificationLoading, setVerificationLoading] = useState(true);
+  const [blacklistReason, setBlacklistReason] = useState<string | null>(null);
+  const [isBlacklisted, setIsBlacklisted] = useState(false);
 
   const verified = isVerificationComplete(
     verificationStatus ?? "not_started",
@@ -280,6 +291,12 @@ export default function OrderForm() {
                 ? profile.verification
                 : undefined,
             ),
+          );
+          setIsBlacklisted(isProfileBlacklisted(profile));
+          setBlacklistReason(
+            typeof profile?.blacklist_reason === "string"
+              ? profile.blacklist_reason
+              : null,
           );
           if (profile) {
             setFio(
@@ -416,7 +433,8 @@ export default function OrderForm() {
     }
     setIsSendActive(true);
     setWallet("");
-    setSbpBankId("");
+    setSbpBankId(fiatBankId(nextReceive));
+    setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(currency, nextReceive, sendAmount);
   };
@@ -455,7 +473,8 @@ export default function OrderForm() {
     setIsReceiveDropdownOpen(false);
     setIsSendActive(true);
     setWallet("");
-    setSbpBankId("");
+    setSbpBankId(fiatBankId(next));
+    setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, next, sendAmount);
   };
@@ -467,7 +486,8 @@ export default function OrderForm() {
     if (!next) return;
     setSelectedReceive(next);
     setWallet("");
-    setSbpBankId("");
+    setSbpBankId(fiatBankId(next));
+    setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, next, sendAmount);
   };
@@ -477,7 +497,8 @@ export default function OrderForm() {
     setIsReceiveDropdownOpen(false);
     setIsSendActive(true);
     setWallet("");
-    setSbpBankId("");
+    setSbpBankId(fiatBankId(currency));
+    setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, currency, sendAmount);
   };
@@ -486,8 +507,12 @@ export default function OrderForm() {
     () => ({
       fio,
       wallet:
-        selectedReceive.id === "sbp"
-          ? serializeSbpRequisites(wallet, sbpBankId)
+        isBankFiatCurrency(selectedReceive)
+          ? serializeSbpRequisites(
+              wallet,
+              sbpBankId || fiatBankId(selectedReceive),
+              sbpMethod,
+            )
           : wallet,
       city: "",
       email,
@@ -503,10 +528,11 @@ export default function OrderForm() {
       fio,
       wallet,
       sbpBankId,
+      sbpMethod,
       email,
       telegram,
       coupon,
-      selectedReceive.id,
+      selectedReceive,
       isReceiveCrypto,
     ],
   );
@@ -523,7 +549,11 @@ export default function OrderForm() {
   );
 
   const handleWalletChange = (val: string) => {
-    setWallet(formatWalletInput(val, selectedReceive.id));
+    setWallet(
+      isBankFiatCurrency(selectedReceive)
+        ? val
+        : formatWalletInput(val, selectedReceive.id),
+    );
     if (fieldErrors.wallet) {
       setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     }
@@ -540,7 +570,8 @@ export default function OrderForm() {
     setSelectedSend(nextSend);
     setSelectedReceive(nextReceive);
     setWallet("");
-    setSbpBankId("");
+    setSbpBankId(fiatBankId(nextReceive));
+    setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
 
     if (nextSendIsCrypto) {
@@ -567,22 +598,42 @@ export default function OrderForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isBlacklisted) {
+      await confirm({
+        title: "Аккаунт в черном списке",
+        description: formatClientBlacklistMessage(blacklistReason),
+        variant: "info",
+      });
+      return;
+    }
+
     if (!verified) {
-      alert("Перед обменом необходимо пройти верификацию.");
+      await confirm({
+        title: "Нужна верификация",
+        description: "Перед обменом необходимо пройти верификацию.",
+        variant: "info",
+      });
       router.push("/user/profile");
       return;
     }
 
     if (!fio.trim() || !email.trim() || !telegram.trim()) {
-      alert(
-        "В верификации не хватает ФИО, e-mail или Telegram. Обновите анкету в профиле.",
-      );
+      await confirm({
+        title: "Неполная анкета",
+        description:
+          "В верификации не хватает ФИО, e-mail или Telegram. Обновите анкету в профиле.",
+        variant: "info",
+      });
       router.push("/user/profile");
       return;
     }
 
     if (!agreeAml) {
-      alert("Необходимо принять условия AML политики.");
+      await confirm({
+        title: "AML политика",
+        description: "Необходимо принять условия AML политики.",
+        variant: "info",
+      });
       return;
     }
 
@@ -590,7 +641,11 @@ export default function OrderForm() {
     const finalReceive = parseFloat(receiveAmount);
 
     if (!(pairRate > 0) || isNaN(finalSend) || isNaN(finalReceive) || finalReceive <= 0) {
-      alert("Курс ещё не загружен. Подождите пару секунд и попробуйте снова.");
+      await confirm({
+        title: "Курс ещё не готов",
+        description: "Курс ещё не загружен. Подождите пару секунд и попробуйте снова.",
+        variant: "info",
+      });
       return;
     }
 
@@ -599,9 +654,11 @@ export default function OrderForm() {
       rubDealAmount < MIN_RUB ||
       rubDealAmount > MAX_RUB
     ) {
-      alert(
-        `Сумма в рублях должна быть от ${MIN_RUB.toLocaleString("ru-RU")} до ${MAX_RUB.toLocaleString("ru-RU")}`,
-      );
+      await confirm({
+        title: "Некорректная сумма",
+        description: `Сумма в рублях должна быть от ${MIN_RUB.toLocaleString("ru-RU")} до ${MAX_RUB.toLocaleString("ru-RU")}`,
+        variant: "info",
+      });
       return;
     }
 
@@ -609,7 +666,13 @@ export default function OrderForm() {
     if (!validation.ok) {
       setFieldErrors(validation.errors);
       const firstError = Object.values(validation.errors).find(Boolean);
-      if (firstError) alert(firstError);
+      if (firstError) {
+        await confirm({
+          title: "Проверьте поля",
+          description: firstError,
+          variant: "info",
+        });
+      }
       return;
     }
 
@@ -677,13 +740,37 @@ export default function OrderForm() {
         );
         return;
       }
+      if (res.status === 409) {
+        await confirm({
+          title: "Лимит заявок",
+          description:
+            json.error ||
+            "Одновременно можно иметь не больше 3 активных заявок.",
+          variant: "info",
+        });
+        router.push("/user/orders");
+        return;
+      }
       if (res.status === 403) {
-        alert(json.error || "Перед обменом необходимо пройти верификацию.");
+        const blacklisted = json.code === CLIENT_BLACKLISTED_CODE;
+        await confirm({
+          title: blacklisted ? "Аккаунт в черном списке" : "Нужна верификация",
+          description:
+            json.error ||
+            (blacklisted
+              ? formatClientBlacklistMessage(null)
+              : "Перед обменом необходимо пройти верификацию."),
+          variant: "info",
+        });
         router.push("/user/profile");
         return;
       }
       if (res.status === 400 && typeof json.error === "string" && json.error.includes("верификации")) {
-        alert(json.error);
+        await confirm({
+          title: "Нужна верификация",
+          description: json.error,
+          variant: "info",
+        });
         router.push("/user/profile");
         return;
       }
@@ -703,7 +790,11 @@ export default function OrderForm() {
     } catch (err: unknown) {
       console.error("Order creation error:", err);
       const message = err instanceof Error ? err.message : "попробуйте позже";
-      alert(`Ошибка при оформлении заявки: ${message}`);
+      await confirm({
+        title: "Не удалось создать заявку",
+        description: `Ошибка при оформлении заявки: ${message}`,
+        variant: "info",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -946,13 +1037,21 @@ export default function OrderForm() {
                 )}{" "}
                 <span className="text-red-500 font-bold ml-0.5"> * </span> :
               </label>
-              {selectedReceive.id === "sbp" ? (
+              {isBankFiatCurrency(selectedReceive) ? (
                 <SbpRequisitesFields
                   phone={wallet}
-                  bankId={sbpBankId}
+                  bankId={sbpBankId || fiatBankId(selectedReceive)}
+                  method={sbpMethod}
+                  lockBank={Boolean(fiatBankId(selectedReceive))}
                   onPhoneChange={handleWalletChange}
                   onBankChange={(id) => {
                     setSbpBankId(id);
+                    if (fieldErrors.wallet) {
+                      setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
+                    }
+                  }}
+                  onMethodChange={(next) => {
+                    setSbpMethod(next);
                     if (fieldErrors.wallet) {
                       setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
                     }
@@ -1093,6 +1192,11 @@ export default function OrderForm() {
                   <Loader2 className="w-5 h-5 animate-spin mr-2" />
                   Проверка профиля...
                 </button>
+              ) : isBlacklisted ? (
+                <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900 max-w-xl">
+                  <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-rose-600" />
+                  <p>{formatClientBlacklistMessage(blacklistReason)}</p>
+                </div>
               ) : !verified ? (
                 <>
                   <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 max-w-xl">

@@ -21,7 +21,13 @@ export function supportOnlineSubtitle(role?: SupportStaffRole | null) {
     : "Техподдержка на связи";
 }
 
-export function supportJoinedMessage(role?: SupportStaffRole | null) {
+export function supportJoinedMessage(
+  role?: SupportStaffRole | null,
+  chatNick?: string | null,
+) {
+  if (chatNick?.trim()) {
+    return `${chatNick.trim()} подключился к чату`;
+  }
   return role === "admin"
     ? "Администратор подключился к чату"
     : "Техподдержка подключилась к чату";

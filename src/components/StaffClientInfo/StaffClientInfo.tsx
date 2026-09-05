@@ -1,10 +1,11 @@
 "use client";
 
-import { Mail, Phone, Send, User } from "lucide-react";
+import { Mail, Phone, Send } from "lucide-react";
 import {
   formatClientName,
   type OrderClient,
 } from "@/src/utils/orders/client-info";
+import { avatarToneClass } from "@/src/utils/staff/permissions";
 
 export default function StaffClientInfo({
   client,
@@ -31,7 +32,9 @@ export default function StaffClientInfo({
 
     return (
         <div className="flex items-center gap-2.5 min-w-0">
-        <span className="w-8 h-8 rounded-full bg-[#FFF4C2] text-[10px] font-bold text-[#C9A227] flex items-center justify-center shrink-0">
+        <span
+          className={`w-8 h-8 rounded-full border text-[10px] font-bold flex items-center justify-center shrink-0 ${avatarToneClass("client")}`}
+        >
           {initials}
         </span>
         <div className="min-w-0">
@@ -56,9 +59,21 @@ export default function StaffClientInfo({
       <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
         Клиент
       </p>
-      <div className="flex items-start gap-2">
-        <User className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
-        <p className="text-sm font-bold text-zinc-900 break-words">{name}</p>
+      <div className="flex items-start gap-2.5">
+        <span
+          className={`w-8 h-8 rounded-full border text-[10px] font-bold flex items-center justify-center shrink-0 ${avatarToneClass("client")}`}
+        >
+          {name
+            .split(" ")
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0])
+            .join("")
+            .toUpperCase() || "К"}
+        </span>
+        <div className="min-w-0 pt-1">
+          <p className="text-sm font-bold text-zinc-900 break-words">{name}</p>
+        </div>
       </div>
       <div className="space-y-1.5 text-xs text-zinc-600">
         <div className="flex items-center gap-2 min-w-0">

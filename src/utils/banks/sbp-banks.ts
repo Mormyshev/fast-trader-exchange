@@ -4,7 +4,7 @@ export type SbpBank = {
   iconSrc: string;
 };
 
-/** Популярные банки СБП + Озон Банк */
+/** Единый полный список банков для СБП и рублёвых выплат. */
 export const SBP_BANKS: SbpBank[] = [
   { id: "sber", name: "Сбербанк", iconSrc: "/icons/sber.svg" },
   { id: "tbank", name: "Т-Банк", iconSrc: "/icons/tbank.svg" },

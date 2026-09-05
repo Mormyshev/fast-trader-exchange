@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { HelpCircle, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function NoticeMessage() {
     const [isVisible, setIsVisible] = useState(true);
@@ -8,60 +10,56 @@ export default function NoticeMessage() {
     if (!isVisible) return null;
 
     return (
-        /* 
-          Senior-решение для управления отступами:
-          - w-full заставляет плашку идеально вставать в один край с формой на десктопе.
-          - md:p-8 задает комфортные внутренние отступы на ПК, а p-5 — компактные на смартфонах.
-          - Все лишние mx-auto и max-w удалены, управление шириной передано глобальной сетке.
-        */
-        <div className="w-full p-5 md:p-8 rounded-3xl border border-white shadow-[0_12px_24px_rgba(0,0,0,0.04)] bg-gradient-to-b from-[#FFF6C7]/80 to-[#FFEE94]/80 text-zinc-900 relative transition-all duration-300 antialiased">
-            {/* Контентная область сообщения */}
-            <div className="pr-2">
-                <ul className="list-disc list-inside space-y-3.5 text-xs md:text-[13px] font-medium leading-relaxed tracking-tight text-left">
-                    {/* Пункт 1 */}
-                    <li className="marker:text-zinc-500">
-                        Для оформления заявки, Вам необходимо заполнить форму
-                        обмена, представленную ниже. При возникновении вопросов
-                        обратитесь в онлайн чат или{" "}
-                        <a
-                            href="tg://resolve?domain=finex24cash"
-                            className="text-gray-500 font-bold hover:underline transition-all"
-                        >
-                            Telegram
-                        </a>
-                        .
-                    </li>
+        <div className="relative w-full overflow-hidden rounded-2xl bg-white p-6 text-sm text-zinc-900 shadow-[0_24px_80px_rgba(15,23,42,0.08)] dark:bg-zinc-900 dark:text-zinc-50 sm:p-7">
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setIsVisible(false)}
+                className="absolute top-4 right-4 size-9 rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            >
+                <X className="size-4" />
+                <span className="sr-only">Закрыть</span>
+            </Button>
 
-                    {/* Пункт 2 */}
-                    <li className="marker:text-zinc-500">
-                        Наш офис в Москве:{" "}
-                        <strong className="font-bold text-zinc-950">
-                            Пресненская набережная 12 (Москва-Сити).
-                        </strong>
-                    </li>
-
-                    {/* Пункт 3 */}
-                    <li className="marker:text-zinc-500">
-                        Сумма к получению считается после ПОЛНОГО пересчета и
-                        получения заявки статуса "Оплаченная".
-                    </li>
-
-                    {/* Пункт 4 */}
-                    <li className="marker:text-zinc-500">
-                        Комиссия обменного пункта уже включена в курс обмена,
-                        основываясь на рынке в данном регионе. Курс формируется
-                        с использованием данных{" "}
-                        <span className="font-semibold">Rapira.net</span> и
-                        может включать в себя комиссию до 1%.
-                    </li>
-
-                    {/* Пункт 5 */}
-                    <li className="marker:text-zinc-500">
-                        На сделки с наличными обменами допускаются лица не
-                        младше 18 и не старше 53 лет.
-                    </li>
-                </ul>
+            <div className="flex size-12 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+                <HelpCircle className="size-6" />
             </div>
+
+            <div className="mt-4 space-y-1.5 pr-8">
+                <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                    Перед обменом
+                </h2>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Несколько правил, которые стоит учесть при создании заявки.
+                </p>
+            </div>
+
+            <ul className="mt-5 space-y-3 text-sm font-medium leading-relaxed text-zinc-600 dark:text-zinc-300">
+                <li>
+                    Для оформления заявки заполните форму обмена ниже. Если
+                    возникнут вопросы, напишите в онлайн-чат или{" "}
+                    <a
+                        href="tg://resolve?domain=finex24cash"
+                        className="font-bold text-[#C9A227] hover:underline"
+                    >
+                        Telegram
+                    </a>
+                    .
+                </li>
+                <li>
+                    Сумма к получению считается после полного пересчёта и
+                    статуса заявки «Оплаченная».
+                </li>
+                <li>
+                    Комиссия обменного пункта уже включена в курс. Курс
+                    формируется по данным{" "}
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-100">
+                        Rapira.net
+                    </span>{" "}
+                    и может включать комиссию до 1%.
+                </li>
+            </ul>
         </div>
     );
 }

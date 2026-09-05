@@ -138,13 +138,9 @@ export async function POST(request: Request, context: RouteContext) {
         { status: 400 },
       );
     }
-    if (
-      profile?.role !== "admin" &&
-      order.operator_id &&
-      order.operator_id !== user.id
-    ) {
+    if (order.operator_id !== user.id) {
       return NextResponse.json(
-        { error: "Эту заявку ведёт другой оператор" },
+        { error: "Сначала возьмите заявку в работу" },
         { status: 403 },
       );
     }

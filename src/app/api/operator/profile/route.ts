@@ -12,7 +12,7 @@ export async function GET() {
     const { data, error } = await withTimeout(
       staff.admin
         .from("profiles")
-        .select("id, email, role, operator_pseudonym")
+        .select("id, email, role, operator_pseudonym, chat_pseudonym")
         .eq("id", staff.user.id)
         .maybeSingle(),
       8000,
@@ -33,7 +33,7 @@ export async function GET() {
 export async function PATCH() {
   return NextResponse.json(
     {
-      error: "Псевдоним назначает только администратор",
+      error: "Ник назначает только администратор",
       code: "ADMIN_ONLY",
     },
     { status: 403 },

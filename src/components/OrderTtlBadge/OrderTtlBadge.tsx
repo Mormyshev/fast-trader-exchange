@@ -43,7 +43,7 @@ export function OrderTtlBadge({
   const now = nowProp ?? localNow;
   const left = formatOrderTimeLeft(createdAt, now);
   const expired = isOrderExpiredByTtl(createdAt, now);
-  const urgent = !expired && orderExpiresAt(createdAt) - now < 60_000;
+  const urgent = !expired && orderExpiresAt(createdAt) - now < 3 * 60_000;
 
   return (
     <span
@@ -60,13 +60,22 @@ export function OrderTtlBadge({
   );
 }
 
-/** Single shared second-ticker for list pages. */
-export function useNowTick(enabled = true): number {
+/** Wall-clock ticker aligned to the next second, like an exchange clock. */
+export function useNowTick(enabled = true, intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!enabled) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [enabled]);
+    let intervalId = 0;
+    const tick = () => setNow(Date.now());
+    const delay = Math.max(0, intervalMs - (Date.now() % intervalMs));
+    const timeoutId = window.setTimeout(() => {
+      tick();
+      intervalId = window.setInterval(tick, intervalMs);
+    }, delay);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
+  }, [enabled, intervalMs]);
   return now;
 }

@@ -1,10 +1,15 @@
 import {
   findCurrencyById,
+  isBankFiatCurrencyId,
   isCryptoCurrency,
   type ExchangeCurrency,
 } from "@/src/utils/exchange-currencies";
-import { formatPhoneInput } from "./common";
-import { validateSbpRequisites } from "./sbp-payout";
+import { digitsOnly, formatCardInput, luhnCheck } from "./card";
+import {
+  detectSbpPayoutMethod,
+  formatSbpDestination,
+  validateSbpRequisites,
+} from "./sbp-payout";
 import { validationError, validationOk, type ValidationResult } from "./types";
 
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]+$/;
@@ -18,25 +23,6 @@ export { orderCodeToCurrencyId } from "@/src/utils/exchange-currencies";
 
 export function isCryptoOrderCode(orderCode: string): boolean {
   return !/^RUB/i.test(orderCode);
-}
-
-function digitsOnly(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
-function luhnCheck(card: string): boolean {
-  let sum = 0;
-  let alt = false;
-  for (let i = card.length - 1; i >= 0; i -= 1) {
-    let n = Number(card[i]);
-    if (alt) {
-      n *= 2;
-      if (n > 9) n -= 9;
-    }
-    sum += n;
-    alt = !alt;
-  }
-  return sum % 10 === 0;
 }
 
 function networkLabel(currency: ExchangeCurrency | undefined): string {
@@ -96,7 +82,7 @@ function detectWrongNetwork(
 
 export function formatWalletInput(value: string, currencyId: string): string {
   if (currencyId === "sbp") {
-    return formatPhoneInput(value);
+    return formatSbpDestination(value, detectSbpPayoutMethod(value));
   }
   if (currencyId === "usdt_trc20") {
     if (value === "") return "";
@@ -233,8 +219,9 @@ export function validateFiatRequisites(
 
   const digits = digitsOnly(trimmed);
 
-  if (currencyId === "sbp") {
-    return validateSbpRequisites(trimmed);
+  if (isBankFiatCurrencyId(currencyId)) {
+    const sbp = validateSbpRequisites(trimmed);
+    if (sbp.ok || currencyId === "sbp" || trimmed.includes(" · ")) return sbp;
   }
 
   if (currencyId === "rub_cash") {
@@ -245,7 +232,7 @@ export function validateFiatRequisites(
     if (!luhnCheck(digits)) {
       return validationError(`Некорректный номер карты (${channel})`);
     }
-    return validationOk(digits.replace(/(.{4})/g, "$1 ").trim());
+    return validationOk(formatCardInput(digits));
   }
 
   if (digits.length === 20) {

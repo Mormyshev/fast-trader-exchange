@@ -11,6 +11,7 @@ import {
   OPERATOR_PROFILE_FIELDS,
   parseAssignedPseudonym,
 } from "@/src/utils/staff/operators-admin";
+import { isChatNickTaken, parseChatNick } from "@/src/utils/staff/chat-nicks";
 
 export async function GET() {
   try {
@@ -37,6 +38,7 @@ export async function GET() {
       email: string;
       role: string;
       operator_pseudonym: string | null;
+      chat_pseudonym: string | null;
       staff_active: boolean | null;
       is_senior_operator: boolean | null;
       updated_at: string | null;
@@ -95,7 +97,18 @@ export async function POST(request: Request) {
     }
     if (await isPseudonymTaken(actor.admin, pseudonymCheck.value)) {
       return NextResponse.json(
-        { error: "Этот псевдоним уже занят" },
+        { error: "Этот ник уже занят" },
+        { status: 409 },
+      );
+    }
+
+    const chatNickCheck = parseChatNick(body?.chat_pseudonym);
+    if (!chatNickCheck.ok) {
+      return NextResponse.json({ error: chatNickCheck.error }, { status: 400 });
+    }
+    if (await isChatNickTaken(actor.admin, chatNickCheck.value)) {
+      return NextResponse.json(
+        { error: "Этот ник для чата уже занят" },
         { status: 409 },
       );
     }
@@ -128,6 +141,7 @@ export async function POST(request: Request) {
             email: emailCheck.value,
             role: "operator",
             operator_pseudonym: pseudonymCheck.value,
+            chat_pseudonym: chatNickCheck.value,
             staff_active: false,
             is_senior_operator: body?.is_senior_operator === true,
             updated_at: now,

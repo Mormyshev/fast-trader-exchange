@@ -5,7 +5,6 @@ import { createClient } from "@/src/utils/supabase/client";
 import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeVerificationsInbox } from "@/src/utils/supabase/verifications-inbox";
 import {
-  ShieldAlert,
   Check,
   X,
   Phone,
@@ -15,28 +14,25 @@ import {
   RefreshCw,
   Clock,
   MessageSquare,
+  Ban,
+  Users,
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
+import ReasonDialog from "@/src/components/staff/ReasonDialog";
 import { normalizeVerificationStatus } from "@/src/utils/verification";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
+import { parseBlacklistReason } from "@/src/utils/clients/blacklist";
 
-type VerificationTab = "pending" | "verified" | "rejected";
+type VerificationTab = "pending" | "verified" | "rejected" | "blacklisted";
 
 interface ProfileRequest {
   id: string;
   email: string;
+  role?: string | null;
   last_name: string | null;
   first_name: string | null;
   middle_name: string | null;
@@ -49,12 +45,15 @@ interface ProfileRequest {
   verification: string | null;
   verification_rejection_comment: string | null;
   updated_at: string | null;
+  is_blacklisted?: boolean | null;
+  blacklist_reason?: string | null;
 }
 
 const TAB_LABELS: Record<VerificationTab, string> = {
   pending: "На проверке",
   verified: "Принятые",
   rejected: "Отменённые",
+  blacklisted: "Черный список",
 };
 
 function formatSubmittedAt(iso: string | null | undefined) {
@@ -89,6 +88,11 @@ export default function VerificationQueue() {
   const [rejectTarget, setRejectTarget] = useState<ProfileRequest | null>(null);
   const [rejectComment, setRejectComment] = useState("");
   const [rejectError, setRejectError] = useState<string | null>(null);
+  const [blacklistTarget, setBlacklistTarget] = useState<ProfileRequest | null>(
+    null,
+  );
+  const [blacklistReason, setBlacklistReason] = useState("");
+  const [blacklistError, setBlacklistError] = useState<string | null>(null);
 
   const fetchRequests = useCallback(async (tab: VerificationTab) => {
     try {
@@ -110,9 +114,16 @@ export default function VerificationQueue() {
   const applyProfile = useCallback(
     (row: ProfileRequest) => {
       if (!row?.id) return;
+      if (row.role && row.role !== "user") {
+        setRequests((prev) => prev.filter((req) => req.id !== row.id));
+        return;
+      }
+      const blacklisted = row.is_blacklisted === true;
       const status = normalizeVerificationStatus(row.verification);
+      const belongsHere =
+        activeTab === "blacklisted" ? blacklisted : !blacklisted && status === activeTab;
 
-      if (status === activeTab) {
+      if (belongsHere) {
         setRequests((prev) => {
           const without = prev.filter((req) => req.id !== row.id);
           return [row, ...without];
@@ -180,7 +191,11 @@ export default function VerificationQueue() {
     comment?: string,
   ) => {
     if (!staffActive) {
-      alert(STAFF_INACTIVE_ERROR);
+      await confirm({
+        title: "Смена недоступна",
+        description: STAFF_INACTIVE_ERROR,
+        variant: "info",
+      });
       return;
     }
     setProcessingId(id);
@@ -198,16 +213,22 @@ export default function VerificationQueue() {
         throw new Error(json.error || "Ошибка обновления");
       }
 
-      alert(
-        status === "verified"
-          ? "Анкета успешно подтверждена!"
-          : "Анкета отклонена. Пользователь увидит ваш комментарий.",
-      );
+      await confirm({
+        title:
+          status === "verified" ? "Анкета подтверждена" : "Анкета отклонена",
+        description:
+          status === "verified"
+            ? "Пользователь получит доступ к обмену."
+            : "Пользователь увидит ваш комментарий.",
+        variant: "success",
+      });
     } catch (err: unknown) {
       console.error("Ошибка обновления статуса:", err);
-      alert(
-        `Ошибка: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`,
-      );
+      await confirm({
+        title: "Не удалось обновить анкету",
+        description: err instanceof Error ? err.message : "Неизвестная ошибка",
+        variant: "info",
+      });
     } finally {
       setProcessingId(null);
     }
@@ -215,7 +236,11 @@ export default function VerificationQueue() {
 
   const handleApprove = async (req: ProfileRequest) => {
     if (!staffActive) {
-      alert(STAFF_INACTIVE_ERROR);
+      await confirm({
+        title: "Смена недоступна",
+        description: STAFF_INACTIVE_ERROR,
+        variant: "info",
+      });
       return;
     }
     const ok = await confirm({
@@ -235,7 +260,11 @@ export default function VerificationQueue() {
 
   const openRejectDialog = (req: ProfileRequest) => {
     if (!staffActive) {
-      alert(STAFF_INACTIVE_ERROR);
+      void confirm({
+        title: "Смена недоступна",
+        description: STAFF_INACTIVE_ERROR,
+        variant: "info",
+      });
       return;
     }
     setRejectTarget(req);
@@ -261,41 +290,186 @@ export default function VerificationQueue() {
     await submitVerdict(rejectTarget.id, "rejected", comment);
   };
 
+  const closeBlacklistDialog = () => {
+    setBlacklistTarget(null);
+    setBlacklistReason("");
+    setBlacklistError(null);
+  };
+
+  const openBlacklistDialog = (req: ProfileRequest) => {
+    if (!staffActive) {
+      void confirm({
+        title: "Смена недоступна",
+        description: STAFF_INACTIVE_ERROR,
+        variant: "info",
+      });
+      return;
+    }
+    setBlacklistTarget(req);
+    setBlacklistReason("");
+    setBlacklistError(null);
+  };
+
+  const submitBlacklistAction = async (
+    id: string,
+    action: "blacklist" | "unblacklist",
+    reason?: string,
+  ) => {
+    if (!staffActive) {
+      await confirm({
+        title: "Смена недоступна",
+        description: STAFF_INACTIVE_ERROR,
+        variant: "info",
+      });
+      return;
+    }
+    setProcessingId(id);
+    setRequests((prev) => prev.filter((req) => req.id !== id));
+
+    try {
+      const res = await fetch("/api/verifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action, reason }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        await fetchRequests(activeTab);
+        throw new Error(json.error || "Ошибка обновления");
+      }
+      await confirm({
+        title:
+          action === "blacklist"
+            ? "Клиент в черном списке"
+            : "Клиент убран из черного списка",
+        description:
+          action === "blacklist"
+            ? "Он увидит причину и не сможет создавать заявки."
+            : "Доступ к обмену снова зависит от статуса верификации.",
+        variant: "success",
+      });
+    } catch (err: unknown) {
+      await confirm({
+        title: "Не удалось обновить черный список",
+        description: err instanceof Error ? err.message : "Неизвестная ошибка",
+        variant: "info",
+      });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleBlacklistSubmit = async () => {
+    if (!blacklistTarget) return;
+    const parsed = parseBlacklistReason(blacklistReason);
+    if (!parsed.ok) {
+      setBlacklistError(parsed.error);
+      return;
+    }
+    const targetId = blacklistTarget.id;
+    closeBlacklistDialog();
+    await submitBlacklistAction(targetId, "blacklist", parsed.value);
+  };
+
+  const handleUnblacklist = async (req: ProfileRequest) => {
+    if (!staffActive) {
+      await confirm({
+        title: "Смена недоступна",
+        description: STAFF_INACTIVE_ERROR,
+        variant: "info",
+      });
+      return;
+    }
+    const ok = await confirm({
+      title: "Убрать из черного списка?",
+      description: `${req.email} снова сможет пользоваться платформой, если анкета подтверждена.`,
+      confirmLabel: "Убрать",
+    });
+    if (!ok) return;
+    await submitBlacklistAction(req.id, "unblacklist");
+  };
+
   const emptyText =
     activeTab === "pending"
       ? "Новых заявок на верификацию нет"
       : activeTab === "verified"
         ? "Принятых анкет пока нет"
-        : "Отменённых анкет пока нет";
+        : activeTab === "rejected"
+          ? "Отменённых анкет пока нет"
+          : "В черном списке никого нет";
+
+  const renderBlacklistButton = (req: ProfileRequest, compact = false) => (
+    <Button
+      size="sm"
+      variant="destructive"
+      disabled={processingId === req.id || !staffActive}
+      onClick={() => openBlacklistDialog(req)}
+      className={`rounded-full font-bold ${
+        compact ? "h-10 text-xs w-full" : "h-8 px-3 text-xs"
+      }`}
+    >
+      <Ban className="h-3.5 w-3.5 mr-1" />
+      В черный список
+    </Button>
+  );
 
   const renderActions = (req: ProfileRequest, compact = false) => {
-    if (activeTab === "verified") {
-      return (
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-          Подтверждена
-        </span>
-      );
-    }
-
-    if (activeTab === "rejected") {
+    if (activeTab === "blacklisted") {
       return (
         <Button
           size="sm"
           disabled={processingId === req.id || !staffActive}
-          onClick={() => void handleApprove(req)}
-          className={`rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold ${
+          onClick={() => void handleUnblacklist(req)}
+          className={`rounded-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold ${
             compact ? "h-10 text-xs w-full" : "h-8 px-3 text-xs"
           }`}
         >
           {processingId === req.id ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <>
-              <Check className="h-3.5 w-3.5 mr-1" />
-              Принять
-            </>
+            "Убрать из ЧС"
           )}
         </Button>
+      );
+    }
+
+    if (activeTab === "verified") {
+      return (
+        <div
+          className={`flex ${compact ? "grid grid-cols-1 gap-2" : "items-center justify-end gap-2"}`}
+        >
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+            Подтверждена
+          </span>
+          {renderBlacklistButton(req, compact)}
+        </div>
+      );
+    }
+
+    if (activeTab === "rejected") {
+      return (
+        <div
+          className={`flex ${compact ? "grid grid-cols-1 sm:grid-cols-2 gap-2" : "items-center justify-end gap-2"}`}
+        >
+          <Button
+            size="sm"
+            disabled={processingId === req.id || !staffActive}
+            onClick={() => void handleApprove(req)}
+            className={`rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold ${
+              compact ? "h-10 text-xs w-full" : "h-8 px-3 text-xs"
+            }`}
+          >
+            {processingId === req.id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <>
+                <Check className="h-3.5 w-3.5 mr-1" />
+                Принять
+              </>
+            )}
+          </Button>
+          {renderBlacklistButton(req, compact)}
+        </div>
       );
     }
 
@@ -332,6 +506,7 @@ export default function VerificationQueue() {
           <X className="h-3.5 w-3.5 mr-1" />
           Отклонить
         </Button>
+        {renderBlacklistButton(req, compact)}
       </div>
     );
   };
@@ -352,12 +527,12 @@ export default function VerificationQueue() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start sm:items-center gap-3 min-w-0">
           <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227] shrink-0">
-            <ShieldAlert className="h-5 w-5 sm:h-6 sm:w-6" />
+            <Users className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-2xl font-bold">Верификация аккаунтов</h1>
+            <h1 className="text-lg sm:text-2xl font-bold">Клиенты</h1>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400">
-              Проверка анкет пользователей — только для администратора
+              Анкеты и черный список — для админа и старшего оператора
             </p>
           </div>
         </div>
@@ -462,6 +637,15 @@ export default function VerificationQueue() {
                     {req.verification_rejection_comment}
                   </div>
                 )}
+                {activeTab === "blacklisted" && req.blacklist_reason ? (
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                    <div className="flex items-center gap-1.5 font-bold mb-1">
+                      <Ban className="h-3 w-3" />
+                      Причина
+                    </div>
+                    {req.blacklist_reason}
+                  </div>
+                ) : null}
                 {req.passport_url || req.selfie_url || req.extra_document_url ? (
                   <div className="flex flex-wrap gap-2">
                     {req.passport_url ? (
@@ -517,6 +701,9 @@ export default function VerificationQueue() {
                     {activeTab === "rejected" && (
                       <th className="px-6 py-4">Комментарий</th>
                     )}
+                    {activeTab === "blacklisted" && (
+                      <th className="px-6 py-4">Причина</th>
+                    )}
                     <th className="px-6 py-4">Документ</th>
                     <th className="px-6 py-4 text-right">Действия</th>
                   </tr>
@@ -559,6 +746,11 @@ export default function VerificationQueue() {
                       {activeTab === "rejected" && (
                         <td className="px-6 py-4 text-xs text-rose-700 max-w-[220px]">
                           {req.verification_rejection_comment || "—"}
+                        </td>
+                      )}
+                      {activeTab === "blacklisted" && (
+                        <td className="px-6 py-4 text-xs text-zinc-700 max-w-[240px]">
+                          {req.blacklist_reason || "—"}
                         </td>
                       )}
                       <td className="px-6 py-4">
@@ -611,60 +803,38 @@ export default function VerificationQueue() {
         </>
       )}
 
-      <Dialog
+      <ReasonDialog
         open={!!rejectTarget}
-        onOpenChange={(open) => {
-          if (!open) closeRejectDialog();
+        title="Отклонить анкету"
+        description="Укажите причину — пользователь увидит комментарий и сможет исправить данные."
+        placeholder="Например: фото паспорта нечитаемо, исправьте и отправьте снова"
+        confirmLabel="Отклонить"
+        icon="alert"
+        value={rejectComment}
+        error={rejectError}
+        onChange={(next) => {
+          setRejectComment(next);
+          if (rejectError) setRejectError(null);
         }}
-      >
-        <DialogContent showCloseButton={false} className="sm:max-w-[440px]">
-          <div className="flex items-start gap-3.5">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
-              <X className="size-5" />
-            </div>
-            <DialogHeader className="flex-1 gap-1.5 pr-0">
-              <DialogTitle>Отклонить анкету</DialogTitle>
-              <DialogDescription>
-                Укажите причину — пользователь увидит комментарий и сможет
-                исправить данные.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-          <textarea
-            value={rejectComment}
-            onChange={(e) => {
-              setRejectComment(e.target.value);
-              if (rejectError) setRejectError(null);
-            }}
-            rows={4}
-            maxLength={1000}
-            placeholder="Например: фото паспорта нечитаемо, исправьте и отправьте снова"
-            className={`w-full rounded-2xl border bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-800 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#FFDD2D] focus:bg-white ${
-              rejectError ? "border-rose-400" : "border-zinc-200"
-            }`}
-          />
-          {rejectError && (
-            <p className="text-xs font-medium text-rose-600">{rejectError}</p>
-          )}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={closeRejectDialog}
-              className="h-11 rounded-xl border-zinc-200 px-5 font-bold text-zinc-700 hover:bg-zinc-50"
-            >
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleRejectSubmit()}
-              className="h-11 rounded-xl bg-rose-600 px-5 font-bold text-white shadow-none hover:bg-rose-700"
-            >
-              Отклонить
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onClose={closeRejectDialog}
+        onConfirm={() => void handleRejectSubmit()}
+      />
+
+      <ReasonDialog
+        open={!!blacklistTarget}
+        title="Добавить в черный список"
+        description="Укажите причину. Клиент увидит её и не сможет создавать заявки."
+        placeholder="Например: мошенничество, повторные отмены, поддельные документы"
+        confirmLabel="В черный список"
+        value={blacklistReason}
+        error={blacklistError}
+        onChange={(next) => {
+          setBlacklistReason(next);
+          if (blacklistError) setBlacklistError(null);
+        }}
+        onClose={closeBlacklistDialog}
+        onConfirm={() => void handleBlacklistSubmit()}
+      />
 
       {selectedPhoto && (
         <div

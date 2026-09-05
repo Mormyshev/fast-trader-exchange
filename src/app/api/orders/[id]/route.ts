@@ -145,19 +145,20 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
-    if (
-      actor.isStaff &&
-      actor.role !== "admin" &&
-      current.operator_id &&
-      current.operator_id !== actor.user.id
-    ) {
+    if (actor.isStaff) {
+      const nextOperatorId =
+        typeof body.operator_id === "string"
+          ? body.operator_id
+          : body.operator_id === null
+            ? null
+            : current.operator_id;
       const touchingProcess =
         typeof body.payment_details === "string" ||
         typeof body.operator_receipt_url === "string" ||
         typeof body.status === "string";
-      if (touchingProcess) {
+      if (touchingProcess && nextOperatorId !== actor.user.id) {
         return NextResponse.json(
-          { error: "Эту заявку ведёт другой оператор" },
+          { error: "Сначала возьмите заявку в работу" },
           { status: 403 },
         );
       }

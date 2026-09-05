@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeftRight, HelpCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowLeftRight,
+  CheckCircle2,
+  HelpCircle,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +33,7 @@ export type ConfirmDialogOptions = {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: "default" | "destructive";
+  variant?: "default" | "destructive" | "success" | "info";
   summary?: ConfirmDialogSummaryItem[];
 };
 
@@ -43,14 +49,19 @@ function ConfirmDialogView({
   const {
     title,
     description,
-    confirmLabel = "Подтвердить",
+    confirmLabel,
     cancelLabel = "Отмена",
     variant = "default",
     summary,
   } = options;
 
   const isDestructive = variant === "destructive";
+  const isSuccess = variant === "success";
+  const isInfo = variant === "info";
   const hasSummary = Boolean(summary?.length);
+  const showCancel = !isSuccess && !isInfo;
+  const actionLabel =
+    confirmLabel ?? (isSuccess || isInfo ? "Понятно" : "Подтвердить");
 
   return (
     <Dialog
@@ -68,11 +79,15 @@ function ConfirmDialogView({
             className={`flex size-12 items-center justify-center rounded-xl ${
               isDestructive
                 ? "bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400"
-                : "bg-[#FFF4C2] text-[#C9A227]"
+                : isSuccess
+                  ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"
+                  : "bg-[#FFF4C2] text-[#C9A227]"
             }`}
           >
             {isDestructive ? (
               <AlertTriangle className="size-6" />
+            ) : isSuccess ? (
+              <CheckCircle2 className="size-6" />
             ) : hasSummary ? (
               <ArrowLeftRight className="size-6" />
             ) : (
@@ -137,14 +152,16 @@ function ConfirmDialogView({
         ) : null}
 
         <DialogFooter className="flex-col-reverse gap-2.5 sm:flex-col-reverse sm:justify-stretch">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onClose(false)}
-            className="h-11 w-full rounded-xl border-zinc-200 px-5 font-bold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200"
-          >
-            {cancelLabel}
-          </Button>
+          {showCancel ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onClose(false)}
+              className="h-11 w-full rounded-xl border-zinc-200 px-5 font-bold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200"
+            >
+              {cancelLabel}
+            </Button>
+          ) : null}
           <Button
             type="button"
             onClick={() => onClose(true)}
@@ -154,7 +171,7 @@ function ConfirmDialogView({
                 : "h-11 w-full rounded-xl bg-[#FFDD2D] px-5 font-bold text-zinc-900 shadow-none hover:bg-[#e6c628]"
             }
           >
-            {confirmLabel}
+            {actionLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

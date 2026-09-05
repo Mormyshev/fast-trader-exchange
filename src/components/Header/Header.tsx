@@ -14,7 +14,9 @@ import {
   SheetTrigger,
   SheetTitle,
 } from "@/components/ui/sheet";
-import UserCabinetNav from "@/src/components/UserCabinetNav/UserCabinetNav";
+import UserCabinetNav, {
+  USER_NAV_ITEMS,
+} from "@/src/components/UserCabinetNav/UserCabinetNav";
 
 function getStaffHome(role: string) {
   return {
@@ -128,31 +130,20 @@ export default function Header() {
                     {role !== "guest" && (
                       <div className="bg-[#FFDD2D] text-zinc-900 rounded-2xl p-2.5 flex flex-col shadow-sm mb-6">
                         {role === "user" ? (
-                          <>
-                            <NextLink
-                              href="/user/exchange"
-                              onClick={() => setIsOpen(false)}
-                              className="block min-w-0 text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer truncate"
-                            >
-                              Обмен
-                            </NextLink>
-                            <div className="h-[1px] bg-black/10 w-full my-0.5" />
-                            <NextLink
-                              href="/user/orders"
-                              onClick={() => setIsOpen(false)}
-                              className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer"
-                            >
-                              Заявки
-                            </NextLink>
-                            <div className="h-[1px] bg-black/10 w-full my-0.5" />
-                            <NextLink
-                              href="/user/profile"
-                              onClick={() => setIsOpen(false)}
-                              className="block text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer"
-                            >
-                              Профиль
-                            </NextLink>
-                          </>
+                          USER_NAV_ITEMS.map((item, index) => (
+                            <div key={item.href}>
+                              {index > 0 ? (
+                                <div className="h-[1px] bg-black/10 w-full my-0.5" />
+                              ) : null}
+                              <NextLink
+                                href={item.href}
+                                onClick={() => setIsOpen(false)}
+                                className="block min-w-0 text-[15px] font-semibold py-3 px-3 rounded-xl hover:bg-black/5 transition-colors cursor-pointer truncate"
+                              >
+                                {item.label}
+                              </NextLink>
+                            </div>
+                          ))
                         ) : (
                           <NextLink
                             href={staffHome.href}

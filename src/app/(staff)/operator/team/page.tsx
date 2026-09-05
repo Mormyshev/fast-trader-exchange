@@ -305,7 +305,13 @@ export default function StaffTeamChatPage() {
                           preview={messagePreview(conversation)}
                           selected={selectedId === conversation.id}
                           unread={conversation.unread}
-                          icon={<OperatorAvatar name={name} className="w-9 h-9" />}
+                          icon={
+                            <OperatorAvatar
+                              name={name}
+                              className="w-9 h-9"
+                              profile={conversation.peer}
+                            />
+                          }
                           onSelect={() => setSelectedId(conversation.id)}
                         />
                       );
@@ -328,7 +334,11 @@ export default function StaffTeamChatPage() {
                           onClick={() => void openPeer(peer.id)}
                           className="w-full text-left px-4 py-3 border-b border-zinc-100 hover:bg-[#FFF8D6] transition-colors flex items-center gap-3 border-l-4 border-l-transparent"
                         >
-                          <OperatorAvatar name={name} className="w-9 h-9" />
+                          <OperatorAvatar
+                            name={name}
+                            className="w-9 h-9"
+                            profile={peer}
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-bold text-zinc-900 truncate">
                               {name}

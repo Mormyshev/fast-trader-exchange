@@ -84,7 +84,7 @@ export async function enrichConversations(
     withTimeout(
       admin
         .from("profiles")
-        .select("id, email, first_name, last_name, operator_pseudonym, role")
+        .select("id, email, first_name, last_name, operator_pseudonym, chat_pseudonym, role, is_senior_operator")
         .in("id", [...profileIds]),
       8000,
       { data: [], error: null } as any,

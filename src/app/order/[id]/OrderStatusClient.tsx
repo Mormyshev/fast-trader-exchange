@@ -34,6 +34,7 @@ import {
   orderStatusBannerClass,
 } from "@/src/utils/orders/status-style";
 import { Button } from "@/components/ui/button";
+import OrderSupportBlock from "@/src/components/Support/OrderSupportBlock";
 
 type OrderStatus =
   | "pending"
@@ -283,8 +284,9 @@ export default function OrderStatusClient({
     }
   };
 
-  const payInIsCrypto =
-    parsePaymentDetails(order.payment_details).kind === "crypto";
+  const payIn = parsePaymentDetails(order.payment_details);
+  const payInIsCrypto = payIn.kind === "crypto";
+  const payInIsCard = payIn.method === "card" || Boolean(payIn.card);
   const receiptReady = Boolean(order.receipt_url || uploadSuccess);
   const status = order.status as OrderStatus;
 
@@ -387,18 +389,26 @@ export default function OrderStatusClient({
                 <p className="text-sm font-bold text-violet-900 dark:text-violet-200">
                   {payInIsCrypto
                     ? "Отправьте крипту на указанный адрес"
-                    : "Оплатите заявку через СБП"}
+                    : payInIsCard
+                      ? "Оплатите заявку на карту"
+                      : "Оплатите заявку через СБП"}
                 </p>
                 <p className="text-xs font-medium text-zinc-500 mt-1">
                   {payInIsCrypto
                     ? "Переведите точную сумму на адрес кошелька мерчанта."
-                    : "Переведите точную сумму на указанный номер телефона в выбранный банк."}
+                    : payInIsCard
+                      ? "Переведите точную сумму на указанный номер карты."
+                      : "Переведите точную сумму на указанный номер телефона в выбранный банк."}
                 </p>
               </div>
 
               <div className="rounded-2xl bg-white border border-violet-200 p-4 space-y-2 dark:bg-zinc-900 dark:border-violet-400/30">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                  {payInIsCrypto ? "Реквизиты для оплаты" : "Реквизиты СБП"}
+                  {payInIsCrypto
+                    ? "Реквизиты для оплаты"
+                    : payInIsCard
+                      ? "Реквизиты карты"
+                      : "Реквизиты СБП"}
                 </p>
                 <PaymentRequisitesView value={order.payment_details} />
               </div>
@@ -548,6 +558,18 @@ export default function OrderStatusClient({
           )}
         </div>
       </div>
+
+      <OrderSupportBlock
+        order={{
+          id: order.id,
+          order_number: order.order_number,
+          status,
+          amount_from: order.amount_from,
+          amount_to: order.amount_to,
+          currency_from: order.currency_from,
+          currency_to: order.currency_to,
+        }}
+      />
       <ConfirmDialogHost />
     </div>
   );

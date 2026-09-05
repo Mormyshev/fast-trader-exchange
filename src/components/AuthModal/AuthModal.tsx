@@ -10,6 +10,7 @@ import {
 } from "@/src/utils/captcha/recaptcha-v2";
 import { isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
 import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
+import PasswordInput from "@/src/components/PasswordInput/PasswordInput";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -297,13 +298,13 @@ export default function AuthModal({
             <label className="block text-xs font-semibold text-zinc-500 pl-1">
               Пароль *
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full h-12 bg-white border border-zinc-200 rounded-full px-6 text-sm font-medium focus:outline-hidden focus:border-[#FFDD2D]"
               required
               disabled={isLoading}
+              autoComplete="current-password"
             />
             <div className="flex justify-end pt-1">
               <button

@@ -48,8 +48,13 @@ model Profiles {
   extra_document_url String?
   verification_rejection_comment String?
   operator_pseudonym String?
+  chat_pseudonym String?
   staff_active Boolean @default(false)
   is_senior_operator Boolean @default(false)
+  is_blacklisted Boolean @default(false)
+  blacklist_reason String?
+  blacklisted_at DateTime? @db.Timestamptz
+  blacklisted_by String? @db.Uuid
 
   orders_as_user     Orders[]     @relation("UserOrders")
   orders_as_operator Orders[]     @relation("OperatorOrders")

@@ -5,8 +5,10 @@ import {
   requireClient,
   requireStaff,
 } from "@/src/utils/chat/auth";
+import { getOrCreateClientConversation } from "@/src/utils/chat/client-conversation";
 import { broadcastChatConversation } from "@/src/utils/supabase/broadcast-support";
 import { enrichConversations } from "@/src/utils/chat/enrich-conversation";
+import { hideInternalStaffNicks } from "@/src/utils/chat/staff-chat";
 
 export async function GET() {
   try {
@@ -39,49 +41,32 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    let { data: row, error } = await withTimeout(
-      actor.admin
-        .from("chat_conversations")
-        .select("*")
-        .eq("user_id", actor.user.id)
-        .eq("status", "open")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      8000,
-      { data: null, error: { message: "Database timeout" } } as any,
+    const conversationResult = await getOrCreateClientConversation(
+      actor.admin,
+      actor.user.id,
     );
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
-    }
-
-    if (!row) {
-      const created = await withTimeout(
-        actor.admin
-          .from("chat_conversations")
-          .insert({ user_id: actor.user.id, status: "open" })
-          .select("*")
-          .single(),
-        8000,
-        { data: null, error: { message: "Database timeout" } } as any,
+    if (!conversationResult.ok) {
+      return NextResponse.json(
+        { error: conversationResult.error },
+        { status: 503 },
       );
-
-      if (created.error || !created.data) {
-        return NextResponse.json(
-          { error: created.error?.message ?? "Failed to create conversation" },
-          { status: 503 },
-        );
-      }
-
-      row = created.data;
-      const [conversation] = await enrichConversations(actor.admin, [row]);
-      void broadcastChatConversation({ conversation });
-      return NextResponse.json({ conversation });
     }
 
-    const [conversation] = await enrichConversations(actor.admin, [row]);
-    return NextResponse.json({ conversation });
+    const [conversation] = await enrichConversations(actor.admin, [
+      conversationResult.row,
+    ]);
+    if (!conversation) {
+      return NextResponse.json(
+        { error: "Не удалось открыть чат" },
+        { status: 503 },
+      );
+    }
+    if (conversationResult.created) {
+      void broadcastChatConversation({ conversation });
+    }
+    return NextResponse.json({
+      conversation: hideInternalStaffNicks(conversation),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

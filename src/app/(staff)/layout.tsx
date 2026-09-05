@@ -48,22 +48,15 @@ export default async function StaffLayout({
   );
 
   return (
-    <>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `(function(){try{var m=document.cookie.match(/(?:^|; )fte-staff-theme=([^;]*)/);var d=m&&m[1]==="dark";document.documentElement.classList.toggle("dark",!!d);document.documentElement.classList.toggle("staff-dark",!!d);}catch(e){}})();`,
-        }}
-      />
-      <StaffThemeProvider initialTheme={initialTheme}>
-        <StaffLayoutClient
-          role={role}
-          initialOperatorPseudonym={operatorPseudonym}
-          initialStaffActive={initialStaffActive}
-          initialIsSeniorOperator={initialIsSeniorOperator}
-        >
-          {children}
-        </StaffLayoutClient>
-      </StaffThemeProvider>
-    </>
+    <StaffThemeProvider initialTheme={initialTheme}>
+      <StaffLayoutClient
+        role={role}
+        initialOperatorPseudonym={operatorPseudonym}
+        initialStaffActive={initialStaffActive}
+        initialIsSeniorOperator={initialIsSeniorOperator}
+      >
+        {children}
+      </StaffLayoutClient>
+    </StaffThemeProvider>
   );
 }

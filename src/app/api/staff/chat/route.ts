@@ -243,13 +243,14 @@ export async function POST(request: Request) {
 
     const profiles = staffProfilesMap([
       mapStaffPeer(peerRow),
-      {
+      mapStaffPeer({
         id: staff.user.id,
         email: staff.user.email ?? "",
         role: staff.profile.role,
         operator_pseudonym: staff.profile.operator_pseudonym,
         staff_active: staff.profile.staff_active,
-      },
+        is_senior_operator: staff.profile.is_senior_operator,
+      }),
     ]);
     const [conversation] = await enrichRows(
       staff.admin,

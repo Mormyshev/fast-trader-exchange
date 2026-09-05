@@ -29,6 +29,7 @@ type ScheduleOperator = {
   email: string;
   operator_pseudonym: string | null;
   staff_active: boolean;
+  is_senior_operator?: boolean | null;
 };
 
 type CellTarget = {
@@ -189,7 +190,14 @@ export default function StaffScheduleBoard() {
     const isMe = operator.id === user?.id;
     return (
       <div className="flex items-center gap-3 min-w-0">
-        <OperatorAvatar name={name} className="w-9 h-9" />
+        <OperatorAvatar
+          name={name}
+          className="w-9 h-9"
+          profile={{
+            role: "operator",
+            is_senior_operator: operator.is_senior_operator,
+          }}
+        />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
             <p className="truncate text-sm font-bold text-zinc-900">{name}</p>

@@ -40,11 +40,14 @@ function currentIndex(status: string): number {
   }
 }
 
-function currentHint(status: string, index: number) {
+function currentHint(status: string, index: number, operatorName?: string | null) {
   if (index === 0) {
-    return status === "processing"
-      ? STEPS[0].processingHint
-      : STEPS[0].pendingHint;
+    if (status === "processing") {
+      return operatorName
+        ? `${operatorName} готовит реквизиты`
+        : STEPS[0].processingHint;
+    }
+    return STEPS[0].pendingHint;
   }
   if (index === 1) return STEPS[1].hint;
   if (index === 2) return STEPS[2].hint;
@@ -85,9 +88,11 @@ function Circle({
 export default function OrderProgressStepper({
   status,
   embedded = false,
+  operatorName,
 }: {
   status: string;
   embedded?: boolean;
+  operatorName?: string | null;
 }) {
   const cancelled = status === "cancelled" || status === "failed";
   const index = cancelled ? 0 : currentIndex(status);
@@ -96,7 +101,7 @@ export default function OrderProgressStepper({
   const title = cancelled ? "Отменена" : STEPS[index]?.title;
   const hint = cancelled
     ? "Заявка закрыта"
-    : currentHint(status, index);
+    : currentHint(status, index, operatorName);
 
   return (
     <div

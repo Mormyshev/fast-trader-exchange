@@ -239,7 +239,11 @@ export default function StaffChatPanel({
             <Users className="h-4 w-4" />
           </div>
         ) : (
-          <OperatorAvatar name={title} size="sm" />
+          <OperatorAvatar
+            name={title}
+            size="sm"
+            profile={conversation.peer}
+          />
         )}
         <div className="min-w-0">
           <p className="text-sm font-bold text-zinc-900 truncate">{title}</p>

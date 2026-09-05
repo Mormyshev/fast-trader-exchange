@@ -24,17 +24,28 @@ function operatorBadgeTone(label: string) {
 export default function StaffOperatorLabel({
   snapshot,
   className = "",
+  emptyLabel,
 }: {
   snapshot?: string | null;
   className?: string;
+  emptyLabel?: string;
 }) {
   const label = formatStaffOperatorLabel(snapshot);
-  if (!label) return null;
+  if (!label) {
+    if (!emptyLabel) return null;
+    return (
+      <span
+        className={`inline-flex max-w-full items-center rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-500 ${className}`}
+      >
+        {emptyLabel}
+      </span>
+    );
+  }
 
   return (
     <span
       className={`inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide whitespace-normal break-words ${operatorBadgeTone(label)} ${className}`}
-      title="Внутренняя подпись оператора"
+      title={`Оператор: ${label}`}
     >
       Оператор: {label}
     </span>

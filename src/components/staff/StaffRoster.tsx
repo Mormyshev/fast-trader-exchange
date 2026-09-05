@@ -105,7 +105,7 @@ export default function StaffRoster() {
                 key={member.id}
                 className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-zinc-50/80 px-3.5 py-3"
               >
-                <OperatorAvatar name={name} size="sm" />
+                <OperatorAvatar name={name} size="sm" profile={member} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <p className="truncate text-sm font-bold text-zinc-900">

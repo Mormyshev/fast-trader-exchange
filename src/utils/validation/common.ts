@@ -1,4 +1,3 @@
-import { isListedOperatorPseudonym } from "@/src/utils/staff/pseudonyms";
 import { validationError, validationOk, type ValidationResult } from "./types";
 
 const CYRILLIC_NAME = /^[А-Яа-яЁё-]+$/;
@@ -204,13 +203,18 @@ export function validatePasswordConfirm(
   return validationOk(confirm);
 }
 
+const OPERATOR_NICK_RE = /^[A-Za-zА-Яа-яЁё0-9._ -]{2,32}$/;
+
 export function validateOperatorPseudonym(value: string): ValidationResult {
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/\s+/g, " ");
   if (!trimmed) {
-    return validationError("Выберите псевдоним");
+    return validationError("Укажите ник оператора");
   }
-  if (!isListedOperatorPseudonym(trimmed)) {
-    return validationError("Выберите псевдоним из списка");
+  if (trimmed.length < 2 || trimmed.length > 32) {
+    return validationError("Ник: от 2 до 32 символов");
+  }
+  if (!OPERATOR_NICK_RE.test(trimmed)) {
+    return validationError("Ник: буквы, цифры, пробел, точка, дефис или _");
   }
   return validationOk(trimmed);
 }

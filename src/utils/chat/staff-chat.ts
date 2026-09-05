@@ -1,15 +1,29 @@
 import type { ChatConversation } from "@/src/utils/chat/types";
 import { assertClientConversation } from "@/src/utils/chat/auth";
+import { publicChatNick } from "@/src/utils/staff/chat-nicks";
 
 export function getStaffPseudonym(
-  profile: { operator_pseudonym?: string | null } | null | undefined,
+  profile: { chat_pseudonym?: string | null } | null | undefined,
 ): string | null {
-  const value = profile?.operator_pseudonym?.trim();
-  return value || null;
+  return publicChatNick(profile?.chat_pseudonym);
 }
 
 export const STAFF_PSEUDONYM_REQUIRED =
-  "Псевдоним ещё не назначен. Обратитесь к администратору.";
+  "Ник для чата ещё не назначен. Обратитесь к администратору.";
+
+export function hideInternalStaffNicks(
+  conversation: ChatConversation,
+): ChatConversation {
+  return {
+    ...conversation,
+    operator: conversation.operator
+      ? { ...conversation.operator, operator_pseudonym: null }
+      : conversation.operator,
+    assigned_operator: conversation.assigned_operator
+      ? { ...conversation.assigned_operator, operator_pseudonym: null }
+      : conversation.assigned_operator,
+  };
+}
 
 export function buildOperatorMeta(
   row: Record<string, unknown>,
@@ -21,15 +35,20 @@ export function buildOperatorMeta(
     typeof row.operator_pseudonym_snapshot === "string"
       ? row.operator_pseudonym_snapshot.trim()
       : "";
-
-  const live =
+  const liveChat =
+    typeof operatorProfile?.chat_pseudonym === "string"
+      ? operatorProfile.chat_pseudonym.trim()
+      : "";
+  const internal =
     typeof operatorProfile?.operator_pseudonym === "string"
       ? operatorProfile.operator_pseudonym.trim()
       : "";
 
   return {
-    operator_pseudonym: live || snapshot || null,
+    operator_pseudonym: internal || null,
+    chat_pseudonym: publicChatNick(liveChat, snapshot),
     role: operatorProfile?.role === "admin" ? "admin" : "operator",
+    is_senior_operator: operatorProfile?.is_senior_operator === true,
   };
 }
 
@@ -39,15 +58,25 @@ export function buildAssignedOperatorMeta(
 ): ChatConversation["assigned_operator"] {
   if (!row.operator_id) return null;
 
-  const pseudonym =
+  const snapshot =
+    typeof row.operator_pseudonym_snapshot === "string"
+      ? row.operator_pseudonym_snapshot.trim()
+      : "";
+  const liveChat =
+    typeof operatorProfile?.chat_pseudonym === "string"
+      ? operatorProfile.chat_pseudonym.trim()
+      : "";
+  const internal =
     typeof operatorProfile?.operator_pseudonym === "string"
       ? operatorProfile.operator_pseudonym.trim()
       : "";
 
   return {
     id: String(row.operator_id),
-    operator_pseudonym: pseudonym || null,
+    operator_pseudonym: internal || null,
+    chat_pseudonym: publicChatNick(liveChat, snapshot),
     role: operatorProfile?.role === "admin" ? "admin" : "operator",
+    is_senior_operator: operatorProfile?.is_senior_operator === true,
   };
 }
 

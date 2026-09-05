@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { MessageCircle, X } from "lucide-react";
 import { createClient } from "@/src/utils/supabase/client";
 import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
@@ -16,6 +17,7 @@ import {
 
 export default function ChatWidget() {
   const { role } = useAuth();
+  const pathname = usePathname() ?? "";
   const [open, setOpen] = useState(false);
   const [conversation, setConversation] = useState<ChatConversation | null>(
     null,
@@ -69,7 +71,7 @@ export default function ChatWidget() {
     };
   }, [open, conversation?.id, role, loadConversation]);
 
-  if (role !== "user") {
+  if (role !== "user" || pathname.startsWith("/user/support")) {
     return null;
   }
 
@@ -94,9 +96,10 @@ export default function ChatWidget() {
           <SheetHeader className="px-4 py-3 border-b border-amber-200/60 bg-gradient-to-r from-[#FFDD2D] to-[#FFF3B0] flex-row items-center justify-between space-y-0 shrink-0">
             <SheetTitle className="text-base font-bold text-zinc-900">
               {conversation?.operator_id
-                ? conversation.assigned_operator?.role === "admin"
-                  ? "Администратор на связи"
-                  : "Техподдержка на связи"
+                ? conversation.assigned_operator?.chat_pseudonym?.trim() ||
+                  (conversation.assigned_operator?.role === "admin"
+                    ? "Администратор на связи"
+                    : "Техподдержка на связи")
                 : "Чат с поддержкой"}
             </SheetTitle>
             <button

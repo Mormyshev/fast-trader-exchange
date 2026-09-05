@@ -12,6 +12,7 @@ import {
   OPERATOR_PROFILE_FIELDS,
   parseAssignedPseudonym,
 } from "@/src/utils/staff/operators-admin";
+import { isChatNickTaken, parseChatNick } from "@/src/utils/staff/chat-nicks";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -88,11 +89,31 @@ export async function PATCH(request: Request, context: RouteContext) {
         await isPseudonymTaken(actor.admin, pseudonymCheck.value, current.id)
       ) {
         return NextResponse.json(
-          { error: "Этот псевдоним уже занят" },
+          { error: "Этот ник уже занят" },
           { status: 409 },
         );
       }
       patch.operator_pseudonym = pseudonymCheck.value;
+    }
+
+    if (body.chat_pseudonym !== undefined) {
+      const chatNickCheck = parseChatNick(
+        body.chat_pseudonym,
+        current.chat_pseudonym,
+      );
+      if (!chatNickCheck.ok) {
+        return NextResponse.json(
+          { error: chatNickCheck.error },
+          { status: 400 },
+        );
+      }
+      if (await isChatNickTaken(actor.admin, chatNickCheck.value, current.id)) {
+        return NextResponse.json(
+          { error: "Этот ник для чата уже занят" },
+          { status: 409 },
+        );
+      }
+      patch.chat_pseudonym = chatNickCheck.value;
     }
 
     if (body.email !== undefined) {
@@ -239,6 +260,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
         .update({
           role: "user",
           operator_pseudonym: null,
+          chat_pseudonym: null,
           staff_active: false,
           is_senior_operator: false,
           updated_at: new Date().toISOString(),

@@ -5,6 +5,7 @@ import Header from "@/src/components/Header/Header";
 import Footer from "@/src/components/Footer/Footer";
 import OrderStatusClient from "./OrderStatusClient";
 import { expireOrderIfNeeded } from "@/src/utils/orders/expire-orders";
+import { stripOrderInternalFields } from "@/src/utils/orders/operator-snapshot";
 
 interface OrderPageProps {
   params: Promise<{ id: string }>;
@@ -49,7 +50,11 @@ export default async function OrderPage({ params }: OrderPageProps) {
     <div className="flex flex-col min-h-screen bg-gray-50/50 dark:bg-zinc-950">
       <Header />
       <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 xl:px-10 mb-12 sm:mb-16 mt-4 sm:mt-6 md:mt-8 antialiased">
-        <OrderStatusClient initialOrder={fresh} />
+        <OrderStatusClient
+          initialOrder={stripOrderInternalFields(
+            fresh as Record<string, unknown>,
+          )}
+        />
       </main>
       <Footer />
     </div>

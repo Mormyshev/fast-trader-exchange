@@ -5,29 +5,44 @@ import { ChevronDown } from "lucide-react";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
 import SlimScroll from "@/src/components/SlimScroll/SlimScroll";
 import { SBP_BANKS, findSbpBank } from "@/src/utils/banks/sbp-banks";
-import { formatPhoneInput } from "@/src/utils/validation";
+import {
+  formatSbpDestination,
+  type SbpPayoutMethod,
+} from "@/src/utils/validation";
+
+const METHODS: { id: SbpPayoutMethod; label: string }[] = [
+  { id: "sbp", label: "По СБП" },
+  { id: "card", label: "По карте" },
+];
 
 export default function SbpRequisitesFields({
   phone,
   bankId,
+  method,
   onPhoneChange,
   onBankChange,
+  onMethodChange,
   onBlur,
   hasError,
   variant = "default",
+  lockBank = false,
 }: {
   phone: string;
   bankId: string;
+  method: SbpPayoutMethod;
   onPhoneChange: (value: string) => void;
   onBankChange: (bankId: string) => void;
+  onMethodChange: (method: SbpPayoutMethod) => void;
   onBlur?: () => void;
   hasError?: boolean;
   variant?: "default" | "staff";
+  lockBank?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = findSbpBank(bankId);
   const staff = variant === "staff";
+  const isCard = method === "card";
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -39,6 +54,12 @@ export default function SbpRequisitesFields({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const switchMethod = (next: SbpPayoutMethod) => {
+    if (next === method) return;
+    onMethodChange(next);
+    onPhoneChange("");
+  };
+
   const fieldClass = hasError
     ? "border-red-400 focus:border-red-500 focus:ring-red-200"
     : staff
@@ -49,16 +70,52 @@ export default function SbpRequisitesFields({
     ? `w-full flex items-center justify-between gap-3 bg-zinc-50 border rounded-xl pl-5 pr-4 py-3 cursor-pointer hover:border-zinc-300 transition-colors text-left ${fieldClass}`
     : `w-full flex items-center justify-between gap-3 bg-white dark:bg-zinc-800 border rounded-full px-5 py-3.5 shadow-[0_0_15px_rgba(255,221,45,0.06)] cursor-pointer hover:border-zinc-300 transition-colors text-left ${fieldClass}`;
 
-  const phoneClass = staff
+  const destClass = staff
     ? `w-full px-4 py-3 text-sm font-mono bg-zinc-50 border rounded-xl focus:outline-hidden text-zinc-900 ${fieldClass}`
     : `w-full bg-white border rounded-full px-6 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 shadow-[0_0_15px_rgba(255,221,45,0.06)] placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-hidden transition-all tracking-wide ${fieldClass}`;
 
   return (
     <div className={staff ? "space-y-4" : "space-y-3"} ref={rootRef}>
+      <div className={staff ? "space-y-1.5" : "space-y-2"}>
+        {staff && (
+          <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide pl-0.5">
+            Способ оплаты
+          </p>
+        )}
+        <div
+          className={
+            staff
+              ? "grid grid-cols-2 gap-1 rounded-xl bg-zinc-100 p-1"
+              : "grid grid-cols-2 gap-1 rounded-full bg-zinc-100 dark:bg-zinc-800 p-1"
+          }
+        >
+          {METHODS.map((option) => {
+            const active = method === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => switchMethod(option.id)}
+                className={`h-10 text-xs font-bold transition-colors ${
+                  staff ? "rounded-lg" : "rounded-full"
+                } ${
+                  active
+                    ? "bg-[#FFDD2D] text-zinc-900"
+                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {lockBank ? null : (
       <div className={staff ? "space-y-1.5" : undefined}>
         {staff && (
           <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide pl-0.5">
-            Банк СБП
+            {isCard ? "Банк карты" : "Банк СБП"}
           </p>
         )}
         <div className="relative">
@@ -126,22 +183,26 @@ export default function SbpRequisitesFields({
           )}
         </div>
       </div>
+      )}
 
       <div className={staff ? "space-y-1.5" : undefined}>
         {staff && (
           <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide pl-0.5">
-            Номер телефона
+            {isCard ? "Номер карты" : "Номер телефона"}
           </p>
         )}
         <input
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
+          type={isCard ? "text" : "tel"}
+          inputMode={isCard ? "numeric" : "tel"}
+          autoComplete={isCard ? "cc-number" : "tel"}
           value={phone}
-          onChange={(e) => onPhoneChange(formatPhoneInput(e.target.value))}
+          onChange={(e) =>
+            onPhoneChange(formatSbpDestination(e.target.value, method))
+          }
           onBlur={onBlur}
-          placeholder="+7 (999) 000-00-00"
-          className={phoneClass}
+          placeholder={isCard ? "2202 0000 0000 0000" : "+7 (999) 000-00-00"}
+          maxLength={isCard ? 23 : 18}
+          className={destClass}
           required={!staff}
         />
       </div>

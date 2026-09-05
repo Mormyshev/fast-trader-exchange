@@ -35,7 +35,7 @@ export async function GET() {
       withTimeout(
         staff.admin
           .from("profiles")
-          .select("id, email, role, operator_pseudonym, staff_active")
+          .select("id, email, role, operator_pseudonym, staff_active, is_senior_operator")
           .eq("role", "operator"),
         8000,
         { data: null, error: { message: "Database timeout" } } as any,
@@ -83,6 +83,7 @@ export async function GET() {
         role: string;
         operator_pseudonym: string | null;
         staff_active: boolean | null;
+        is_senior_operator: boolean | null;
       }>
     )
       .map((row) => ({
@@ -91,6 +92,7 @@ export async function GET() {
         role: row.role as "operator",
         operator_pseudonym: row.operator_pseudonym?.trim() || null,
         staff_active: row.staff_active === true,
+        is_senior_operator: row.is_senior_operator === true,
       }))
       .sort((a, b) => {
         const nameA = (a.operator_pseudonym || a.email).toLocaleLowerCase("ru");

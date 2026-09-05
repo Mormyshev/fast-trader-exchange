@@ -33,8 +33,8 @@ type ChatPanelProps = {
 
 function getOperatorDisplayName(conversation?: ChatConversation | null) {
   return (
-    conversation?.assigned_operator?.operator_pseudonym?.trim() ||
-    conversation?.operator?.operator_pseudonym?.trim() ||
+    conversation?.assigned_operator?.chat_pseudonym?.trim() ||
+    conversation?.operator?.chat_pseudonym?.trim() ||
     null
   );
 }
@@ -73,12 +73,18 @@ function LiveStatus({ label }: { label: string }) {
   );
 }
 
-function SupportJoinedNotice({ role }: { role: "operator" | "admin" }) {
+function SupportJoinedNotice({
+  role,
+  chatNick,
+}: {
+  role: "operator" | "admin";
+  chatNick?: string | null;
+}) {
   return (
     <div className="flex justify-center">
       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-800">
         <span className="size-1.5 rounded-full bg-emerald-500" />
-        {supportJoinedMessage(role)}
+        {supportJoinedMessage(role, chatNick)}
       </span>
     </div>
   );
@@ -349,7 +355,18 @@ export default function ChatPanel({
             operatorName && assignedRole ? (
               <>
                 <div className="relative shrink-0">
-                  <OperatorAvatar name={operatorName} size="sm" />
+                  <OperatorAvatar
+                    name={operatorName}
+                    size="sm"
+                    profile={conversation?.assigned_operator}
+                    tone={
+                      assignedRole === "admin"
+                        ? "admin"
+                        : conversation?.assigned_operator?.is_senior_operator
+                          ? "senior"
+                          : "operator"
+                    }
+                  />
                   <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[#FFF8D6] bg-emerald-500" />
                 </div>
                 <div className="min-w-0">
@@ -421,7 +438,7 @@ export default function ChatPanel({
         <div className="px-4 py-3 bg-amber-100/80 border-b border-amber-200/70 text-sm text-amber-950 shrink-0">
           {role === "admin" ? (
             <>
-              Назначьте псевдоним в разделе{" "}
+              Назначьте ник для чата в разделе{" "}
               <Link
                 href="/admin/profile"
                 className="font-bold underline underline-offset-2"
@@ -431,13 +448,13 @@ export default function ChatPanel({
               , чтобы отвечать в чате.
             </>
           ) : (
-            "Псевдоним ещё не назначен. Обратитесь к администратору, чтобы отвечать в чате."
+            "Ник для чата ещё не назначен. Обратитесь к администратору, чтобы отвечать в чате."
           )}
         </div>
       )}
 
       {isAssignedToOther && workEnabled && (
-        <div className="px-4 py-3 bg-zinc-100 border-b border-zinc-200 text-sm text-zinc-700 shrink-0">
+        <div className="px-4 py-3 bg-[#FFF8D6] border-b border-amber-200/70 text-sm font-medium text-zinc-800 shrink-0">
           {assignedStaffName
             ? assignedRole === "admin"
               ? `Диалог ведёт администратор ${assignedStaffName}.`
@@ -454,7 +471,9 @@ export default function ChatPanel({
           </div>
         ) : messages.length === 0 ? (
           <div className="space-y-4">
-            {assignedRole ? <SupportJoinedNotice role={assignedRole} /> : null}
+            {assignedRole ? (
+              <SupportJoinedNotice role={assignedRole} chatNick={operatorName} />
+            ) : null}
             <div className="rounded-2xl border border-amber-200/40 bg-[#FFF9E6] dark:bg-amber-950/20 px-4 py-6 text-center">
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 {assignedRole
@@ -465,7 +484,9 @@ export default function ChatPanel({
           </div>
         ) : (
           <>
-            {assignedRole ? <SupportJoinedNotice role={assignedRole} /> : null}
+            {assignedRole ? (
+              <SupportJoinedNotice role={assignedRole} chatNick={operatorName} />
+            ) : null}
             {messages.map((message, index) => {
             const isMine =
               mode === "user"

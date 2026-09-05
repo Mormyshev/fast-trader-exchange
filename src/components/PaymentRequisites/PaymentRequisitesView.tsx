@@ -50,7 +50,7 @@ export default function PaymentRequisitesView({
       <div className={stack}>
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-            Банк СБП
+            {parsed.method === "card" || parsed.card ? "Банк карты" : "Банк СБП"}
           </p>
           <div className={`${box} flex items-center gap-2`}>
             {bank ? (
@@ -61,9 +61,11 @@ export default function PaymentRequisitesView({
         </div>
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-            Номер телефона
+            {parsed.method === "card" || parsed.card
+              ? "Номер карты"
+              : "Номер телефона СБП"}
           </p>
-          <p className={box}>{parsed.phone || "—"}</p>
+          <p className={box}>{parsed.card || parsed.phone || "—"}</p>
         </div>
       </div>
     );

@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
+import Script from "next/script";
 import { Providers } from "./providers";
 import "./globals.css";
 import "./staff-theme.css";
 import { createClient } from "@/src/utils/supabase/server";
+
+const AUTH_CALLBACK_BOOTSTRAP = `(function(){try{var p=location.pathname;if(p==="/auth/callback"||p==="/auth/confirm")return;var s=location.search;if(s.indexOf("code=")<0&&s.indexOf("token_hash=")<0)return;var u=new URL("/auth/callback"+s,location.origin);if(!u.searchParams.get("next")&&(p.indexOf("/auth/reset-password")===0||u.searchParams.get("type")==="recovery"))u.searchParams.set("next","/auth/reset-password");location.replace(u.pathname+u.search);}catch(e){}})();`;
+
+const STAFF_THEME_BOOTSTRAP = `(function(){try{var p=location.pathname;if(p.indexOf("/operator")!==0&&p.indexOf("/admin")!==0)return;var m=document.cookie.match(/(?:^|; )fte-staff-theme=([^;]*)/);var d=m&&m[1]==="dark";document.documentElement.classList.toggle("dark",!!d);document.documentElement.classList.toggle("staff-dark",!!d);}catch(e){}})();`;
 
 const roboto = Roboto({
   variable: "--font-roboto",
@@ -48,11 +53,12 @@ export default async function RootLayout({
       <body
         className={`${roboto.className} font-sans min-h-full flex flex-col bg-white text-zinc-900`}
       >
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p==="/auth/callback"||p==="/auth/confirm")return;var s=location.search;if(s.indexOf("code=")<0&&s.indexOf("token_hash=")<0)return;var u=new URL("/auth/callback"+s,location.origin);if(!u.searchParams.get("next")&&(p.indexOf("/auth/reset-password")===0||u.searchParams.get("type")==="recovery"))u.searchParams.set("next","/auth/reset-password");location.replace(u.pathname+u.search);}catch(e){}})();`,
-          }}
-        />
+        <Script id="auth-callback-bootstrap" strategy="beforeInteractive">
+          {AUTH_CALLBACK_BOOTSTRAP}
+        </Script>
+        <Script id="staff-theme-bootstrap" strategy="beforeInteractive">
+          {STAFF_THEME_BOOTSTRAP}
+        </Script>
         <Providers initialUser={user} initialRole={initialRole}>
           {children}
         </Providers>

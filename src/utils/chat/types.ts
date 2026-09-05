@@ -10,6 +10,7 @@ export type ChatMessage = {
   sender?: {
     role?: string | null;
     operator_pseudonym?: string | null;
+    chat_pseudonym?: string | null;
     email?: string;
   };
 };
@@ -28,12 +29,16 @@ export type ChatConversation = {
   };
   operator?: {
     operator_pseudonym?: string | null;
+    chat_pseudonym?: string | null;
     role?: "operator" | "admin" | null;
+    is_senior_operator?: boolean | null;
   } | null;
   assigned_operator?: {
     id: string;
     operator_pseudonym?: string | null;
+    chat_pseudonym?: string | null;
     role?: "operator" | "admin" | null;
+    is_senior_operator?: boolean | null;
   } | null;
   last_message?: ChatMessage | null;
   unread?: boolean;

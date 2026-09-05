@@ -24,14 +24,26 @@ export function isOrderExpiredByTtl(
   return now >= orderExpiresAt(createdAt);
 }
 
+export function orderRemainingMs(
+  createdAt: string | Date,
+  now = Date.now(),
+): number {
+  return Math.max(0, orderExpiresAt(createdAt) - now);
+}
+
 export function formatOrderTimeLeft(
   createdAt: string | Date,
   now = Date.now(),
 ): string {
-  const diff = orderExpiresAt(createdAt) - now;
+  const diff = orderRemainingMs(createdAt, now);
   if (diff <= 0) return "00:00";
-  const minutes = Math.floor(diff / 60_000);
-  const seconds = Math.floor((diff % 60_000) / 1000);
+  const totalSeconds = Math.floor(diff / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
