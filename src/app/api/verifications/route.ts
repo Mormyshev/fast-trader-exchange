@@ -35,10 +35,7 @@ function normalizeComment(value: unknown): string | null {
   return trimmed.slice(0, 1000);
 }
 
-function applyClientListFilters<T extends { eq: (...args: any[]) => T }>(
-  query: T,
-  tab: VerificationTab,
-) {
+function applyClientListFilters(query: any, tab: VerificationTab) {
   if (tab === "blacklisted") {
     return query.eq("is_blacklisted", true);
   }
