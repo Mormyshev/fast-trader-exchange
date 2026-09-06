@@ -22,17 +22,18 @@ export default function NoticeMessage() {
                 <span className="sr-only">Закрыть</span>
             </Button>
 
-            <div className="mt-4 space-y-1.5 pr-8">
-                <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                    Перед обменом
-                </h2>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Несколько правил, которые стоит учесть при создании заявки.
-                </p>
-            </div>
-
-            <div className="flex size-12 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227] mt-4">
-                <HelpCircle className="size-6" />
+            <div className="mt-4 flex items-start gap-3.5 pr-8">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+                    <HelpCircle className="size-6" />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                    <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                        Перед обменом
+                    </h2>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        Несколько правил, которые стоит учесть при создании заявки.
+                    </p>
+                </div>
             </div>
             <ul className="mt-5 space-y-3 text-sm font-medium leading-relaxed text-zinc-600 dark:text-zinc-300">
                 <li>

@@ -7,6 +7,7 @@ import SlimScroll from "@/src/components/SlimScroll/SlimScroll";
 import { SBP_BANKS, findSbpBank } from "@/src/utils/banks/sbp-banks";
 import {
   formatSbpDestination,
+  validateSbpDestination,
   type SbpPayoutMethod,
 } from "@/src/utils/validation";
 
@@ -24,6 +25,7 @@ export default function SbpRequisitesFields({
   onMethodChange,
   onBlur,
   hasError,
+  errorMessage,
   variant = "default",
   lockBank = false,
 }: {
@@ -35,10 +37,12 @@ export default function SbpRequisitesFields({
   onMethodChange: (method: SbpPayoutMethod) => void;
   onBlur?: () => void;
   hasError?: boolean;
+  errorMessage?: string;
   variant?: "default" | "staff";
   lockBank?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = findSbpBank(bankId);
   const staff = variant === "staff";
@@ -58,9 +62,27 @@ export default function SbpRequisitesFields({
     if (next === method) return;
     onMethodChange(next);
     onPhoneChange("");
+    setLocalError(null);
   };
 
-  const fieldClass = hasError
+  const shownError = errorMessage || localError;
+  const invalid = Boolean(hasError || shownError);
+
+  const checkDestination = (value: string, nextMethod = method) => {
+    const digits = value.replace(/\D/g, "");
+    if (nextMethod === "card" && digits.length >= 16) {
+      const result = validateSbpDestination(value, nextMethod);
+      setLocalError(result.ok ? null : result.error);
+      return;
+    }
+    if (nextMethod === "card" && digits.length > 0 && digits.length < 16) {
+      setLocalError(null);
+      return;
+    }
+    setLocalError(null);
+  };
+
+  const fieldClass = invalid
     ? "border-red-400 focus:border-red-500 focus:ring-red-200"
     : staff
       ? "border-zinc-200 focus:border-[#FFDD2D]"
@@ -196,15 +218,35 @@ export default function SbpRequisitesFields({
           inputMode={isCard ? "numeric" : "tel"}
           autoComplete={isCard ? "cc-number" : "tel"}
           value={phone}
-          onChange={(e) =>
-            onPhoneChange(formatSbpDestination(e.target.value, method))
-          }
-          onBlur={onBlur}
+          onChange={(e) => {
+            const next = formatSbpDestination(e.target.value, method);
+            onPhoneChange(next);
+            checkDestination(next);
+          }}
+          onBlur={() => {
+            if (phone.trim()) {
+              const result = validateSbpDestination(phone, method);
+              setLocalError(result.ok ? null : result.error);
+            }
+            onBlur?.();
+          }}
           placeholder={isCard ? "2202 0000 0000 0000" : "+7 (999) 000-00-00"}
           maxLength={isCard ? 23 : 18}
           className={destClass}
           required={!staff}
+          aria-invalid={invalid}
         />
+        {shownError ? (
+          <p
+            className={
+              staff
+                ? "text-[11px] font-semibold text-red-500 pl-1 pt-0.5"
+                : "text-xs font-semibold text-red-500 pl-4 pt-1"
+            }
+          >
+            {shownError}
+          </p>
+        ) : null}
       </div>
     </div>
   );

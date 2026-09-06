@@ -11,12 +11,14 @@ export default function SmoothScroll({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const staffShell =
-    pathname.startsWith("/operator") || pathname.startsWith("/admin");
+  const disableLenis =
+    pathname.startsWith("/operator") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/user/support");
 
   useEffect(() => {
     document.body.style.removeProperty("pointer-events");
-    if (staffShell) return;
+    if (disableLenis) return;
     if (window.innerWidth < 1024) return;
 
     const lenis = new Lenis({
@@ -25,6 +27,7 @@ export default function SmoothScroll({
       orientation: "vertical",
       gestureOrientation: "vertical",
       smoothWheel: true,
+      allowNestedScroll: true,
     });
 
     setLenisInstance(lenis);
@@ -41,7 +44,7 @@ export default function SmoothScroll({
       lenis.destroy();
       setLenisInstance(null);
     };
-  }, [staffShell]);
+  }, [disableLenis]);
 
   return <>{children}</>;
 }

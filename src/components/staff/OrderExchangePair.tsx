@@ -1,17 +1,11 @@
 import { ArrowRight } from "lucide-react";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
-import {
-  findCurrencyByOrderCode,
-  isCryptoCurrency,
-} from "@/src/utils/exchange-currencies";
+import { findCurrencyByOrderCode } from "@/src/utils/exchange-currencies";
 
-export function formatOrderMoney(value: number, orderCode: string) {
-  const currency = findCurrencyByOrderCode(orderCode);
-  const crypto = currency
-    ? isCryptoCurrency(currency)
-    : !/^RUB/i.test(orderCode);
+export function formatOrderMoney(value: number, _orderCode?: string) {
   return Number(value || 0).toLocaleString("ru-RU", {
-    maximumFractionDigits: crypto ? 8 : 2,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 }
 

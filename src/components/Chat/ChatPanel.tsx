@@ -464,7 +464,10 @@ export default function ChatPanel({
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4 space-y-3 bg-white dark:bg-zinc-950">
+      <div
+        data-lenis-prevent
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4 space-y-3 bg-white dark:bg-zinc-950"
+      >
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-6 h-6 animate-spin text-[#FFDD2D]" />

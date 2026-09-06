@@ -389,21 +389,18 @@ export function getPairRate(
     return 0;
 }
 
-export function amountDecimals(isCrypto: boolean): number {
-    return isCrypto ? 8 : 2;
+export function amountDecimals(_isCrypto?: boolean): number {
+    return 2;
 }
 
-export function formatAmount(value: number, isCrypto: boolean): string {
+export function formatAmount(value: number, _isCrypto?: boolean): string {
     if (!Number.isFinite(value) || value <= 0) return "";
-    const fixed = value.toFixed(amountDecimals(isCrypto));
-    if (!isCrypto) return Number(fixed).toFixed(2);
-    return fixed.replace(/\.?0+$/, "") || "0";
+    return value.toFixed(2);
 }
 
 function formatRubPrice(rubPerOneCrypto: number): string {
     if (!(rubPerOneCrypto > 0)) return "—";
-    if (rubPerOneCrypto >= 1000) return rubPerOneCrypto.toFixed(2);
-    return rubPerOneCrypto.toFixed(4);
+    return rubPerOneCrypto.toFixed(2);
 }
 
 /** Всегда «1» у крипты: 85.22 RUB = 1 USDT или 1 USDT = 80.25 RUB */
@@ -459,7 +456,8 @@ export function formatLockedOrderRate(
 
     const rate = toAmt / fromAmt;
     const formatted = rate.toLocaleString("ru-RU", {
-        maximumFractionDigits: rate >= 1 ? 6 : 8,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
     });
     return `1 ${sendCode} = ${formatted} ${receiveCode}`;
 }

@@ -12,15 +12,9 @@ const VISIBLE_COUNT = 2;
 
 function formatRub(value: number): string {
   if (!(value > 0)) return "—";
-  if (value >= 1000) {
-    return value.toLocaleString("ru-RU", {
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2,
-    });
-  }
   return value.toLocaleString("ru-RU", {
-    maximumFractionDigits: 4,
     minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 }
 

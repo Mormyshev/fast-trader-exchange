@@ -108,11 +108,7 @@ export function validateSbpRequisites(value: string): ValidationResult {
   }
   const destination = validateSbpDestination(parsed.destination, parsed.method);
   if (!destination.ok) {
-    return validationError(
-      parsed.method === "card"
-        ? "Карта: укажите номер карты (16–19 цифр)"
-        : "СБП: укажите телефон +7 (XXX) XXX-XX-XX",
-    );
+    return validationError(destination.error);
   }
   return validationOk(
     serializeSbpRequisites(destination.value, parsed.bankId, parsed.method),

@@ -139,10 +139,14 @@ export default function ClientDashboard({
                     </span>
                   </div>
                   <p className="text-sm font-bold text-zinc-900 truncate">
-                    {Number(order.amount_from || 0).toLocaleString("ru-RU")}{" "}
+                    {Number(order.amount_from || 0).toLocaleString("ru-RU", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
                     {order.currency_from} →{" "}
                     {Number(order.amount_to || 0).toLocaleString("ru-RU", {
-                      maximumFractionDigits: 8,
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     })}{" "}
                     {order.currency_to.replace(/_/g, " ")}
                   </p>

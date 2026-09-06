@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     if (rubAmount < MIN_RUB || rubAmount > MAX_RUB) {
       return NextResponse.json(
         {
-          error: `Сумма в рублях должна быть от ${MIN_RUB.toLocaleString("ru-RU")} до ${MAX_RUB.toLocaleString("ru-RU")}`,
+          error: `Сумма в рублях должна быть от ${MIN_RUB.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} до ${MAX_RUB.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         },
         { status: 400 },
       );

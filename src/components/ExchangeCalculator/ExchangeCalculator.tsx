@@ -449,7 +449,10 @@ export default function ExchangeCalculator() {
                 isBelowMin ? "text-rose-600" : "text-zinc-900 dark:text-zinc-100"
               }`}
             >
-              {MIN_RUB.toLocaleString("ru-RU")}{" "}
+              {MIN_RUB.toLocaleString("ru-RU", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
               <span className="font-semibold text-zinc-400">RUB</span>
             </p>
             {minCryptoEquivalent && cryptoCode ? (
@@ -477,7 +480,10 @@ export default function ExchangeCalculator() {
               Резерв
             </p>
             <p className="mt-1.5 text-[13px] font-bold tabular-nums leading-tight text-zinc-900 sm:text-sm dark:text-zinc-100">
-              {RESERVE.toLocaleString("ru-RU")}{" "}
+              {RESERVE.toLocaleString("ru-RU", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
               <span className="font-semibold text-zinc-400">
                 {selectedReceive.code}
               </span>

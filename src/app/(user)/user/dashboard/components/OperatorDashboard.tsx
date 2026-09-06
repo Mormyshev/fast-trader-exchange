@@ -198,14 +198,21 @@ export default function OperatorDashboard() {
                     <p className="text-sm font-semibold">
                       Клиент отдает:{" "}
                       <span className="font-bold text-base">
-                        {Number(order.amount_from).toLocaleString("ru-RU")}{" "}
+                        {Number(order.amount_from).toLocaleString("ru-RU", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
                         {order.currency_from}
                       </span>
                     </p>
                     <p className="text-sm font-semibold text-zinc-500">
                       Должен получить:{" "}
                       <span>
-                        {Number(order.amount_to).toFixed(4)} {order.currency_to}
+                        {Number(order.amount_to).toLocaleString("ru-RU", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        {order.currency_to}
                       </span>
                     </p>
                   </div>
@@ -270,7 +277,10 @@ export default function OperatorDashboard() {
                         КЛИЕНТ ОТДАЕТ:
                       </span>
                       <span className="font-black text-zinc-900 dark:text-zinc-100 text-base">
-                        {Number(order.amount_from).toLocaleString("ru-RU")}{" "}
+                        {Number(order.amount_from).toLocaleString("ru-RU", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
                         {order.currency_from}
                       </span>
                     </div>

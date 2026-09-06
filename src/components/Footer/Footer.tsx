@@ -38,7 +38,7 @@ export default function Footer() {
                   FastTraderExchange
                 </span>
                 <span className="text-[10px] text-gray-400 dark:text-zinc-500 mt-1 uppercase tracking-wider font-medium">
-                  демо-площадка обмена
+                  Площадка обмена
                 </span>
               </div>
             </Link>

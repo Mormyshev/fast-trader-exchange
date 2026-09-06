@@ -60,6 +60,13 @@ function inputClass(hasError: boolean, base: string) {
     : base;
 }
 
+function formatMoneyRu(value: number) {
+  return value.toLocaleString("ru-RU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return (
@@ -656,7 +663,7 @@ export default function OrderForm() {
     ) {
       await confirm({
         title: "Некорректная сумма",
-        description: `Сумма в рублях должна быть от ${MIN_RUB.toLocaleString("ru-RU")} до ${MAX_RUB.toLocaleString("ru-RU")}`,
+        description: `Сумма в рублях должна быть от ${formatMoneyRu(MIN_RUB)} до ${formatMoneyRu(MAX_RUB)}`,
         variant: "info",
       });
       return;
@@ -871,25 +878,21 @@ export default function OrderForm() {
               <div className="flex flex-col text-right text-[11px] font-bold text-zinc-400 dark:text-zinc-500 pr-4">
                 {!isSendCrypto ? (
                   <>
-                    <span> min.: {MIN_RUB.toLocaleString("ru-RU")} RUB </span>
-                    <span> max.: {MAX_RUB.toLocaleString("ru-RU")} RUB </span>
+                    <span> min.: {formatMoneyRu(MIN_RUB)} RUB </span>
+                    <span> max.: {formatMoneyRu(MAX_RUB)} RUB </span>
                   </>
                 ) : (
                   <>
                     <span>
                       {" "}
                       min.:{" "}
-                      {minReceive > 0
-                        ? minReceive.toLocaleString("ru-RU")
-                        : "—"}{" "}
+                      {minReceive > 0 ? formatMoneyRu(minReceive) : "—"}{" "}
                       {sendCode}{" "}
                     </span>
                     <span>
                       {" "}
                       max.:{" "}
-                      {maxReceive > 0
-                        ? maxReceive.toLocaleString("ru-RU")
-                        : "—"}{" "}
+                      {maxReceive > 0 ? formatMoneyRu(maxReceive) : "—"}{" "}
                       {sendCode}{" "}
                     </span>
                   </>
@@ -988,23 +991,19 @@ export default function OrderForm() {
                   <>
                     <span>
                       min.:{" "}
-                      {minReceive > 0
-                        ? minReceive.toLocaleString("ru-RU")
-                        : "—"}{" "}
+                      {minReceive > 0 ? formatMoneyRu(minReceive) : "—"}{" "}
                       {receiveCode}
                     </span>
                     <span>
                       max.:{" "}
-                      {maxReceive > 0
-                        ? maxReceive.toLocaleString("ru-RU")
-                        : "—"}{" "}
+                      {maxReceive > 0 ? formatMoneyRu(maxReceive) : "—"}{" "}
                       {receiveCode}
                     </span>
                   </>
                 ) : (
                   <>
-                    <span> min.: {MIN_RUB.toLocaleString("ru-RU")} RUB </span>
-                    <span> max.: {MAX_RUB.toLocaleString("ru-RU")} RUB </span>
+                    <span> min.: {formatMoneyRu(MIN_RUB)} RUB </span>
+                    <span> max.: {formatMoneyRu(MAX_RUB)} RUB </span>
                   </>
                 )}
               </div>
@@ -1058,8 +1057,10 @@ export default function OrderForm() {
                   }}
                   onBlur={() => touchField("wallet")}
                   hasError={!!fieldErrors.wallet}
+                  errorMessage={fieldErrors.wallet}
                 />
               ) : (
+                <>
                 <input
                   type="text"
                   value={wallet}
@@ -1072,8 +1073,9 @@ export default function OrderForm() {
                   )}
                   required
                 />
+                <FieldError message={fieldErrors.wallet} />
+                </>
               )}
-              <FieldError message={fieldErrors.wallet} />
             </div>
           </div>
 
