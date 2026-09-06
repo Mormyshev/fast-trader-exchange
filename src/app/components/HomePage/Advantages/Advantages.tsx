@@ -25,7 +25,7 @@ export default function Advantages() {
   return (
     <section className="w-full">
       <h2 className="text-center text-2xl sm:text-[28px] font-bold tracking-tight text-zinc-900">
-        Почему выбирают Aurum Swap
+        Почему выбирают FastTraderExchange
       </h2>
 
       <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5">

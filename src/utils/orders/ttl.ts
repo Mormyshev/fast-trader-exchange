@@ -1,3 +1,5 @@
+import { paymentIssuedAtFromDetails } from "@/src/utils/orders/payment-details";
+
 /** Lifetime for unfinished orders (pending → awaiting_payment). */
 export const ORDER_TTL_MS = 15 * 60 * 1000;
 
@@ -8,6 +10,41 @@ export const ORDER_TTL_STATUSES = [
 ] as const;
 
 export type OrderTtlStatus = (typeof ORDER_TTL_STATUSES)[number];
+
+export type OrderTtlSource = {
+  created_at: string;
+  status?: string;
+  payment_issued_at?: string | null;
+  payment_details?: string | null;
+  updated_at?: string | null;
+};
+
+/** After requisites are issued, payment window starts from that moment. */
+export function orderTtlStartedAt(order: OrderTtlSource): string {
+  if (order.status === "awaiting_payment") {
+    if (order.payment_issued_at) return order.payment_issued_at;
+    const fromDetails = paymentIssuedAtFromDetails(order.payment_details);
+    if (fromDetails) return fromDetails;
+    if (order.updated_at) return order.updated_at;
+  }
+  return order.created_at;
+}
+
+export function isPaymentIssuedColumnMissing(
+  error: { message?: string } | null | undefined,
+): boolean {
+  const message = error?.message ?? "";
+  return (
+    /payment_issued_at/i.test(message) &&
+    (/does not exist/i.test(message) || /schema cache/i.test(message))
+  );
+}
+
+export function stripPaymentIssuedField(fields: string): string {
+  return fields
+    .replace(/,\s*payment_issued_at\b/g, "")
+    .replace(/\bpayment_issued_at\s*,\s*/g, "");
+}
 
 export function orderExpiresAt(createdAt: string | Date): number {
   const t =

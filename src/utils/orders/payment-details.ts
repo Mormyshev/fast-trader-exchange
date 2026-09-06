@@ -97,6 +97,41 @@ export function serializeCryptoPaymentDetails(wallet: string): string {
   });
 }
 
+export function attachPaymentIssuedAt(
+  raw: string,
+  issuedAt: string,
+): string {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return JSON.stringify({ ...parsed, issuedAt });
+    }
+  } catch {
+    // free-text requisites
+  }
+  return JSON.stringify({
+    v: 2,
+    kind: "legacy",
+    legacy: raw,
+    issuedAt,
+  });
+}
+
+export function paymentIssuedAtFromDetails(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed?.issuedAt === "string" && parsed.issuedAt.trim()) {
+      return parsed.issuedAt;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export function parsePaymentDetails(
   raw: string | null | undefined,
 ): PaymentRequisites {
@@ -112,6 +147,10 @@ export function parsePaymentDetails(
           kind: "crypto",
           wallet: parsed.wallet,
         };
+      }
+
+      if (parsed.kind === "legacy" && typeof parsed.legacy === "string") {
+        return { ...empty, kind: "legacy", legacy: parsed.legacy };
       }
 
       if (parsed.kind === "sbp") {

@@ -7,6 +7,7 @@ import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperato
 import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
 import type { OrderClient } from "@/src/utils/orders/client-info";
 import { orderPublicTitle } from "@/src/utils/orders/public-number";
+import { orderTtlStartedAt } from "@/src/utils/orders/ttl";
 import OrderProgressStepper from "@/src/components/OrderProgress/OrderProgressStepper";
 
 export type OperatorOrderCardTone =
@@ -29,6 +30,9 @@ type CardOrder = {
   client?: OrderClient | null;
   operator_pseudonym_snapshot?: string | null;
   order_number?: number | null;
+  payment_issued_at?: string | null;
+  payment_details?: string | null;
+  updated_at?: string | null;
 };
 
 const BADGE: Record<OperatorOrderCardTone, string> = {
@@ -107,7 +111,7 @@ export default function OperatorOrderCard({
 
       <div className="px-4 sm:px-5 pt-4 space-y-2.5">
         <RateFixationBar
-          createdAt={order.created_at}
+          createdAt={orderTtlStartedAt(order)}
           status={order.status}
           now={now}
           embedded

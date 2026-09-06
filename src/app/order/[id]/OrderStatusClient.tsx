@@ -17,6 +17,7 @@ import {
 import {
   isOrderExpiredByTtl,
   ORDER_TTL_STATUSES,
+  orderTtlStartedAt,
 } from "@/src/utils/orders/ttl";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import PaymentRequisitesView from "@/src/components/PaymentRequisites/PaymentRequisitesView";
@@ -183,7 +184,7 @@ export default function OrderStatusClient({
     }
 
     const tick = () => {
-      if (isOrderExpiredByTtl(order.created_at)) {
+      if (isOrderExpiredByTtl(orderTtlStartedAt(order))) {
         void cancelOrder("timeout");
       }
     };
@@ -192,7 +193,14 @@ export default function OrderStatusClient({
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cancel only when timer hits zero
-  }, [order.status, order.created_at, order.id]);
+  }, [
+    order.status,
+    order.created_at,
+    order.payment_issued_at,
+    order.payment_details,
+    order.updated_at,
+    order.id,
+  ]);
 
   const handleCancelClick = async () => {
     const ok = await confirm({
@@ -309,7 +317,7 @@ export default function OrderStatusClient({
       </div>
 
       <RateFixationBar
-        createdAt={order.created_at}
+        createdAt={orderTtlStartedAt(order)}
         status={status}
         now={now}
       />

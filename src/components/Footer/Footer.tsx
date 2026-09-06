@@ -28,14 +28,14 @@ export default function Footer() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/logo.svg"
-                alt="Aurum Swap"
+                alt="FastTraderExchange"
                 width={40}
                 height={40}
                 className="h-10 w-10"
               />
               <div className="flex flex-col text-left">
                 <span className="font-bold text-2xl text-gray-900 dark:text-zinc-50 tracking-tight leading-none">
-                  Aurum Swap
+                  FastTraderExchange
                 </span>
                 <span className="text-[10px] text-gray-400 dark:text-zinc-500 mt-1 uppercase tracking-wider font-medium">
                   демо-площадка обмена
@@ -92,18 +92,18 @@ export default function Footer() {
 
           <div className="w-full md:w-auto flex justify-start md:justify-end shrink-0">
             <a
-              href="mailto:hello@aurumswap.demo"
+              href="mailto:hello@fasttraderexchange.com"
               className="inline-flex items-center space-x-2 bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 text-xs font-bold px-5 py-2.5 rounded-full shadow-xs transition-all active:scale-95 w-full sm:w-auto justify-center whitespace-nowrap"
             >
               <Mail className="w-4 h-4 stroke-[2.2]" />
-              <span>hello@aurumswap.demo</span>
+              <span>hello@fasttraderexchange.com</span>
             </a>
           </div>
         </div>
 
         <div className="pt-3 w-full text-center">
           <p className="text-[11px] font-medium text-gray-400 dark:text-zinc-500 leading-none">
-            &copy; 2024 &mdash; {currentYear} aurumswap.demo. Все права защищены.
+            &copy; 2024 &mdash; {currentYear} FastTraderExchange. Все права защищены.
           </p>
         </div>
       </div>

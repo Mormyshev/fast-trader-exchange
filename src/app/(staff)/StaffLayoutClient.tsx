@@ -335,24 +335,23 @@ export default function StaffLayoutClient({
           <div className="flex items-center justify-between gap-2 shrink-0 px-1 sm:px-2">
             <Link
               href="/"
-              className="relative h-7 min-w-0 flex-1 text-base sm:text-lg font-black tracking-tight text-zinc-900 select-none hover:opacity-80"
+              className="relative flex h-7 min-w-0 flex-1 items-center gap-2 text-sm sm:text-base font-black tracking-tight text-zinc-900 select-none hover:opacity-80"
               title="На главную сайта"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.svg"
+                alt="FastTraderExchange"
+                width={28}
+                height={28}
+                className="h-7 w-7 shrink-0"
+              />
               <span
-                className={`absolute inset-y-0 left-0 flex items-center whitespace-nowrap transition-opacity duration-200 ${
+                className={`truncate whitespace-nowrap transition-opacity duration-200 ${
                   collapsed ? "opacity-0" : "opacity-100 delay-75"
                 }`}
               >
-                AURUM SWAP
-                <span className="text-[#e6c628] font-medium">.DEMO</span>
-              </span>
-              <span
-                aria-hidden
-                className={`absolute inset-y-0 left-0 flex items-center transition-opacity duration-200 ${
-                  collapsed ? "opacity-100 delay-75" : "opacity-0"
-                }`}
-              >
-                A<span className="text-[#e6c628]">.</span>
+                FastTraderExchange
               </span>
             </Link>
             <button

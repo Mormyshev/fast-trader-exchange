@@ -17,7 +17,7 @@ import {
 import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
 import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
 import OperatorOrderCard from "@/src/components/staff/OperatorOrderCard";
-import { isOrderExpiredByTtl } from "@/src/utils/orders/ttl";
+import { isOrderExpiredByTtl, orderTtlStartedAt } from "@/src/utils/orders/ttl";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import type { OrderClient } from "@/src/utils/orders/client-info";
 import { formatClientName, mergeOrderClient } from "@/src/utils/orders/client-info";
@@ -73,6 +73,8 @@ interface Order {
   operator_pseudonym_snapshot?: string | null;
   client?: OrderClient | null;
   order_number?: number | null;
+  payment_issued_at?: string | null;
+  updated_at?: string | null;
 }
 
 type TabId = "new" | "in_work" | "awaiting" | "review" | "completed" | "cancelled";
@@ -155,12 +157,20 @@ export default function OperatorOrdersPage() {
 
   // Когда таймер истёк — подтверждаем отмену через API (сервер сам переведёт в cancelled)
   useEffect(() => {
-    const candidates = [...newOrders, ...myOrders].filter(
-      (o) => hasOrderTtl(o.status) && isOrderExpiredByTtl(o.created_at, now),
+    const live = [...newOrders, ...myOrders];
+    const candidates = live.filter(
+      (o) => hasOrderTtl(o.status) && isOrderExpiredByTtl(orderTtlStartedAt(o), now),
     );
+    const liveKeys = new Set(
+      live.map((o) => `${o.id}:${orderTtlStartedAt(o)}`),
+    );
+    for (const key of expiredHandledRef.current) {
+      if (!liveKeys.has(key)) expiredHandledRef.current.delete(key);
+    }
     for (const order of candidates) {
-      if (expiredHandledRef.current.has(order.id)) continue;
-      expiredHandledRef.current.add(order.id);
+      const key = `${order.id}:${orderTtlStartedAt(order)}`;
+      if (expiredHandledRef.current.has(key)) continue;
+      expiredHandledRef.current.add(key);
       void (async () => {
         try {
           const res = await fetch(`/api/orders/${order.id}`, {

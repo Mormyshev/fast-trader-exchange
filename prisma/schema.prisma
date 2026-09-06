@@ -187,6 +187,7 @@ model Orders {
   operator_receipt_url String?
   operator_pseudonym_snapshot String?
   order_number Int? @unique
+  payment_issued_at DateTime? @db.Timestamptz
 
   user            Profiles?   @relation("UserOrders", fields: [user_id], references: [id], onDelete: SetNull)
   operator        Profiles?   @relation("OperatorOrders", fields: [operator_id], references: [id], onDelete: SetNull)

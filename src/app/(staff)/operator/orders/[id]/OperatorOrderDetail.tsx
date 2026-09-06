@@ -19,7 +19,11 @@ import { useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
 import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
-import { isOrderExpiredByTtl, ORDER_TTL_STATUSES } from "@/src/utils/orders/ttl";
+import {
+  isOrderExpiredByTtl,
+  ORDER_TTL_STATUSES,
+  orderTtlStartedAt,
+} from "@/src/utils/orders/ttl";
 import type { OrderClient } from "@/src/utils/orders/client-info";
 import {
   buildOperatorPaymentDetails,
@@ -61,6 +65,8 @@ interface Order {
   operator_pseudonym_snapshot?: string | null;
   client?: OrderClient | null;
   order_number?: number | null;
+  payment_issued_at?: string | null;
+  updated_at?: string | null;
 }
 
 function statusLabel(status: OrderStatus) {
@@ -176,7 +182,10 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
     if (!(ORDER_TTL_STATUSES as readonly string[]).includes(order.status)) {
       return;
     }
-    if (!isOrderExpiredByTtl(order.created_at, now)) return;
+    if (!isOrderExpiredByTtl(orderTtlStartedAt(order), now)) {
+      expireRequestedRef.current = false;
+      return;
+    }
     if (expireRequestedRef.current) return;
     expireRequestedRef.current = true;
 
@@ -481,7 +490,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       </div>
 
       <RateFixationBar
-        createdAt={order.created_at}
+        createdAt={orderTtlStartedAt(order)}
         status={order.status}
         now={now}
       />

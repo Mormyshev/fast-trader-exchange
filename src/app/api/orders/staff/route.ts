@@ -10,9 +10,13 @@ import {
   isOrderNumberColumnMissing,
   stripOrderNumberField,
 } from "@/src/utils/orders/public-number";
+import {
+  isPaymentIssuedColumnMissing,
+  stripPaymentIssuedField,
+} from "@/src/utils/orders/ttl";
 
 const ORDER_FIELDS =
-  "id, created_at, status, user_id, operator_id, operator_pseudonym_snapshot, order_number, currency_from, currency_to, amount_from, amount_to, wallet_from, wallet_to, tx_hash, payment_details, receipt_url, operator_receipt_url";
+  "id, created_at, status, user_id, operator_id, operator_pseudonym_snapshot, order_number, payment_issued_at, currency_from, currency_to, amount_from, amount_to, wallet_from, wallet_to, tx_hash, payment_details, receipt_url, operator_receipt_url";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -125,20 +129,32 @@ export async function GET() {
 
     await cancelExpiredOrders(admin);
 
+    let fields = ORDER_FIELDS;
     let bundle = await loadStaffOrders(
       admin,
       user.id,
       isAdmin,
       includeTeamQueue,
-      ORDER_FIELDS,
+      fields,
     );
     if (bundle.error && isOrderNumberColumnMissing(bundle.error)) {
+      fields = stripOrderNumberField(fields);
       bundle = await loadStaffOrders(
         admin,
         user.id,
         isAdmin,
         includeTeamQueue,
-        stripOrderNumberField(ORDER_FIELDS),
+        fields,
+      );
+    }
+    if (bundle.error && isPaymentIssuedColumnMissing(bundle.error)) {
+      fields = stripPaymentIssuedField(fields);
+      bundle = await loadStaffOrders(
+        admin,
+        user.id,
+        isAdmin,
+        includeTeamQueue,
+        fields,
       );
     }
 

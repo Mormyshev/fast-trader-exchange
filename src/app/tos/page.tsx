@@ -4,8 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import TermsContent from "./_components/TermsContent";
 
 export const metadata: Metadata = {
-  title: "Пользовательское соглашение — Aurum Swap",
-  description: "Условия использования сервиса Aurum Swap",
+  title: "Пользовательское соглашение — FastTraderExchange",
+  description: "Условия использования сервиса FastTraderExchange",
 };
 
 export default function TosPage() {

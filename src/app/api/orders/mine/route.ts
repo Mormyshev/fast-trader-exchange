@@ -7,6 +7,10 @@ import {
   isOrderNumberColumnMissing,
   stripOrderNumberField,
 } from "@/src/utils/orders/public-number";
+import {
+  isPaymentIssuedColumnMissing,
+  stripPaymentIssuedField,
+} from "@/src/utils/orders/ttl";
 
 const IN_PROGRESS_STATUSES = [
   "processing",
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest) {
     await cancelExpiredOrders(admin);
 
     const fieldsWithNumber =
-      "id, created_at, status, currency_from, currency_to, amount_from, amount_to, wallet_to, payment_details, receipt_url, operator_receipt_url, order_number";
+      "id, created_at, status, currency_from, currency_to, amount_from, amount_to, wallet_to, payment_details, receipt_url, operator_receipt_url, order_number, payment_issued_at";
 
     const buildQuery = (fields: string) => {
       let query = admin
@@ -87,9 +91,15 @@ export async function GET(request: NextRequest) {
         .eq("status", "completed"),
     ]);
 
+    let fields = fieldsWithNumber;
     let { data, error } = listRes;
     if (error && isOrderNumberColumnMissing(error)) {
-      ({ data, error } = await buildQuery(stripOrderNumberField(fieldsWithNumber)));
+      fields = stripOrderNumberField(fields);
+      ({ data, error } = await buildQuery(fields));
+    }
+    if (error && isPaymentIssuedColumnMissing(error)) {
+      fields = stripPaymentIssuedField(fields);
+      ({ data, error } = await buildQuery(fields));
     }
 
     if (error) {

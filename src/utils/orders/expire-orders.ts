@@ -7,12 +7,16 @@ import {
   isOrderExpiredByTtl,
   ORDER_TTL_MS,
   ORDER_TTL_STATUSES,
+  orderTtlStartedAt,
 } from "@/src/utils/orders/ttl";
 
 type OrderRow = Record<string, unknown> & {
   id: string;
   status: string;
   created_at: string;
+  updated_at?: string | null;
+  payment_issued_at?: string | null;
+  payment_details?: string | null;
 };
 
 /** Cancel one order if it outlived the TTL. Returns the (possibly updated) order. */
@@ -23,7 +27,7 @@ export async function expireOrderIfNeeded(
   if (!ORDER_TTL_STATUSES.includes(order.status as (typeof ORDER_TTL_STATUSES)[number])) {
     return order;
   }
-  if (!isOrderExpiredByTtl(order.created_at)) {
+  if (!isOrderExpiredByTtl(orderTtlStartedAt(order))) {
     return order;
   }
 
@@ -50,13 +54,28 @@ export async function cancelExpiredOrders(admin: SupabaseClient): Promise<{
 }> {
   const cutoff = new Date(Date.now() - ORDER_TTL_MS).toISOString();
 
-  const { data: expired, error } = await admin
+  const waiting = await admin
     .from("orders")
     .select("*")
-    .in("status", [...ORDER_TTL_STATUSES])
+    .in("status", ["pending", "processing"])
     .lt("created_at", cutoff);
 
-  if (error || !expired?.length) {
+  const paying = await admin
+    .from("orders")
+    .select("*")
+    .eq("status", "awaiting_payment")
+    .lt("created_at", cutoff);
+
+  if (waiting.error) {
+    return { cancelled: 0, ids: [] };
+  }
+
+  const expiredPaying = (paying.data ?? []).filter((row) =>
+    isOrderExpiredByTtl(orderTtlStartedAt(row as OrderRow)),
+  );
+
+  const expired = [...(waiting.data ?? []), ...expiredPaying];
+  if (!expired.length) {
     return { cancelled: 0, ids: [] };
   }
 

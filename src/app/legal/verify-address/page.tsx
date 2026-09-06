@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import AmlServiceButtons from "../_components/AmlServiceButtons";
 
 export const metadata: Metadata = {
-  title: "Проверить адрес перед обменом — Aurum Swap",
+  title: "Проверить адрес перед обменом — FastTraderExchange",
   description:
     "Проверьте криптовалютный адрес через независимые AML-сервисы перед обменом",
 };

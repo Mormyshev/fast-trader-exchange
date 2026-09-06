@@ -5,7 +5,7 @@ export default function Features() {
   return (
     <section className="rounded-2xl bg-[#FFDD2D] px-6 py-8 shadow-[0_4px_24px_rgba(15,23,42,0.04)] sm:px-9 sm:py-10 lg:px-12 lg:py-12">
       <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-900/40">
-        Aurum Swap
+        FastTraderExchange
       </p>
       <h1 className="mt-4 text-[1.85rem] font-bold leading-[1.05] tracking-tight text-zinc-900 sm:text-4xl lg:text-[2.75rem]">
         Обмен криптовалюты

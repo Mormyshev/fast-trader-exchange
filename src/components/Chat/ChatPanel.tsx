@@ -379,7 +379,7 @@ export default function ChatPanel({
             ) : (
               <div>
                 <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                  Поддержка Aurum Swap
+                  Поддержка FastTraderExchange
                 </p>
                 <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
                   {supportWaitingLabel()}

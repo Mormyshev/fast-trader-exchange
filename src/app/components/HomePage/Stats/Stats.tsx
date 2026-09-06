@@ -11,7 +11,7 @@ export default function Stats() {
   return (
     <section className="w-full">
       <h2 className="text-center text-2xl sm:text-[28px] font-bold tracking-tight text-zinc-900">
-        Aurum Swap в цифрах
+        FastTraderExchange в цифрах
       </h2>
 
       <div className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">

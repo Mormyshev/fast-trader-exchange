@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import AmlKycContent from "../_components/AmlKycContent";
 
 export const metadata: Metadata = {
-  title: "AML / KYC — Aurum Swap",
+  title: "AML / KYC — FastTraderExchange",
   description: "Политика противодействия отмыванию доходов и процедуры KYC",
 };
 

@@ -10,7 +10,7 @@ export default function PrivacyContent() {
       <ul className="list-disc pl-5 space-y-2">
         <li>
           Настоящая Политика регулирует порядок обработки персональных данных
-          оператором aurumswap.demo и информирует о мерах защиты таких данных.
+          оператором FastTraderExchange и информирует о мерах защиты таких данных.
           Документ доступен всем пользователям в сети Интернет.
         </li>
         <li>
@@ -43,7 +43,7 @@ export default function PrivacyContent() {
           предоставлен субъектом для неограниченного круга лиц.
         </li>
         <li>
-          Оператор — aurumswap.demo, определяющий цели и методы обработки данных.
+          Оператор — FastTraderExchange, определяющий цели и методы обработки данных.
         </li>
         <li>
           Обработка данных — сбор, хранение, использование, передача и иные
@@ -51,23 +51,23 @@ export default function PrivacyContent() {
         </li>
         <li>
           Мобильное приложение — программа для устройств (смартфоны, планшеты),
-          обеспечивающая доступ к услугам aurumswap.demo.
+          обеспечивающая доступ к услугам FastTraderExchange.
         </li>
         <li>
           Личный кабинет — защищенный раздел на сайте/в приложении, доступный
           после регистрации (логин и пароль).
         </li>
         <li>
-          Сайт — информационный ресурс по адресу aurumswap.demo, включая тексты,
+          Сайт — информационный ресурс по адресу FastTraderExchange, включая тексты,
           графику, ПО и иные материалы.
         </li>
       </ul>
 
       <h3 className="text-base md:text-lg font-bold text-zinc-900 dark:text-zinc-100 pt-2">
-        Обработка данных на aurumswap.demo
+        Обработка данных на FastTraderExchange
       </h3>
       <p>
-        Сервис Aurum Swap обрабатывает и хранит персональные данные с помощью
+        Сервис FastTraderExchange обрабатывает и хранит персональные данные с помощью
         сервиса{" "}
         <a
           href="https://sumsub.com/"
@@ -229,7 +229,7 @@ export default function PrivacyContent() {
       </p>
       <p>
         Пользователь может добровольно согласиться на получение рекламных и
-        информационных рассылок от Aurum Swap, включая:
+        информационных рассылок от FastTraderExchange, включая:
       </p>
       <ul className="list-disc pl-5 space-y-1">
         <li>Новости о сервисе и обновлениях;</li>
@@ -246,8 +246,8 @@ export default function PrivacyContent() {
       <p>
         Пользователь вправе в любой момент отказаться от рассылок при обращении
         в техническую поддержку онлайн-чата или e-mail (
-        <a href="mailto:hello@aurumswap.demo" className={linkClass}>
-          hello@aurumswap.demo
+        <a href="mailto:hello@fasttraderexchange.com" className={linkClass}>
+          hello@fasttraderexchange.com
         </a>
         ).
       </p>
@@ -273,7 +273,7 @@ export default function PrivacyContent() {
         Заключительные положения
       </h3>
       <p>
-        1. Политика вступает в силу с момента публикации на aurumswap.demo.
+        1. Политика вступает в силу с момента публикации на FastTraderExchange.
       </p>
       <p>2. Изменения вносятся при:</p>
       <ul className="list-disc pl-5 space-y-1">
@@ -284,7 +284,7 @@ export default function PrivacyContent() {
       <p>
         Актуальная версия Политики доступна по адресу:{" "}
         <a href="/legal/privacy" className={linkClass}>
-          https://aurumswap.demo/legal/privacy
+          https://t.me/FastTraderExchangelegal/privacy
         </a>
         .
       </p>

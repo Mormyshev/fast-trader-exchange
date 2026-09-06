@@ -9,6 +9,7 @@ import {
 } from "@/src/utils/supabase/broadcast";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
 import { expireOrderIfNeeded } from "@/src/utils/orders/expire-orders";
+import { isPaymentIssuedColumnMissing } from "@/src/utils/orders/ttl";
 import {
   fetchOperatorPseudonym,
   stripOrderInternalFields,
@@ -20,6 +21,7 @@ import {
   STAFF_OPEN_ORDER_STATUSES,
 } from "@/src/utils/staff/duty";
 import { canReassignOrders } from "@/src/utils/staff/permissions";
+import { attachPaymentIssuedAt } from "@/src/utils/orders/payment-details";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -289,7 +291,25 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
     }
 
-    const { data: updated, error: updateError } = await withTimeout(
+    const nextStatus = String(patch.status ?? current.status);
+    if (
+      nextStatus === "awaiting_payment" &&
+      (current.status !== "awaiting_payment" ||
+        typeof patch.payment_details === "string")
+    ) {
+      const issuedAt = new Date().toISOString();
+      patch.payment_issued_at = issuedAt;
+      const details = String(
+        patch.payment_details ??
+          (current as { payment_details?: string | null }).payment_details ??
+          "",
+      );
+      if (details) {
+        patch.payment_details = attachPaymentIssuedAt(details, issuedAt);
+      }
+    }
+
+    let { data: updated, error: updateError } = await withTimeout(
       actor.admin
         .from("orders")
         .update(patch)
@@ -299,6 +319,24 @@ export async function PATCH(request: Request, context: RouteContext) {
       8000,
       { data: null, error: { message: "Database timeout" } } as any,
     );
+
+    if (
+      updateError &&
+      isPaymentIssuedColumnMissing(updateError) &&
+      patch.payment_issued_at
+    ) {
+      const { payment_issued_at: _issued, ...withoutIssued } = patch;
+      ({ data: updated, error: updateError } = await withTimeout(
+        actor.admin
+          .from("orders")
+          .update(withoutIssued)
+          .eq("id", id)
+          .select("*")
+          .single(),
+        8000,
+        { data: null, error: { message: "Database timeout" } } as any,
+      ));
+    }
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 503 });

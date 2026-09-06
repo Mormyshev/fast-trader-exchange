@@ -718,7 +718,7 @@ export default function ProfilePage() {
                                 </p>
                                 <p className="mt-0.5 text-[11px] font-medium text-zinc-400">
                                     {FILE_HINT}. На фоне — адрес сайта или лист
-                                    бумаги с email, номером заявки и Aurum Swap.
+                                    бумаги с email, номером заявки и FastTraderExchange.
                                 </p>
                             </div>
                             <div className="grid min-h-0 flex-1 grid-rows-3 gap-2">

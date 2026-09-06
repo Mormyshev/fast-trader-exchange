@@ -4,8 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import PrivacyContent from "./_components/PrivacyContent";
 
 export const metadata: Metadata = {
-  title: "Обработка персональных данных — Aurum Swap",
-  description: "Политика обработки персональных данных пользователей Aurum Swap",
+  title: "Обработка персональных данных — FastTraderExchange",
+  description: "Политика обработки персональных данных пользователей FastTraderExchange",
 };
 
 export default function PrivacyPage() {

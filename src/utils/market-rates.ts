@@ -89,7 +89,7 @@ async function fetchCbrXml(url: string): Promise<number | null> {
     responseType: "text",
     headers: {
       Accept: "application/xml, text/xml, */*",
-      "User-Agent": "AurumSwap/1.0",
+      "User-Agent": "FastTraderExchange/1.0",
     },
   });
   const xml = typeof res.data === "string" ? res.data : String(res.data ?? "");
