@@ -209,7 +209,7 @@ export default function OperatorOrdersPage() {
     const incomingTtl = ttlStartedAtFromDetails(updated.payment_details);
     const prevTtl = ttlStartedAtFromDetails(prev?.payment_details);
     const keepPrevDetails =
-      Boolean(prevTtl) &&
+      prevTtl != null &&
       (!incomingTtl ||
         new Date(prevTtl).getTime() > new Date(incomingTtl).getTime());
 
