@@ -1,4 +1,4 @@
-import { findSbpBank } from "@/src/utils/banks/sbp-banks";
+import { findSbpBank, isManualSbpBank, normalizeManualBankName, SBP_MANUAL_BANK_ID } from "@/src/utils/banks/sbp-banks";
 import {
   isCryptoOrderCode,
   orderCodeToCurrencyId,
@@ -35,6 +35,7 @@ export function validateSbpPaymentRequisites(
   destination: string,
   bankId: string,
   method?: SbpPayoutMethod,
+  customBankName?: string,
 ):
   | {
       ok: true;
@@ -46,7 +47,15 @@ export function validateSbpPaymentRequisites(
     }
   | { ok: false; error: string } {
   const bank = findSbpBank(bankId);
-  if (!bank) {
+  const manualName = normalizeManualBankName(customBankName ?? "");
+  if (isManualSbpBank(bankId)) {
+    if (manualName.length < 2) {
+      return { ok: false, error: "Введите название банка" };
+    }
+    if (manualName.length > 80) {
+      return { ok: false, error: "Слишком длинное название банка" };
+    }
+  } else if (!bank) {
     return {
       ok: false,
       error:
@@ -65,8 +74,8 @@ export function validateSbpPaymentRequisites(
     method: resolved,
     phone: resolved === "sbp" ? destCheck.value : "",
     card: resolved === "card" ? destCheck.value : "",
-    bankId: bank.id,
-    bankName: bank.name,
+    bankId: bank?.id ?? SBP_MANUAL_BANK_ID,
+    bankName: bank?.name ?? manualName,
   };
 }
 
@@ -74,6 +83,7 @@ export function serializeSbpPaymentDetails(
   destination: string,
   bankId: string,
   method?: SbpPayoutMethod,
+  customBankName?: string,
 ): string {
   const bank = findSbpBank(bankId);
   const resolved = method ?? detectSbpPayoutMethod(destination);
@@ -85,7 +95,7 @@ export function serializeSbpPaymentDetails(
     phone: resolved === "sbp" ? value : "",
     card: resolved === "card" ? value : "",
     bankId,
-    bankName: bank?.name ?? "",
+    bankName: bank?.name ?? normalizeManualBankName(customBankName ?? ""),
   });
 }
 
@@ -125,6 +135,50 @@ export function paymentIssuedAtFromDetails(
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (typeof parsed?.issuedAt === "string" && parsed.issuedAt.trim()) {
       return parsed.issuedAt;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/** Restart the order TTL after a cancelled → processing restore. */
+export function attachTtlStartedAt(
+  raw: string | null | undefined,
+  startedAt: string,
+): string {
+  if (!raw?.trim()) {
+    return JSON.stringify({ v: 2, ttlStartedAt: startedAt });
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return JSON.stringify({
+        ...parsed,
+        ttlStartedAt: startedAt,
+        issuedAt: startedAt,
+      });
+    }
+  } catch {
+    // free-text requisites
+  }
+  return JSON.stringify({
+    v: 2,
+    kind: "legacy",
+    legacy: raw,
+    ttlStartedAt: startedAt,
+    issuedAt: startedAt,
+  });
+}
+
+export function ttlStartedAtFromDetails(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed?.ttlStartedAt === "string" && parsed.ttlStartedAt.trim()) {
+      return parsed.ttlStartedAt;
     }
   } catch {
     // ignore
@@ -189,6 +243,10 @@ export function parsePaymentDetails(
           phone: typeof parsed.phone === "string" ? parsed.phone : "",
         };
       }
+
+      if (typeof parsed.ttlStartedAt === "string" && parsed.ttlStartedAt.trim()) {
+        return empty;
+      }
     }
   } catch {
     // old free-text requisites
@@ -221,6 +279,7 @@ export function buildOperatorPaymentDetails(
     wallet: string;
     bankId: string;
     method?: SbpPayoutMethod;
+    bankName?: string;
   },
 ): { ok: true; payload: string; summary: string } | { ok: false; error: string } {
   if (clientPaysWithCrypto(currencyFrom)) {
@@ -240,12 +299,18 @@ export function buildOperatorPaymentDetails(
     input.phone,
     input.bankId,
     input.method,
+    input.bankName,
   );
   if (!sbp.ok) return { ok: false, error: sbp.error };
   const destination = sbp.card || sbp.phone;
   return {
     ok: true,
-    payload: serializeSbpPaymentDetails(destination, sbp.bankId, sbp.method),
+    payload: serializeSbpPaymentDetails(
+      destination,
+      sbp.bankId,
+      sbp.method,
+      sbp.bankName,
+    ),
     summary:
       sbp.method === "card"
         ? `Карта ${sbp.bankName}, ${destination}`

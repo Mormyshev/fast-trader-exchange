@@ -3,6 +3,15 @@ import { createClient } from "@/src/utils/supabase/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
+import { clientPaysWithCrypto } from "@/src/utils/orders/payment-details";
+import { stripOrderInternalFields } from "@/src/utils/orders/operator-snapshot";
+import {
+  isAllowedReceiptFile,
+  receiptContentType,
+  receiptFileExt,
+  receiptRejectMessage,
+  receiptUploadKind,
+} from "@/src/utils/orders/receipt-file";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -23,13 +32,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Файл не передан" }, { status: 400 });
-    }
-
-    if (file.type !== "application/pdf") {
-      return NextResponse.json(
-        { error: "Принимаются только PDF" },
-        { status: 400 },
-      );
     }
 
     if (file.size > 10 * 1024 * 1024) {
@@ -62,13 +64,21 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const ext = file.name.split(".").pop() || "pdf";
+    const kind = receiptUploadKind(clientPaysWithCrypto(order.currency_from));
+    if (!isAllowedReceiptFile(file, kind)) {
+      return NextResponse.json(
+        { error: receiptRejectMessage(kind) },
+        { status: 400 },
+      );
+    }
+
+    const ext = receiptFileExt(file);
     const filePath = `${id}-${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const uploadResult = await withTimeout(
       admin.storage.from("receipts").upload(filePath, buffer, {
-        contentType: "application/pdf",
+        contentType: receiptContentType(file),
         upsert: true,
       }),
       15000,
@@ -101,7 +111,9 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: updateError.message }, { status: 503 });
     }
 
-    return NextResponse.json({ order: updated });
+    return NextResponse.json({
+      order: stripOrderInternalFields(updated as Record<string, unknown>),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

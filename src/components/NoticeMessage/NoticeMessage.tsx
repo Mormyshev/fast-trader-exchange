@@ -31,7 +31,8 @@ export default function NoticeMessage() {
                         Перед обменом
                     </h2>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Несколько правил, которые стоит учесть при создании заявки.
+                        Несколько правил, которые стоит учесть при создании
+                        заявки.
                     </p>
                 </div>
             </div>
@@ -52,12 +53,10 @@ export default function NoticeMessage() {
                     статуса заявки «Оплаченная».
                 </li>
                 <li>
-                    Комиссия обменного пункта уже включена в курс. Курс
-                    формируется по данным{" "}
+                    Курс формируется по данным{" "}
                     <span className="font-semibold text-zinc-800 dark:text-zinc-100">
-                        Rapira.net
+                        ЦБ РФ
                     </span>{" "}
-                    и может включать комиссию до 1%.
                 </li>
             </ul>
         </div>

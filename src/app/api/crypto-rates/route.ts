@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
-  fetchCbrUsdRub,
+  applyUsdtFallback,
+  fetchCbrUsdRubHit,
   fetchMarketRates,
+  PUBLIC_RATE_SYMBOLS,
   ratesToUpsertRows,
+  resolveOfflineUsdt,
+  USDT_CBR_LAST_SYMBOL,
 } from "@/src/utils/market-rates";
 
 const STALE_MS = 60_000;
@@ -15,14 +19,22 @@ type RateRecord = {
   updated_at?: string | null;
 };
 
-function ratesResponse(
-  rows: Array<{ symbol: string; exchange_price: number }>,
-  headers: Record<string, string>,
-) {
+type PublicRate = {
+  symbol: string;
+  exchange_price: number;
+  source?: string;
+  cbr_offline?: boolean;
+};
+
+/** Последние живые источники (ЦБ / Rapira / Bybit / Binance). */
+let lastLiveSources: Record<string, string> = {};
+
+function ratesResponse(rows: PublicRate[], cbrOffline: boolean, refreshed: boolean) {
   return NextResponse.json(rows, {
     headers: {
       "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
-      ...headers,
+      "X-Rates-Refreshed": refreshed ? "1" : "0",
+      "X-Cbr-Offline": cbrOffline ? "1" : "0",
     },
   });
 }
@@ -54,7 +66,48 @@ function isStale(rows: RateRecord[]) {
   );
 }
 
-export async function GET() {
+function hasLiveSources() {
+  return Boolean(
+    lastLiveSources.USDTUSDT &&
+      lastLiveSources.BTCUSDT &&
+      lastLiveSources.ETHUSDT &&
+      lastLiveSources.SOLUSDT &&
+      lastLiveSources.TONUSDT,
+  );
+}
+
+function toPublicPayload(
+  bySymbol: Record<string, { exchange_price: number; source?: string }>,
+  cbrOffline: boolean,
+): PublicRate[] {
+  return PUBLIC_RATE_SYMBOLS.map((symbol) => {
+    const row = bySymbol[symbol];
+    return {
+      symbol,
+      exchange_price: row?.exchange_price ?? 0,
+      source: row?.source,
+      ...(symbol === "USDTUSDT" ? { cbr_offline: cbrOffline } : {}),
+    };
+  });
+}
+
+async function persistRates(
+  supabase: ReturnType<typeof createRatesDb>,
+  rows: ReturnType<typeof ratesToUpsertRows>,
+) {
+  if (!supabase || rows.length === 0) return;
+  try {
+    const { error } = await supabase
+      .from("crypto_rates")
+      .upsert(rows, { onConflict: "symbol" });
+    if (error) console.warn("[crypto-rates] db write:", error.message);
+  } catch (err) {
+    console.warn("[crypto-rates] db write failed:", err);
+  }
+}
+
+export async function GET(request: Request) {
+  const fresh = new URL(request.url).searchParams.get("fresh") === "1";
   let rows: RateRecord[] = [];
   const supabase = createRatesDb();
 
@@ -70,38 +123,82 @@ export async function GET() {
     }
   }
 
-  if (!isStale(rows)) {
-    const cbrUsdRub = await fetchCbrUsdRub();
-    const payload = rows.map(({ symbol, exchange_price }) => ({
-      symbol,
-      exchange_price:
-        symbol === "USDTUSDT" && cbrUsdRub ? cbrUsdRub : exchange_price,
-    }));
-    return ratesResponse(payload, { "X-Rates-Refreshed": "0" });
-  }
+  const needLive = fresh || isStale(rows) || !hasLiveSources();
 
-  const rates = await fetchMarketRates();
-  const upsertRows = ratesToUpsertRows(rates);
+  if (!needLive) {
+    const cbrHit = await fetchCbrUsdRubHit();
+    const cbrOffline = !cbrHit;
+    const offlineUsdt = resolveOfflineUsdt(rows);
 
-  if (supabase) {
-    try {
-      const { error } = await supabase
-        .from("crypto_rates")
-        .upsert(upsertRows, { onConflict: "symbol" });
-      if (error) console.warn("[crypto-rates] db write:", error.message);
-    } catch (err) {
-      console.warn("[crypto-rates] db write failed:", err);
+    if (cbrHit) {
+      lastLiveSources = { ...lastLiveSources, USDTUSDT: cbrHit.source };
+      const now = new Date().toISOString();
+      await persistRates(supabase, [
+        {
+          symbol: "USDTUSDT",
+          base_price: cbrHit.rate,
+          exchange_price: cbrHit.rate,
+          updated_at: now,
+        },
+        {
+          symbol: USDT_CBR_LAST_SYMBOL,
+          base_price: cbrHit.rate,
+          exchange_price: cbrHit.rate,
+          updated_at: now,
+        },
+      ]);
+    } else {
+      lastLiveSources = { ...lastLiveSources, USDTUSDT: offlineUsdt.source };
     }
+
+    const bySymbol: Record<string, { exchange_price: number; source?: string }> =
+      {};
+    for (const row of rows) {
+      bySymbol[row.symbol] = {
+        exchange_price: row.exchange_price,
+        source: lastLiveSources[row.symbol],
+      };
+    }
+    bySymbol.USDTUSDT = {
+      exchange_price: cbrHit ? cbrHit.rate : offlineUsdt.rate,
+      source: lastLiveSources.USDTUSDT,
+    };
+
+    console.info(
+      "[crypto-rates] кэш чисел из crypto_rates, ЦБ:",
+      cbrOffline ? "офлайн" : cbrHit?.source,
+    );
+    return ratesResponse(toPublicPayload(bySymbol, cbrOffline), cbrOffline, false);
   }
+
+  console.info(
+    fresh
+      ? "[crypto-rates] принудительное обновление внешних API"
+      : "[crypto-rates] кэш устарел — запрос к внешним API",
+  );
+  const fetched = await fetchMarketRates();
+  const rates = applyUsdtFallback(fetched, rows);
+  const upsertRows = ratesToUpsertRows(rates);
+  lastLiveSources = { ...rates.sources };
+
+  await persistRates(supabase, upsertRows);
+
+  const bySymbol: Record<string, { exchange_price: number; source?: string }> =
+    {};
+  for (const row of upsertRows) {
+    bySymbol[row.symbol] = {
+      exchange_price: row.exchange_price,
+      source: rates.sources[row.symbol] ?? lastLiveSources[row.symbol],
+    };
+  }
+  bySymbol.USDTUSDT = {
+    exchange_price: rates.USDTUSDT,
+    source: rates.sources.USDTUSDT,
+  };
 
   return ratesResponse(
-    upsertRows.map(({ symbol, exchange_price }) => ({
-      symbol,
-      exchange_price,
-    })),
-    {
-      "X-Rates-Source": rates.source,
-      "X-Rates-Refreshed": "1",
-    },
+    toPublicPayload(bySymbol, rates.cbrOffline),
+    rates.cbrOffline,
+    true,
   );
 }

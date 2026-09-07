@@ -13,20 +13,24 @@ export default function OperatorPayInForm({
   currencyFrom,
   phone,
   bankId,
+  bankName,
   wallet,
   method,
   onPhoneChange,
   onBankChange,
+  onBankNameChange,
   onWalletChange,
   onMethodChange,
 }: {
   currencyFrom: string;
   phone: string;
   bankId: string;
+  bankName?: string;
   wallet: string;
   method: SbpPayoutMethod;
   onPhoneChange: (value: string) => void;
   onBankChange: (value: string) => void;
+  onBankNameChange?: (value: string) => void;
   onWalletChange: (value: string) => void;
   onMethodChange: (method: SbpPayoutMethod) => void;
 }) {
@@ -62,9 +66,11 @@ export default function OperatorPayInForm({
         variant="staff"
         phone={phone}
         bankId={bankId}
+        bankName={bankName}
         method={method}
         onPhoneChange={onPhoneChange}
         onBankChange={onBankChange}
+        onBankNameChange={onBankNameChange}
         onMethodChange={onMethodChange}
       />
       <p className="text-[11px] text-zinc-400 font-medium pl-1 mt-1.5">

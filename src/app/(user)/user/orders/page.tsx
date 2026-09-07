@@ -8,7 +8,6 @@ import {
   ClipboardList,
   ChevronLeft,
   ChevronRight,
-  FileText,
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,7 +45,6 @@ interface Order {
   amount_from: number;
   amount_to: number;
   wallet_to: string;
-  operator_receipt_url?: string | null;
   order_number?: number | null;
 }
 
@@ -403,18 +401,6 @@ export default function UserOrdersPage() {
                           <div className="font-bold text-zinc-900 whitespace-nowrap">
                             {orderPublicTitle(order)}
                           </div>
-                          {order.status === "completed" &&
-                          order.operator_receipt_url ? (
-                            <a
-                              href={`/api/orders/${order.id}/operator-receipt`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:underline"
-                            >
-                              <FileText className="w-3 h-3" />
-                              Подтверждение
-                            </a>
-                          ) : null}
                         </td>
                         <td
                           className={`${TABLE_CELL} whitespace-nowrap font-medium text-zinc-500`}

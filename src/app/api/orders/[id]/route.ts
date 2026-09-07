@@ -13,6 +13,7 @@ import { isPaymentIssuedColumnMissing } from "@/src/utils/orders/ttl";
 import {
   fetchOperatorPseudonym,
   stripOrderInternalFields,
+  attachOperatorSnapshot,
 } from "@/src/utils/orders/operator-snapshot";
 import { attachClientToOrder } from "@/src/utils/orders/attach-client";
 import {
@@ -20,8 +21,11 @@ import {
   staffInactiveResponse,
   STAFF_OPEN_ORDER_STATUSES,
 } from "@/src/utils/staff/duty";
-import { canReassignOrders } from "@/src/utils/staff/permissions";
-import { attachPaymentIssuedAt } from "@/src/utils/orders/payment-details";
+import {
+  canReassignOrders,
+  canRestoreCancelledOrders,
+} from "@/src/utils/staff/permissions";
+import { attachPaymentIssuedAt, attachTtlStartedAt } from "@/src/utils/orders/payment-details";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -48,6 +52,7 @@ async function getActor() {
       isStaff: profile?.role === "operator" || profile?.role === "admin",
       staffActive: isStaffOnDuty(profile),
       canReassignOrders: canReassignOrders(profile),
+      canRestoreCancelledOrders: canRestoreCancelledOrders(profile),
     };
   } catch {
     return null;
@@ -83,7 +88,10 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const fresh = await expireOrderIfNeeded(actor.admin, order);
     const payload = actor.isStaff
-      ? await attachClientToOrder(actor.admin, fresh)
+      ? await attachOperatorSnapshot(
+          actor.admin,
+          await attachClientToOrder(actor.admin, fresh),
+        )
       : stripOrderInternalFields(fresh as Record<string, unknown>);
     return NextResponse.json({ order: payload });
   } catch (err) {
@@ -129,9 +137,31 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const isOwner = current.user_id === actor.user.id;
+    const restoringToWork =
+      current.status === "cancelled" && body.status === "processing";
 
     if (!isOwner && !actor.isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (restoringToWork) {
+      if (!actor.isStaff || !actor.canRestoreCancelledOrders) {
+        return NextResponse.json(
+          {
+            error:
+              "Вернуть заявку в работу могут старший оператор и администратор",
+          },
+          { status: 403 },
+        );
+      }
+    } else if (current.status === "cancelled") {
+      return NextResponse.json(
+        {
+          error:
+            "Отменённую заявку нельзя изменить. Старший оператор или админ может вернуть её в работу.",
+        },
+        { status: 400 },
+      );
     }
 
     if (actor.isStaff && !actor.staffActive) {
@@ -147,7 +177,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
-    if (actor.isStaff) {
+    if (actor.isStaff && !restoringToWork) {
       const nextOperatorId =
         typeof body.operator_id === "string"
           ? body.operator_id
@@ -168,7 +198,24 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const patch: Record<string, unknown> = {};
 
-    if (actor.isStaff) {
+    if (restoringToWork) {
+      const issuedAt = new Date().toISOString();
+      patch.status = "processing";
+      patch.operator_id = actor.user.id;
+      patch.payment_issued_at = issuedAt;
+      patch.payment_details = attachTtlStartedAt(
+        String(
+          (current as { payment_details?: string | null }).payment_details ??
+            "",
+        ),
+        issuedAt,
+      );
+      const pseudonym = await fetchOperatorPseudonym(
+        actor.admin,
+        actor.user.id,
+      );
+      patch.operator_pseudonym_snapshot = pseudonym || null;
+    } else if (actor.isStaff) {
       if (typeof body.payment_details === "string") {
         patch.payment_details = body.payment_details;
       }
@@ -258,8 +305,8 @@ export async function PATCH(request: Request, context: RouteContext) {
             );
             if (pseudonym) {
               patch.operator_pseudonym_snapshot = pseudonym;
-            } else if (isReassign) {
-              patch.operator_pseudonym_snapshot = null;
+            } else if (!hadSnapshot) {
+              patch.operator_pseudonym_snapshot = "Сотрудник";
             }
           }
         }
@@ -292,6 +339,26 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const nextStatus = String(patch.status ?? current.status);
+    if (
+      nextStatus === "cancelled" &&
+      !String(
+        (patch.operator_pseudonym_snapshot as string | undefined) ??
+          (current as { operator_pseudonym_snapshot?: string | null })
+            .operator_pseudonym_snapshot ??
+          "",
+      ).trim()
+    ) {
+      const operatorId = String(
+        (patch.operator_id as string | undefined) ??
+          current.operator_id ??
+          "",
+      );
+      if (operatorId) {
+        patch.operator_pseudonym_snapshot =
+          (await fetchOperatorPseudonym(actor.admin, operatorId)) ||
+          "Сотрудник";
+      }
+    }
     if (
       nextStatus === "awaiting_payment" &&
       (current.status !== "awaiting_payment" ||
@@ -343,17 +410,24 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     if (updated) {
-      void attachClientToOrder(actor.admin, updated).then((withClient) => {
+      void attachClientToOrder(actor.admin, updated).then(async (withClient) => {
+        const withOperator = await attachOperatorSnapshot(
+          actor.admin,
+          withClient,
+        );
         void broadcastOrderEvent(
           ORDER_UPDATED_EVENT,
-          withClient as Record<string, unknown>,
+          withOperator as Record<string, unknown>,
         );
       });
     }
 
     const payload = actor.isStaff
       ? updated
-        ? await attachClientToOrder(actor.admin, updated)
+        ? await attachOperatorSnapshot(
+            actor.admin,
+            await attachClientToOrder(actor.admin, updated),
+          )
         : updated
       : updated
         ? stripOrderInternalFields(updated as Record<string, unknown>)

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
+  applyUsdtFallback,
   fetchMarketRates,
   ratesToUpsertRows,
 } from "@/src/utils/market-rates";
@@ -26,7 +27,17 @@ export async function GET(request: NextRequest) {
     auth: { persistSession: false },
   });
 
-  const rates = await fetchMarketRates();
+  const fetched = await fetchMarketRates();
+  let stored: Array<{ symbol: string; exchange_price: number }> = [];
+  try {
+    const { data } = await supabase
+      .from("crypto_rates")
+      .select("symbol, exchange_price");
+    if (data) stored = data;
+  } catch {
+    // fallback без предыдущего ЦБ
+  }
+  const rates = applyUsdtFallback(fetched, stored);
   const upsertRows = ratesToUpsertRows(rates);
 
   let dbError: string | undefined;

@@ -4,6 +4,17 @@ export type SbpBank = {
   iconSrc: string;
 };
 
+/** Банк не из списка: оператор вводит название сам. */
+export const SBP_MANUAL_BANK_ID = "manual";
+
+export function isManualSbpBank(id: string): boolean {
+  return id === SBP_MANUAL_BANK_ID;
+}
+
+export function normalizeManualBankName(name: string): string {
+  return name.replace(/\s+/g, " ").trim();
+}
+
 /** Единый полный список банков для СБП и рублёвых выплат. */
 export const SBP_BANKS: SbpBank[] = [
   { id: "sber", name: "Сбербанк", iconSrc: "/icons/sber.svg" },

@@ -10,6 +10,14 @@ import {
 } from "@/src/utils/supabase/broadcast";
 import { receiptsObjectPath } from "@/src/utils/orders/receipt-path";
 import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
+import { isCryptoOrderCode } from "@/src/utils/validation/wallet";
+import {
+  isAllowedReceiptFile,
+  receiptContentType,
+  receiptFileExt,
+  receiptRejectMessage,
+  receiptUploadKind,
+} from "@/src/utils/orders/receipt-file";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -37,7 +45,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const isStaff =
       profile?.role === "operator" || profile?.role === "admin";
-    if (order.user_id !== user.id && !isStaff) {
+    if (!isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -101,12 +109,6 @@ export async function POST(request: Request, context: RouteContext) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Файл не передан" }, { status: 400 });
     }
-    if (file.type !== "application/pdf") {
-      return NextResponse.json(
-        { error: "Принимаются только PDF" },
-        { status: 400 },
-      );
-    }
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json(
         { error: "Файл слишком большой (макс. 10 МБ)" },
@@ -126,9 +128,16 @@ export async function POST(request: Request, context: RouteContext) {
     if (!order) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (!isRubPayout(order.currency_to)) {
+    if (!isRubPayout(order.currency_to) && !isCryptoOrderCode(order.currency_to)) {
       return NextResponse.json(
-        { error: "Чек выплаты нужен только при отправке RUB клиенту" },
+        { error: "Чек выплаты для этой заявки не предусмотрен" },
+        { status: 400 },
+      );
+    }
+    const kind = receiptUploadKind(isCryptoOrderCode(order.currency_to));
+    if (!isAllowedReceiptFile(file, kind)) {
+      return NextResponse.json(
+        { error: receiptRejectMessage(kind) },
         { status: 400 },
       );
     }
@@ -145,13 +154,13 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const ext = file.name.split(".").pop() || "pdf";
+    const ext = receiptFileExt(file);
     const filePath = `operator-${id}-${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const uploadResult = await withTimeout(
       admin.storage.from("receipts").upload(filePath, buffer, {
-        contentType: "application/pdf",
+        contentType: receiptContentType(file),
         upsert: true,
       }),
       15000,

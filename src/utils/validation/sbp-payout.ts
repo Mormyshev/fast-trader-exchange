@@ -1,4 +1,4 @@
-import { findSbpBank, findSbpBankByName } from "@/src/utils/banks/sbp-banks";
+import { findSbpBank, findSbpBankByName, isManualSbpBank, normalizeManualBankName, SBP_MANUAL_BANK_ID } from "@/src/utils/banks/sbp-banks";
 import { digitsOnly, formatCardInput, validateCardNumber } from "./card";
 import { formatPhoneInput, validatePhone } from "./common";
 import { validationError, validationOk, type ValidationResult } from "./types";
@@ -41,15 +41,18 @@ export function serializeSbpRequisites(
   destination: string,
   bankId: string,
   method?: SbpPayoutMethod,
+  customBankName?: string,
 ): string {
   const bank = findSbpBank(bankId);
+  const name =
+    bank?.name ?? normalizeManualBankName(customBankName ?? "");
   const resolved = method ?? detectSbpPayoutMethod(destination);
   const formatted = formatSbpDestination(destination, resolved);
   const methodLabel = resolved === "card" ? METHOD_CARD : METHOD_SBP;
-  if (bank && formatted) {
-    return `${bank.name}${SEP}${methodLabel}${SEP}${formatted}`;
+  if (name && formatted) {
+    return `${name}${SEP}${methodLabel}${SEP}${formatted}`;
   }
-  if (bank) return `${bank.name}${SEP}${methodLabel}`;
+  if (name) return `${name}${SEP}${methodLabel}`;
   return formatted;
 }
 
@@ -57,43 +60,73 @@ export function parseSbpRequisites(value: string): {
   bankId: string;
   destination: string;
   method: SbpPayoutMethod;
+  bankName: string;
 } {
+  const empty = {
+    bankId: "",
+    destination: "",
+    method: "sbp" as SbpPayoutMethod,
+    bankName: "",
+  };
   const trimmed = value.trim();
-  if (!trimmed) return { bankId: "", destination: "", method: "sbp" };
+  if (!trimmed) return empty;
+
+  const fromBankLabel = (
+    label: string,
+    method: SbpPayoutMethod,
+    destination: string,
+  ) => {
+    const name = normalizeManualBankName(label);
+    const bank = findSbpBankByName(name);
+    if (bank) {
+      return { bankId: bank.id, destination, method, bankName: bank.name };
+    }
+    if (name) {
+      return {
+        bankId: SBP_MANUAL_BANK_ID,
+        destination,
+        method,
+        bankName: name,
+      };
+    }
+    return { ...empty, destination, method };
+  };
 
   const parts = trimmed.split(SEP);
   if (
     parts.length >= 3 &&
     (parts[1] === METHOD_SBP || parts[1] === METHOD_CARD)
   ) {
-    const bank = findSbpBankByName(parts[0]);
     const method: SbpPayoutMethod =
       parts[1] === METHOD_CARD ? "card" : "sbp";
-    return {
-      bankId: bank?.id ?? "",
-      method,
-      destination: parts.slice(2).join(SEP).trim(),
-    };
+    return fromBankLabel(parts[0], method, parts.slice(2).join(SEP).trim());
   }
 
   const sepIdx = trimmed.indexOf(SEP);
   if (sepIdx !== -1) {
-    const bank = findSbpBankByName(trimmed.slice(0, sepIdx));
     const destination = trimmed.slice(sepIdx + SEP.length).trim();
-    return {
-      bankId: bank?.id ?? "",
+    return fromBankLabel(
+      trimmed.slice(0, sepIdx),
+      detectSbpPayoutMethod(destination),
       destination,
-      method: detectSbpPayoutMethod(destination),
-    };
+    );
   }
 
   const byName = findSbpBankByName(trimmed);
-  if (byName) return { bankId: byName.id, destination: "", method: "sbp" };
+  if (byName) {
+    return {
+      bankId: byName.id,
+      destination: "",
+      method: "sbp",
+      bankName: byName.name,
+    };
+  }
 
   return {
     bankId: "",
     destination: trimmed,
     method: detectSbpPayoutMethod(trimmed),
+    bankName: "",
   };
 }
 
@@ -106,11 +139,19 @@ export function validateSbpRequisites(value: string): ValidationResult {
         : "СБП: выберите банк получателя",
     );
   }
+  if (isManualSbpBank(parsed.bankId) && parsed.bankName.length < 2) {
+    return validationError("Введите название банка");
+  }
   const destination = validateSbpDestination(parsed.destination, parsed.method);
   if (!destination.ok) {
     return validationError(destination.error);
   }
   return validationOk(
-    serializeSbpRequisites(destination.value, parsed.bankId, parsed.method),
+    serializeSbpRequisites(
+      destination.value,
+      parsed.bankId,
+      parsed.method,
+      parsed.bankName,
+    ),
   );
 }

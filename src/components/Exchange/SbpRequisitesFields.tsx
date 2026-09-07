@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, PenLine } from "lucide-react";
 import CurrencyIcon from "@/src/components/CurrencyIcon/CurrencyIcon";
 import SlimScroll from "@/src/components/SlimScroll/SlimScroll";
-import { SBP_BANKS, findSbpBank } from "@/src/utils/banks/sbp-banks";
+import {
+  SBP_BANKS,
+  SBP_MANUAL_BANK_ID,
+  findSbpBank,
+  isManualSbpBank,
+} from "@/src/utils/banks/sbp-banks";
 import {
   formatSbpDestination,
   validateSbpDestination,
@@ -20,9 +25,11 @@ export default function SbpRequisitesFields({
   phone,
   bankId,
   method,
+  bankName = "",
   onPhoneChange,
   onBankChange,
   onMethodChange,
+  onBankNameChange,
   onBlur,
   hasError,
   errorMessage,
@@ -32,9 +39,11 @@ export default function SbpRequisitesFields({
   phone: string;
   bankId: string;
   method: SbpPayoutMethod;
+  bankName?: string;
   onPhoneChange: (value: string) => void;
   onBankChange: (bankId: string) => void;
   onMethodChange: (method: SbpPayoutMethod) => void;
+  onBankNameChange?: (bankName: string) => void;
   onBlur?: () => void;
   hasError?: boolean;
   errorMessage?: string;
@@ -47,6 +56,7 @@ export default function SbpRequisitesFields({
   const selected = findSbpBank(bankId);
   const staff = variant === "staff";
   const isCard = method === "card";
+  const manualBank = isManualSbpBank(bankId);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -150,6 +160,15 @@ export default function SbpRequisitesFields({
                     {selected.name}
                   </span>
                 </>
+              ) : manualBank ? (
+                <>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#FFF4C2] text-[#C9A227]">
+                    <PenLine className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate">
+                    Ручной ввод
+                  </span>
+                </>
               ) : (
                 <span className="text-sm font-bold text-zinc-300 dark:text-zinc-600">
                   Выберите банк
@@ -179,12 +198,32 @@ export default function SbpRequisitesFields({
             >
               <SlimScroll maxHeightClassName="max-h-72">
                 <div className="space-y-1 p-2 pr-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onBankChange(SBP_MANUAL_BANK_ID);
+                      setOpen(false);
+                    }}
+                    className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors cursor-pointer ${
+                      manualBank
+                        ? "bg-[#FFF3B0] dark:bg-amber-500/20"
+                        : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                    }`}
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#FFF4C2] text-[#C9A227]">
+                      <PenLine className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      Ручной ввод
+                    </span>
+                  </button>
                   {SBP_BANKS.map((bank) => (
                     <button
                       key={bank.id}
                       type="button"
                       onClick={() => {
                         onBankChange(bank.id);
+                        onBankNameChange?.("");
                         setOpen(false);
                       }}
                       className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left transition-colors cursor-pointer ${
@@ -204,6 +243,28 @@ export default function SbpRequisitesFields({
             </div>
           )}
         </div>
+        {manualBank ? (
+          <div className="space-y-1.5">
+            {staff ? (
+              <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide pl-0.5">
+                Название банка
+              </p>
+            ) : (
+              <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 pl-4">
+                Название банка
+              </p>
+            )}
+            <input
+              type="text"
+              value={bankName}
+              onChange={(e) => onBankNameChange?.(e.target.value)}
+              placeholder="Например: Ак Барс"
+              maxLength={80}
+              className={destClass}
+              aria-label="Название банка"
+            />
+          </div>
+        ) : null}
       </div>
       )}
 

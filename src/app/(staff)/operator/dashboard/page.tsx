@@ -27,6 +27,7 @@ import OperatorOrderCard from "@/src/components/staff/OperatorOrderCard";
 import type { OperatorOrderCardTone } from "@/src/components/staff/OperatorOrderCard";
 import OrderExchangePair from "@/src/components/staff/OrderExchangePair";
 import StaffDutyToggle from "@/src/components/staff/StaffDutyToggle";
+import StaffRatesBoard from "@/src/components/staff/StaffRatesBoard";
 import StaffRoster from "@/src/components/staff/StaffRoster";
 import { useAuth } from "@/src/app/context/AuthContext";
 import {
@@ -257,24 +258,21 @@ export default function OperatorDashboard() {
 
             setCompletedOrders((prev) => {
                 const without = prev.filter((o) => o.id !== next.id);
-                const isAdmin = roleRef.current === "admin";
                 const visibleCompleted =
                     next.status === "completed" &&
-                    (isAdmin || next.operator_id === currentUserId);
-                return visibleCompleted
-                    ? [next, ...without].slice(0, 50)
-                    : without;
+                    (canReassignRef.current ||
+                        next.operator_id === currentUserId);
+                return visibleCompleted ? [next, ...without] : without;
             });
 
             setCancelledOrders((prev) => {
                 const without = prev.filter((o) => o.id !== next.id);
-                const isAdmin = roleRef.current === "admin";
                 const visible =
                     next.status === "cancelled" &&
-                    (isAdmin ||
+                    (canReassignRef.current ||
                         next.operator_id === currentUserId ||
                         next.operator_id == null);
-                return visible ? [next, ...without].slice(0, 100) : without;
+                return visible ? [next, ...without] : without;
             });
         };
 
@@ -407,6 +405,7 @@ export default function OperatorDashboard() {
             </div>
 
             <StaffDutyToggle />
+            <StaffRatesBoard />
             <StaffRoster />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
@@ -448,14 +447,21 @@ export default function OperatorDashboard() {
                 <Card className="rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem] sm:col-span-2 lg:col-span-1">
                     <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-zinc-500 uppercase tracking-wide">
-                            {role === "admin" ? "Выполнено" : "Выполнено мной"}
+                            {canReassignOrders ? "Выполнено" : "Выполнено мной"}
                         </span>
                         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
                             <CheckCircle2 className="w-5 h-5" />
                         </span>
                     </div>
-                    <div className="text-4xl font-bold text-zinc-900">
-                        {completedCount}
+                    <div>
+                        <div className="text-4xl font-bold text-zinc-900">
+                            {completedCount}
+                        </div>
+                        {canReassignOrders ? (
+                            <p className="mt-1 text-[11px] font-semibold text-zinc-400">
+                                все выполненные заявки команды
+                            </p>
+                        ) : null}
                     </div>
                 </Card>
             </div>
@@ -633,13 +639,8 @@ export default function OperatorDashboard() {
                                                             snapshot={
                                                                 order.operator_pseudonym_snapshot
                                                             }
+                                                            emptyLabel="Оператор не назначен"
                                                         />
-                                                        {!order.operator_pseudonym_snapshot &&
-                                                            order.operator_id && (
-                                                                <span className="text-[11px] text-zinc-400 font-medium">
-                                                                    Без подписи
-                                                                </span>
-                                                            )}
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-4 text-right align-middle">

@@ -11,12 +11,44 @@ export default function StaffClientInfo({
   client,
   compact = false,
   hideLabel = false,
+  stacked = false,
 }: {
   client: OrderClient | null | undefined;
   compact?: boolean;
   hideLabel?: boolean;
+  stacked?: boolean;
 }) {
   const name = formatClientName(client);
+
+  if (stacked) {
+    const hasContacts = Boolean(
+      client?.phone || client?.telegram || client?.email,
+    );
+    const showEmail = Boolean(client?.email && client.email !== name);
+
+    return (
+      <div className="min-w-0 text-[11px] leading-snug space-y-0.5">
+        {!hideLabel && (
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+            Клиент
+          </p>
+        )}
+        <p className="text-xs font-semibold text-zinc-900 break-words">{name}</p>
+        {client?.phone ? (
+          <p className="text-zinc-600 tabular-nums">{client.phone}</p>
+        ) : null}
+        {client?.telegram ? (
+          <p className="text-zinc-600 break-all">{client.telegram}</p>
+        ) : null}
+        {showEmail ? (
+          <p className="text-zinc-500 break-all">{client?.email}</p>
+        ) : null}
+        {!hasContacts ? (
+          <p className="text-zinc-400">Нет контактов</p>
+        ) : null}
+      </div>
+    );
+  }
 
   if (compact) {
     const initials = name

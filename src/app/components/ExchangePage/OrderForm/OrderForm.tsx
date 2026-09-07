@@ -230,6 +230,7 @@ export default function OrderForm() {
   const [fio, setFio] = useState<string>("");
   const [wallet, setWallet] = useState<string>("");
   const [sbpBankId, setSbpBankId] = useState<string>(() => fiatBankId(initialTo));
+  const [sbpBankName, setSbpBankName] = useState<string>("");
   const [sbpMethod, setSbpMethod] = useState<SbpPayoutMethod>("sbp");
   const [email, setEmail] = useState<string>("");
   const [telegram, setTelegram] = useState<string>("");
@@ -441,6 +442,7 @@ export default function OrderForm() {
     setIsSendActive(true);
     setWallet("");
     setSbpBankId(fiatBankId(nextReceive));
+    setSbpBankName("");
     setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(currency, nextReceive, sendAmount);
@@ -481,6 +483,7 @@ export default function OrderForm() {
     setIsSendActive(true);
     setWallet("");
     setSbpBankId(fiatBankId(next));
+    setSbpBankName("");
     setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, next, sendAmount);
@@ -494,6 +497,7 @@ export default function OrderForm() {
     setSelectedReceive(next);
     setWallet("");
     setSbpBankId(fiatBankId(next));
+    setSbpBankName("");
     setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, next, sendAmount);
@@ -505,6 +509,7 @@ export default function OrderForm() {
     setIsSendActive(true);
     setWallet("");
     setSbpBankId(fiatBankId(currency));
+    setSbpBankName("");
     setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
     syncUrl(selectedSend, currency, sendAmount);
@@ -519,6 +524,7 @@ export default function OrderForm() {
               wallet,
               sbpBankId || fiatBankId(selectedReceive),
               sbpMethod,
+              sbpBankName,
             )
           : wallet,
       city: "",
@@ -535,6 +541,7 @@ export default function OrderForm() {
       fio,
       wallet,
       sbpBankId,
+      sbpBankName,
       sbpMethod,
       email,
       telegram,
@@ -578,6 +585,7 @@ export default function OrderForm() {
     setSelectedReceive(nextReceive);
     setWallet("");
     setSbpBankId(fiatBankId(nextReceive));
+    setSbpBankName("");
     setSbpMethod("sbp");
     setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
 
@@ -791,6 +799,7 @@ export default function OrderForm() {
       if (dontRemember) {
         setWallet("");
         setSbpBankId("");
+        setSbpBankName("");
       }
 
       router.push(`/order/${json.order.id}`);
@@ -1040,11 +1049,18 @@ export default function OrderForm() {
                 <SbpRequisitesFields
                   phone={wallet}
                   bankId={sbpBankId || fiatBankId(selectedReceive)}
+                  bankName={sbpBankName}
                   method={sbpMethod}
                   lockBank={Boolean(fiatBankId(selectedReceive))}
                   onPhoneChange={handleWalletChange}
                   onBankChange={(id) => {
                     setSbpBankId(id);
+                    if (fieldErrors.wallet) {
+                      setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
+                    }
+                  }}
+                  onBankNameChange={(name) => {
+                    setSbpBankName(name);
                     if (fieldErrors.wallet) {
                       setFieldErrors((prev) => ({ ...prev, wallet: undefined }));
                     }

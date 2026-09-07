@@ -21,6 +21,12 @@ export function canReassignOrders(
   return isAdminOrSeniorOperator(profile);
 }
 
+export function canRestoreCancelledOrders(
+  profile: StaffRoleLike | null | undefined,
+): boolean {
+  return isAdminOrSeniorOperator(profile);
+}
+
 export function canVerifyClients(
   profile: StaffRoleLike | null | undefined,
 ): boolean {

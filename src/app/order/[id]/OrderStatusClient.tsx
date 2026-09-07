@@ -12,7 +12,6 @@ import {
   Upload,
   Check,
   ArrowLeft,
-  FileText,
 } from "lucide-react";
 import {
   isOrderExpiredByTtl,
@@ -36,6 +35,14 @@ import {
 } from "@/src/utils/orders/status-style";
 import { Button } from "@/components/ui/button";
 import OrderSupportBlock from "@/src/components/Support/OrderSupportBlock";
+import { stripOrderInternalFields } from "@/src/utils/orders/operator-snapshot";
+import {
+  receiptAcceptAttr,
+  receiptFileHint,
+  receiptRejectMessage,
+  receiptUploadKind,
+  isAllowedReceiptFile,
+} from "@/src/utils/orders/receipt-file";
 
 type OrderStatus =
   | "pending"
@@ -161,8 +168,14 @@ export default function OrderStatusClient({
             filter: `id=eq.${order.id}`,
           },
           (payload) => {
-            setOrder(payload.new);
-            if ((payload.new as any)?.receipt_url) setUploadSuccess(true);
+            setOrder(
+              stripOrderInternalFields(
+                payload.new as Record<string, unknown>,
+              ),
+            );
+            if ((payload.new as { receipt_url?: string })?.receipt_url) {
+              setUploadSuccess(true);
+            }
           },
         );
 
@@ -217,8 +230,9 @@ export default function OrderStatusClient({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== "application/pdf") {
-      alert("Пожалуйста, загрузите чек в формате PDF!");
+    const kind = receiptUploadKind(clientPaysWithCrypto(order.currency_from));
+    if (!isAllowedReceiptFile(file, kind)) {
+      alert(receiptRejectMessage(kind));
       return;
     }
 
@@ -256,7 +270,7 @@ export default function OrderStatusClient({
 
   const handleConfirmPayment = async () => {
     if (!order.receipt_url && !uploadSuccess) {
-      alert("Пожалуйста, сначала прикрепите PDF-чек об оплате!");
+      alert("Пожалуйста, сначала прикрепите чек об оплате!");
       return;
     }
 
@@ -295,6 +309,10 @@ export default function OrderStatusClient({
   const payIn = parsePaymentDetails(order.payment_details);
   const payInIsCrypto = payIn.kind === "crypto";
   const payInIsCard = payIn.method === "card" || Boolean(payIn.card);
+  const receiptKind = receiptUploadKind(
+    clientPaysWithCrypto(order.currency_from),
+  );
+  const receiptHint = receiptFileHint(receiptKind);
   const receiptReady = Boolean(order.receipt_url || uploadSuccess);
   const status = order.status as OrderStatus;
 
@@ -335,7 +353,7 @@ export default function OrderStatusClient({
             })}
           </p>
 
-          <div className="rounded-2xl bg-[#FFF8D6] px-3.5 sm:px-5 py-4">
+          <div className="rounded-2xl bg-[#FFF8D6] px-3.5 sm:px-5 py-4 space-y-3">
             <OrderExchangePair
               amountFrom={order.amount_from}
               amountTo={order.amount_to}
@@ -344,6 +362,11 @@ export default function OrderStatusClient({
               fromCaption="Отдаёте"
               toCaption="Получаете"
             />
+            {!clientPaysWithCrypto(order.currency_from) && (
+              <p className="text-xs font-semibold leading-relaxed text-zinc-700">
+                Переводите сумму без копеек — только целые рубли.
+              </p>
+            )}
           </div>
 
           <div className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 space-y-2 dark:bg-zinc-800/70 dark:border-zinc-700">
@@ -405,10 +428,17 @@ export default function OrderStatusClient({
                   {payInIsCrypto
                     ? "Переведите точную сумму на адрес кошелька мерчанта."
                     : payInIsCard
-                      ? "Переведите точную сумму на указанный номер карты."
-                      : "Переведите точную сумму на указанный номер телефона в выбранный банк."}
+                      ? "Переведите точную сумму целыми рублями, без копеек, на указанный номер карты."
+                      : "Переведите точную сумму целыми рублями, без копеек, на указанный номер телефона в выбранный банк."}
                 </p>
               </div>
+
+              {!payInIsCrypto && (
+                <p className="rounded-xl bg-white/80 border border-violet-200 px-3.5 py-2.5 text-sm font-semibold text-violet-950 dark:bg-zinc-900/60 dark:border-violet-400/30 dark:text-violet-100">
+                  Перевод нужно делать без копеек: укажите сумму в целых рублях
+                  (например 15 000 ₽, не 15 000,50 ₽).
+                </p>
+              )}
 
               <div className="rounded-2xl bg-white border border-violet-200 p-4 space-y-2 dark:bg-zinc-900 dark:border-violet-400/30">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
@@ -423,12 +453,12 @@ export default function OrderStatusClient({
 
               <div className="space-y-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                  Чек об оплате (PDF)
+                  Чек об оплате ({receiptHint})
                 </p>
                 <label className="relative flex flex-col items-center justify-center border-2 border-dashed border-violet-300 bg-white hover:bg-violet-50/60 rounded-2xl p-5 text-center cursor-pointer transition-all dark:bg-zinc-900 dark:border-violet-400/40 dark:hover:bg-violet-950/20">
                   <input
                     type="file"
-                    accept="application/pdf"
+                    accept={receiptAcceptAttr(receiptKind)}
                     onChange={handleFileUpload}
                     disabled={isUploading || isConfirming}
                     className="absolute inset-0 opacity-0 cursor-pointer"
@@ -451,7 +481,7 @@ export default function OrderStatusClient({
                     <div className="space-y-1.5">
                       <Upload className="w-6 h-6 text-violet-500 mx-auto" />
                       <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">
-                        Нажмите, чтобы прикрепить PDF-чек
+                        Нажмите, чтобы прикрепить чек ({receiptHint})
                       </p>
                     </div>
                   )}
@@ -496,17 +526,6 @@ export default function OrderStatusClient({
               <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                 Оператор проверяет ваш чек. Статус обновится автоматически.
               </p>
-              {order.operator_receipt_url && (
-                <a
-                  href={`/api/orders/${order.id}/operator-receipt`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-800 hover:underline"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  Подтверждение перевода (PDF)
-                </a>
-              )}
             </div>
           )}
 
@@ -521,17 +540,6 @@ export default function OrderStatusClient({
               <p className="text-sm font-medium">
                 Средства отправлены на указанные вами реквизиты.
               </p>
-              {order.operator_receipt_url && (
-                <a
-                  href={`/api/orders/${order.id}/operator-receipt`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:underline"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  Скачать подтверждение перевода (PDF)
-                </a>
-              )}
             </div>
           )}
 

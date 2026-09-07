@@ -9,6 +9,7 @@ import {
   ORDER_TTL_STATUSES,
   orderTtlStartedAt,
 } from "@/src/utils/orders/ttl";
+import { fetchOperatorPseudonym } from "@/src/utils/orders/operator-snapshot";
 
 type OrderRow = Record<string, unknown> & {
   id: string;
@@ -31,9 +32,21 @@ export async function expireOrderIfNeeded(
     return order;
   }
 
+  const cancelPatch: Record<string, unknown> = { status: "cancelled" };
+  const snapshot =
+    typeof order.operator_pseudonym_snapshot === "string"
+      ? order.operator_pseudonym_snapshot.trim()
+      : "";
+  const operatorId =
+    typeof order.operator_id === "string" ? order.operator_id : "";
+  if (!snapshot && operatorId) {
+    cancelPatch.operator_pseudonym_snapshot =
+      (await fetchOperatorPseudonym(admin, operatorId)) || "Сотрудник";
+  }
+
   const { data: updated, error } = await admin
     .from("orders")
-    .update({ status: "cancelled" })
+    .update(cancelPatch)
     .eq("id", order.id)
     .in("status", [...ORDER_TTL_STATUSES])
     .select("*")
@@ -70,11 +83,14 @@ export async function cancelExpiredOrders(admin: SupabaseClient): Promise<{
     return { cancelled: 0, ids: [] };
   }
 
+  const expiredWaiting = (waiting.data ?? []).filter((row) =>
+    isOrderExpiredByTtl(orderTtlStartedAt(row as OrderRow)),
+  );
   const expiredPaying = (paying.data ?? []).filter((row) =>
     isOrderExpiredByTtl(orderTtlStartedAt(row as OrderRow)),
   );
 
-  const expired = [...(waiting.data ?? []), ...expiredPaying];
+  const expired = [...expiredWaiting, ...expiredPaying];
   if (!expired.length) {
     return { cancelled: 0, ids: [] };
   }

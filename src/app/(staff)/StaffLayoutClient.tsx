@@ -35,6 +35,7 @@ import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import StaffDutyToggle from "@/src/components/staff/StaffDutyToggle";
 import StaffThemeSelect from "@/src/components/staff/StaffThemeSelect";
+import StaffCbrOfflineBadge from "@/src/components/staff/StaffCbrOfflineBadge";
 import { staffPositionLabel } from "@/src/utils/staff/permissions";
 
 const pageTitles: { [key: string]: string } = {
@@ -503,12 +504,13 @@ export default function StaffLayoutClient({
             >
               <Menu className="w-5 h-5 text-[#2A2A2A]" />
             </Button>
-            <h2 className="text-sm sm:text-base md:text-xl font-bold text-zinc-800 tracking-tight select-none truncate">
+            <h2 className="text-sm sm:text-base md:text-xl font-bold text-zinc-800 tracking-tight select-none truncate min-w-0">
               {currentTitle}
             </h2>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0">
+            <StaffCbrOfflineBadge />
             <StaffThemeSelect />
             <div className="flex items-center gap-2 sm:gap-3 sm:border-r sm:border-zinc-200 sm:pr-4 md:pr-6">
               {operatorPseudonym ? (

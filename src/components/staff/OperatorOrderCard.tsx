@@ -87,6 +87,7 @@ export default function OperatorOrderCard({
             {showOperator ? (
               <StaffOperatorLabel
                 snapshot={order.operator_pseudonym_snapshot}
+                emptyLabel={showOperator ? "Оператор не назначен" : undefined}
               />
             ) : null}
           </div>

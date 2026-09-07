@@ -15,6 +15,14 @@ import { createClient } from "@/src/utils/supabase/client";
 import { startPolling, subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
+import { SBP_MANUAL_BANK_ID } from "@/src/utils/banks/sbp-banks";
+import {
+  isAllowedReceiptFile,
+  receiptAcceptAttr,
+  receiptFileHint,
+  receiptRejectMessage,
+  receiptUploadKind,
+} from "@/src/utils/orders/receipt-file";
 import { useNowTick } from "@/src/components/OrderTtlBadge/OrderTtlBadge";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
 import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
@@ -105,6 +113,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
   const [loading, setLoading] = useState(true);
   const [phone, setPhone] = useState("");
   const [bankId, setBankId] = useState("");
+  const [bankName, setBankName] = useState("");
   const [payWallet, setPayWallet] = useState("");
   const [payoutMethod, setPayoutMethod] = useState<SbpPayoutMethod>("sbp");
   const [saving, setSaving] = useState(false);
@@ -246,6 +255,42 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
     }
   };
 
+  const handleRestoreToWork = async () => {
+    if (!order || !user?.id) return;
+    if (!canReassignOrders) return;
+    if (!staffActive) {
+      alert(STAFF_INACTIVE_ERROR);
+      return;
+    }
+
+    const ok = await confirm({
+      title: "Вернуть заявку в работу?",
+      description:
+        "Заявка снова станет активной и закрепится за вами. Таймер жизни заявки начнётся заново.",
+      confirmLabel: "Вернуть в работу",
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operator_id: user.id,
+          status: "processing",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось вернуть заявку");
+      setOrder(json.order as Order);
+    } catch (err: any) {
+      alert(err.message || "Не удалось вернуть заявку в работу");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleJoin = async () => {
     if (!user?.id || !order) return;
     if (!canReassignOrders) return;
@@ -294,6 +339,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
     const check = buildOperatorPaymentDetails(order.currency_from, {
       phone,
       bankId,
+      bankName,
       wallet: payWallet,
       method: payoutMethod,
     });
@@ -407,8 +453,9 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== "application/pdf") {
-      alert("Нужен файл PDF");
+    const kind = receiptUploadKind(!isRubPayout(order.currency_to));
+    if (!isAllowedReceiptFile(file, kind)) {
+      alert(receiptRejectMessage(kind));
       e.target.value = "";
       return;
     }
@@ -546,7 +593,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                 rel="noopener noreferrer"
                 className="inline-flex text-xs font-bold text-[#C9A227] hover:underline"
               >
-                Открыть чек клиента (PDF)
+                Открыть чек клиента
               </a>
             ) : null}
           </div>
@@ -616,10 +663,15 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                 currencyFrom={order.currency_from}
                 phone={phone}
                 bankId={bankId}
+                bankName={bankName}
                 wallet={payWallet}
                 method={payoutMethod}
                 onPhoneChange={setPhone}
-                onBankChange={setBankId}
+                onBankChange={(id) => {
+                  setBankId(id);
+                  if (id !== SBP_MANUAL_BANK_ID) setBankName("");
+                }}
+                onBankNameChange={setBankName}
                 onWalletChange={setPayWallet}
                 onMethodChange={setPayoutMethod}
               />
@@ -673,7 +725,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                     rel="noopener noreferrer"
                     className="inline-block mt-2 text-xs font-bold text-[#C9A227] hover:underline"
                   >
-                    Открыть PDF чек клиента
+                    Открыть чек клиента
                   </a>
                 ) : (
                   <p className="text-xs text-zinc-500 mt-2">
@@ -682,49 +734,62 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                 )}
               </div>
 
-              {isRubPayout(order.currency_to) && (
-                <div className="space-y-2 border-t border-zinc-200/80 pt-4">
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                    Чек выплаты RUB клиенту (обязательно)
-                  </p>
-                  {order.operator_receipt_url ? (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-800">
-                        <Check className="w-3.5 h-3.5 text-[#C9A227]" />
-                        Чек выплаты прикреплён
-                      </span>
-                      <a
-                        href={`/api/orders/${order.id}/operator-receipt`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-bold text-[#C9A227] hover:underline"
-                      >
-                        Открыть PDF
-                      </a>
-                    </div>
-                  ) : (
-                    <label className={`flex flex-col items-center justify-center border border-dashed border-amber-200 bg-white rounded-2xl p-5 text-center transition-all ${staffActive && canManageProcess ? "hover:bg-[#FFF8D6] cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
-                      <input
-                        type="file"
-                        accept="application/pdf"
-                        onChange={handleOperatorReceiptUpload}
-                        disabled={uploadingPayout || saving || !staffActive || !canManageProcess}
-                        className="sr-only"
-                      />
-                      {uploadingPayout ? (
-                        <Loader2 className="w-6 h-6 animate-spin text-[#C9A227]" />
-                      ) : (
-                        <>
-                          <Upload className="w-6 h-6 text-[#C9A227] mb-2" />
-                          <span className="text-xs font-bold text-zinc-700">
-                            Прикрепить PDF-чек перевода рублей
-                          </span>
-                        </>
+              <div className="space-y-2 border-t border-zinc-200/80 pt-4">
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                  {isRubPayout(order.currency_to)
+                    ? "Чек выплаты RUB клиенту"
+                    : "Чек перевода криптовалюты"}
+                </p>
+                <p className="text-[11px] font-medium text-zinc-500">
+                  Внутренний документ: клиенту не показывается, нужен для
+                  проверки заявки.
+                  {isRubPayout(order.currency_to)
+                    ? ""
+                    : ` Формат: ${receiptFileHint(receiptUploadKind(true))}.`}
+                </p>
+                {order.operator_receipt_url ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-800">
+                      <Check className="w-3.5 h-3.5 text-[#C9A227]" />
+                      Чек выплаты прикреплён
+                    </span>
+                    <a
+                      href={`/api/orders/${order.id}/operator-receipt`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold text-[#C9A227] hover:underline"
+                    >
+                      Открыть файл
+                    </a>
+                  </div>
+                ) : (
+                  <label className={`flex flex-col items-center justify-center border border-dashed border-amber-200 bg-white rounded-2xl p-5 text-center transition-all ${staffActive && canManageProcess ? "hover:bg-[#FFF8D6] cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
+                    <input
+                      type="file"
+                      accept={receiptAcceptAttr(
+                        receiptUploadKind(!isRubPayout(order.currency_to)),
                       )}
-                    </label>
-                  )}
-                </div>
-              )}
+                      onChange={handleOperatorReceiptUpload}
+                      disabled={uploadingPayout || saving || !staffActive || !canManageProcess}
+                      className="sr-only"
+                    />
+                    {uploadingPayout ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-[#C9A227]" />
+                    ) : (
+                      <>
+                        <Upload className="w-6 h-6 text-[#C9A227] mb-2" />
+                        <span className="text-xs font-bold text-zinc-700">
+                          Прикрепить чек (
+                          {receiptFileHint(
+                            receiptUploadKind(!isRubPayout(order.currency_to)),
+                          )}
+                          )
+                        </span>
+                      </>
+                    )}
+                  </label>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <Button
@@ -765,8 +830,19 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             )}
 
           {(order.status === "completed" || order.status === "cancelled") && (
-            <div className="p-5 rounded-2xl bg-[#F4F5F7] text-sm font-medium text-zinc-600">
-              Заявка закрыта со статусом «{statusLabel(order.status)}».
+            <div className="p-5 rounded-2xl bg-[#F4F5F7] space-y-3 max-w-xl">
+              <p className="text-sm font-medium text-zinc-600">
+                Заявка закрыта со статусом «{statusLabel(order.status)}».
+              </p>
+              {order.status === "cancelled" && canReassignOrders ? (
+                <Button
+                  disabled={saving || !staffActive}
+                  onClick={() => void handleRestoreToWork()}
+                  className="rounded-xl h-10 px-5 font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none"
+                >
+                  {saving ? "..." : "Вернуть в работу"}
+                </Button>
+              ) : null}
             </div>
           )}
         </div>
