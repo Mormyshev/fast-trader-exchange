@@ -15,6 +15,7 @@ import OperatorAvatar from "@/src/components/Chat/OperatorAvatar";
 import StaffSearchInput, {
   matchesSearchQuery,
 } from "@/src/components/staff/StaffSearchInput";
+import { formatChatListStamp } from "@/src/utils/chat/format-time";
 
 function UnreadDot({ show }: { show: boolean }) {
   if (!show) return null;
@@ -37,6 +38,7 @@ function ChatRow({
   selected,
   unread,
   icon,
+  lastAt,
   onSelect,
 }: {
   title: string;
@@ -44,8 +46,11 @@ function ChatRow({
   selected: boolean;
   unread: boolean;
   icon: ReactNode;
+  lastAt?: string | null;
   onSelect: () => void;
 }) {
+  const stamp = formatChatListStamp(lastAt);
+
   return (
     <button
       type="button"
@@ -67,7 +72,15 @@ function ChatRow({
           {preview}
         </p>
       </div>
-      <UnreadDot show={unread && !selected} />
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        {stamp ? (
+          <span className="text-[10px] font-semibold text-zinc-400 leading-tight text-right tabular-nums">
+            <span className="block">{stamp.date}</span>
+            <span className="block">{stamp.time}</span>
+          </span>
+        ) : null}
+        <UnreadDot show={unread && !selected} />
+      </div>
     </button>
   );
 }
@@ -279,6 +292,9 @@ export default function StaffTeamChatPage() {
                       preview={messagePreview(group)}
                       selected={selectedId === group.id}
                       unread={group.unread}
+                      lastAt={
+                        group.last_message?.created_at || group.updated_at
+                      }
                       icon={
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFDD2D] text-zinc-900 shrink-0">
                           <Users className="h-4 w-4" />
@@ -305,6 +321,10 @@ export default function StaffTeamChatPage() {
                           preview={messagePreview(conversation)}
                           selected={selectedId === conversation.id}
                           unread={conversation.unread}
+                          lastAt={
+                            conversation.last_message?.created_at ||
+                            conversation.updated_at
+                          }
                           icon={
                             <OperatorAvatar
                               name={name}

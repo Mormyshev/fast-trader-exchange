@@ -20,6 +20,11 @@ import {
   validatePayoutDetails,
 } from "@/src/utils/validation";
 import {
+  consumeRateLimit,
+  getRequestIp,
+  rateLimitJsonResponse,
+} from "@/src/utils/rate-limit";
+import {
   CLIENT_BLACKLISTED_CODE,
   formatClientBlacklistMessage,
   isProfileBlacklisted,
@@ -35,6 +40,12 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (
+      !consumeRateLimit(`orders:create:${user.id}:${getRequestIp(request)}`, 10, 60_000)
+    ) {
+      return rateLimitJsonResponse();
     }
 
     const body = await request.json().catch(() => null);

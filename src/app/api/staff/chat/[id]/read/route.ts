@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { requireStaff } from "@/src/utils/chat/auth";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 import {
   canAccessStaffConversation,
   isStaffChatTableMissing,
@@ -15,6 +16,9 @@ export async function POST(_request: Request, context: RouteContext) {
     const staff = await requireStaff();
     if (!staff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(staff.profile)) {
+      return staffInactiveResponse();
     }
 
     const { data: row, error } = await loadStaffConversation(staff.admin, id);

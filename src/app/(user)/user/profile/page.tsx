@@ -396,8 +396,11 @@ export default function ProfilePage() {
         setPasswordResetLoading(true);
         try {
             const result = await requestPasswordReset("", "");
-            if (result.error) {
-                setPasswordResetError(result.error);
+            if ("error" in result) {
+                setPasswordResetError(
+                    result.error ??
+                        "Не удалось отправить письмо. Попробуйте ещё раз.",
+                );
                 return;
             }
             setPasswordResetInfo(

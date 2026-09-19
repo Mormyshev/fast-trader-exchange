@@ -17,6 +17,7 @@ import {
   broadcastStaffChatConversation,
   broadcastStaffChatMessage,
 } from "@/src/utils/supabase/broadcast-staff-chat";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -53,6 +54,9 @@ export async function GET(_request: Request, context: RouteContext) {
     const staff = await requireStaff();
     if (!staff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(staff.profile)) {
+      return staffInactiveResponse();
     }
 
     const { data: row, error } = await loadStaffConversation(staff.admin, id);
@@ -107,6 +111,9 @@ export async function POST(request: Request, context: RouteContext) {
     const staff = await requireStaff();
     if (!staff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(staff.profile)) {
+      return staffInactiveResponse();
     }
 
     const { data: row, error } = await loadStaffConversation(staff.admin, id);

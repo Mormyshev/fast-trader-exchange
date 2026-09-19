@@ -15,6 +15,7 @@ import {
 import { isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
 import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
 import PasswordInput from "@/src/components/PasswordInput/PasswordInput";
+import { isSafeInternalPath } from "@/src/utils/safe-path";
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -127,7 +128,9 @@ export default function RegisterModal({
 
       if (result.route) {
         onClose();
-        const next = redirectTo ?? result.route;
+        const next = isSafeInternalPath(redirectTo)
+          ? redirectTo
+          : result.route;
         window.location.href = next;
         return;
       }

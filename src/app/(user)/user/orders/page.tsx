@@ -437,19 +437,33 @@ export default function UserOrdersPage() {
                           </span>
                         </td>
                         <td className={`${TABLE_CELL} text-right`}>
-                          <Button
-                            asChild
-                            size="sm"
-                            className={`rounded-full h-8 px-4 text-xs font-bold shadow-none cursor-pointer ${
-                              isActive
-                                ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
-                                : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
-                            }`}
-                          >
-                            <Link href={`/order/${order.id}`}>
-                              {isActive ? "Открыть" : "Подробнее"}
-                            </Link>
-                          </Button>
+                          <div className="flex flex-col items-stretch gap-1">
+                            <Button
+                              asChild
+                              size="sm"
+                              className={`rounded-full h-8 px-4 text-xs font-bold shadow-none cursor-pointer ${
+                                isActive
+                                  ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
+                                  : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
+                              }`}
+                            >
+                              <Link href={`/order/${order.id}`}>
+                                {isActive ? "Открыть" : "Подробнее"}
+                              </Link>
+                            </Button>
+                            {order.status === "completed" ? (
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="rounded-full h-8 px-4 text-xs font-bold cursor-pointer"
+                              >
+                                <Link href={`/order/${order.id}/receipt`}>
+                                  Чек
+                                </Link>
+                              </Button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );

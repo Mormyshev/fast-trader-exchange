@@ -5,7 +5,7 @@ import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
 import { attachClientsToOrders } from "@/src/utils/orders/attach-client";
 import { attachOperatorSnapshots } from "@/src/utils/orders/operator-snapshot";
-import { STAFF_OPEN_ORDER_STATUSES } from "@/src/utils/staff/duty";
+import { STAFF_OPEN_ORDER_STATUSES, isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 import { canReassignOrders } from "@/src/utils/staff/permissions";
 import {
   isOrderNumberColumnMissing,
@@ -118,12 +118,15 @@ export async function GET() {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("role, is_senior_operator")
+      .select("role, is_senior_operator, staff_active")
       .eq("id", user.id)
       .maybeSingle();
 
     if (profile?.role !== "operator" && profile?.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(profile)) {
+      return staffInactiveResponse();
     }
 
     const includeTeamQueue = canReassignOrders(profile);

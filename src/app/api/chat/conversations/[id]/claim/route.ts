@@ -10,6 +10,7 @@ import {
   takeoverConversation,
 } from "@/src/utils/chat/staff-chat";
 import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
+import { canReassignOrders } from "@/src/utils/staff/permissions";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -47,7 +48,20 @@ export async function POST(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: existingError.message }, { status: 503 });
     }
 
-    const access = existing?.operator_id
+    const assignedTo = existing?.operator_id;
+    if (
+      typeof assignedTo === "string" &&
+      assignedTo &&
+      assignedTo !== staff.user.id &&
+      !canReassignOrders(staff.profile)
+    ) {
+      return NextResponse.json(
+        { error: "Чат уже в работе у другого оператора" },
+        { status: 409 },
+      );
+    }
+
+    const access = assignedTo
       ? await takeoverConversation(staff.admin, id, staff.user.id, pseudonym)
       : await claimConversation(staff.admin, id, staff.user.id, pseudonym);
 

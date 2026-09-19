@@ -8,13 +8,21 @@ import {
 export async function broadcastStaffChatMessage(
   payload: Record<string, unknown>,
 ) {
-  await broadcastStaffChatEvent(STAFF_CHAT_MESSAGE_CREATED_EVENT, payload);
+  const message = payload.message as Record<string, unknown> | undefined;
+  await broadcastStaffChatEvent(STAFF_CHAT_MESSAGE_CREATED_EVENT, {
+    conversationId:
+      payload.conversationId ?? message?.conversation_id ?? null,
+    messageId: message?.id ?? payload.messageId ?? null,
+  });
 }
 
 export async function broadcastStaffChatConversation(
   payload: Record<string, unknown>,
 ) {
-  await broadcastStaffChatEvent(STAFF_CHAT_CONVERSATION_UPDATED_EVENT, payload);
+  const conversation = payload.conversation as Record<string, unknown> | undefined;
+  await broadcastStaffChatEvent(STAFF_CHAT_CONVERSATION_UPDATED_EVENT, {
+    conversationId: conversation?.id ?? payload.conversationId ?? null,
+  });
 }
 
 async function broadcastStaffChatEvent(

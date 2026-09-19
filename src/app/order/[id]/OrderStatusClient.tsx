@@ -12,6 +12,7 @@ import {
   Upload,
   Check,
   ArrowLeft,
+  FileText,
 } from "lucide-react";
 import {
   isOrderExpiredByTtl,
@@ -538,8 +539,35 @@ export default function OrderStatusClient({
                 <p className="text-sm font-bold">Обмен успешно завершён</p>
               </div>
               <p className="text-sm font-medium">
-                Средства отправлены на указанные вами реквизиты.
+                Средства отправлены на указанные вами реквизиты. Сохраните чек
+                сделки.
               </p>
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <Button
+                  asChild
+                  className="rounded-full h-10 px-5 text-sm font-bold bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 shadow-none cursor-pointer"
+                >
+                  <Link href={`/order/${order.id}/receipt`}>
+                    <FileText className="w-4 h-4" />
+                    Открыть чек
+                  </Link>
+                </Button>
+                {order.has_payout_receipt ? (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="rounded-full h-10 px-5 text-sm font-bold cursor-pointer"
+                  >
+                    <a
+                      href={`/api/orders/${order.id}/operator-receipt`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Подтверждение выплаты
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
             </div>
           )}
 

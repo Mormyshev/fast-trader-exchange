@@ -16,8 +16,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => null);
-    const raw = body && typeof body.rate === "number" ? body.rate : Number(body?.rate);
-    const rate = Number(raw.toFixed(2));
+    const raw =
+      body && typeof body.rate === "number"
+        ? body.rate
+        : Number(String(body?.rate ?? "").replace(",", ".").replace(/\s/g, ""));
+    const rate = Number(raw.toFixed(4));
     if (!Number.isFinite(rate) || rate < MIN_RATE || rate > MAX_RATE) {
       return NextResponse.json(
         { error: `Укажите курс USDT от ${MIN_RATE} до ${MAX_RATE} ₽` },

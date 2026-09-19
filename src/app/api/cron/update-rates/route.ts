@@ -5,13 +5,15 @@ import {
   fetchMarketRates,
   ratesToUpsertRows,
 } from "@/src/utils/market-rates";
+import { cronUnauthorizedResponse, isCronAuthorized } from "@/src/utils/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
-  // Чтение заголовка гарантированно пробивает кэш платформы на уровне ядра
-  void request.headers.get("user-agent");
+  if (!isCronAuthorized(request)) {
+    return cronUnauthorizedResponse();
+  }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

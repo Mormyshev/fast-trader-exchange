@@ -9,15 +9,19 @@ import {
   formatClientBlacklistMessage,
   isProfileBlacklisted,
 } from "@/src/utils/clients/blacklist";
+import {
+  sniffFileKind,
+  sniffedContentType,
+  sniffedExt,
+} from "@/src/utils/files/magic";
+import { signStoredUrls } from "@/src/utils/storage/signed-url";
 
-const ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-];
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const KYC_URL_KEYS = [
+  "passport_url",
+  "selfie_url",
+  "extra_document_url",
+] as const;
 
 function isExtraColumnMissing(message: string | null | undefined) {
   if (!message) return false;
@@ -32,26 +36,36 @@ function readFile(form: FormData, key: string): File | null {
   return value instanceof File && value.size > 0 ? value : null;
 }
 
+function isAllowedKycBytes(bytes: Uint8Array) {
+  const kind = sniffFileKind(bytes);
+  return kind === "jpeg" || kind === "png" || kind === "gif" || kind === "webp";
+}
+
+async function signProfile(admin: ReturnType<typeof createAdminClient>, profile: Record<string, unknown>) {
+  return signStoredUrls(admin, "verifications", profile, [...KYC_URL_KEYS]);
+}
+
 async function uploadVerificationImage(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
   kind: string,
   file: File,
 ) {
-  if (!ALLOWED_TYPES.includes(file.type) && file.type !== "image/jpg") {
-    return { error: "Загрузите GIF, JPG или PNG" };
-  }
   if (file.size > MAX_FILE_BYTES) {
     return { error: "Файл слишком большой (макс. 20 МБ)" };
   }
 
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const fileName = `${kind}-${userId}-${Date.now()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
+  if (!isAllowedKycBytes(buffer)) {
+    return { error: "Загрузите GIF, JPG, PNG или WebP" };
+  }
+
+  const sniffed = sniffFileKind(buffer)!;
+  const fileName = `${kind}-${userId}-${Date.now()}.${sniffedExt(sniffed)}`;
 
   const uploadResult = await withTimeout(
     admin.storage.from("verifications").upload(fileName, buffer, {
-      contentType: file.type || "image/jpeg",
+      contentType: sniffedContentType(sniffed),
       upsert: true,
     }),
     20000,
@@ -62,10 +76,7 @@ async function uploadVerificationImage(
     return { error: uploadResult.error.message };
   }
 
-  const { data: urlData } = admin.storage
-    .from("verifications")
-    .getPublicUrl(fileName);
-  return { url: urlData.publicUrl };
+  return { path: fileName };
 }
 
 export async function GET() {
@@ -111,7 +122,9 @@ export async function GET() {
       data = created.data;
     }
 
-    return NextResponse.json({ profile: data });
+    return NextResponse.json({
+      profile: await signProfile(admin, (data ?? {}) as Record<string, unknown>),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });
@@ -135,7 +148,9 @@ export async function PATCH(request: Request) {
     const { data: currentProfile } = await withTimeout(
       admin
         .from("profiles")
-        .select("is_blacklisted, blacklist_reason")
+        .select(
+          "is_blacklisted, blacklist_reason, passport_url, selfie_url, extra_document_url",
+        )
         .eq("id", user.id)
         .maybeSingle(),
       8000,
@@ -158,9 +173,18 @@ export async function PATCH(request: Request) {
     const passportFile = readFile(form, "passport");
     const selfieFile = readFile(form, "selfie");
     const extraFile = readFile(form, "extra");
-    let passportUrl = String(form.get("passport_url") || "").trim() || null;
-    let selfieUrl = String(form.get("selfie_url") || "").trim() || null;
-    let extraUrl = String(form.get("extra_document_url") || "").trim() || null;
+    let passportUrl =
+      typeof currentProfile?.passport_url === "string"
+        ? currentProfile.passport_url
+        : null;
+    let selfieUrl =
+      typeof currentProfile?.selfie_url === "string"
+        ? currentProfile.selfie_url
+        : null;
+    let extraUrl =
+      typeof currentProfile?.extra_document_url === "string"
+        ? currentProfile.extra_document_url
+        : null;
 
     const profileValidation = validateProfileFormFields(
       {
@@ -191,13 +215,13 @@ export async function PATCH(request: Request) {
         "passport",
         passportFile,
       );
-      if (uploaded.error || !uploaded.url) {
+      if (uploaded.error || !uploaded.path) {
         return NextResponse.json(
           { error: uploaded.error || "Не удалось загрузить документ" },
           { status: 503 },
         );
       }
-      passportUrl = uploaded.url;
+      passportUrl = uploaded.path;
     }
 
     if (selfieFile) {
@@ -207,13 +231,13 @@ export async function PATCH(request: Request) {
         "selfie",
         selfieFile,
       );
-      if (uploaded.error || !uploaded.url) {
+      if (uploaded.error || !uploaded.path) {
         return NextResponse.json(
           { error: uploaded.error || "Не удалось загрузить селфи" },
           { status: 503 },
         );
       }
-      selfieUrl = uploaded.url;
+      selfieUrl = uploaded.path;
     }
 
     if (extraFile) {
@@ -223,13 +247,13 @@ export async function PATCH(request: Request) {
         "extra",
         extraFile,
       );
-      if (uploaded.error || !uploaded.url) {
+      if (uploaded.error || !uploaded.path) {
         return NextResponse.json(
           { error: uploaded.error || "Не удалось загрузить дополнительный файл" },
           { status: 503 },
         );
       }
-      extraUrl = uploaded.url;
+      extraUrl = uploaded.path;
     }
 
     if (!passportUrl) {
@@ -292,11 +316,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
 
-    if (data) {
-      void broadcastVerificationEvent(data as Record<string, unknown>);
+    const signed = data
+      ? await signProfile(admin, data as Record<string, unknown>)
+      : data;
+
+    if (signed) {
+      void broadcastVerificationEvent(signed);
     }
 
-    return NextResponse.json({ profile: data });
+    return NextResponse.json({ profile: signed });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

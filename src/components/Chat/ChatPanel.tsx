@@ -237,13 +237,11 @@ export default function ChatPanel({
         ? subscribeSupportInbox(supabase, {
             onMessage: (payload) => {
               if (payload.conversationId !== conversationId) return;
-              upsertMessage(payload.message as ChatMessage);
+              void loadMessages(true);
             },
             onConversation: (payload) => {
-              const next = payload.conversation as ChatConversation | undefined;
-              if (next?.id === conversationId) {
-                onConversationChangeRef.current?.(next);
-              }
+              if (payload.conversationId !== conversationId) return;
+              void loadMessages(true);
             },
           })
         : null;

@@ -56,42 +56,11 @@ USING (
     FROM public.profiles p
     WHERE p.id = auth.uid()
       AND p.role IN ('operator', 'admin')
+      AND COALESCE(p.staff_active, false) = true
   )
 );
 
-CREATE POLICY "orders_insert_own"
-ON public.orders
-FOR INSERT
-TO authenticated
-WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "orders_update_own"
-ON public.orders
-FOR UPDATE
-TO authenticated
-USING (auth.uid() = user_id)
-WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "orders_update_staff"
-ON public.orders
-FOR UPDATE
-TO authenticated
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.role IN ('operator', 'admin')
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.role IN ('operator', 'admin')
-  )
-);
+-- Writes only via service role (Next.js API). Do not recreate INSERT/UPDATE policies.
 
 -- 3) Realtime publication (ignore error if already added)
 DO $$

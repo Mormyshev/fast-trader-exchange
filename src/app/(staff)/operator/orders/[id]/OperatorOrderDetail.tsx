@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/src/utils/supabase/client";
-import { startPolling, subscribeWithAuth } from "@/src/utils/supabase/realtime";
+import { startPolling } from "@/src/utils/supabase/realtime";
+import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { isRubPayout } from "@/src/utils/exchange-currencies";
 import { SBP_MANUAL_BANK_ID } from "@/src/utils/banks/sbp-banks";
@@ -132,7 +133,6 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
     }
 
     let cancelled = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     async function load() {
       try {
@@ -152,37 +152,18 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
       }
     }
 
-    void (async () => {
-      await load();
-      if (cancelled) return;
+    void load();
 
-      channel = supabase
-        .channel(`operator-order-${orderId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "orders",
-            filter: `id=eq.${orderId}`,
-          },
-          (payload) => {
-            setOrder((prev) => ({
-              ...(payload.new as Order),
-              client: prev?.client,
-            }));
-          },
-        );
-
-      await subscribeWithAuth(supabase, channel);
-    })();
+    const inbox = subscribeOrdersInbox(supabase, (order) => {
+      if (order?.id === orderId) void load();
+    });
 
     const stopPoll = startPolling(() => void load(), 4000);
 
     return () => {
       cancelled = true;
       stopPoll();
-      if (channel) supabase.removeChannel(channel);
+      inbox.unsubscribe();
     };
   }, [orderId, user?.id, isAuthLoading, supabase]);
 
@@ -588,7 +569,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
             <PaymentRequisitesView value={order.payment_details} />
             {order.receipt_url && order.status !== "paid" ? (
               <a
-                href={order.receipt_url}
+                href={`/api/orders/${order.id}/receipt`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex text-xs font-bold text-[#C9A227] hover:underline"
@@ -720,7 +701,7 @@ export default function OperatorOrderDetail({ orderId }: { orderId: string }) {
                 </p>
                 {order.receipt_url ? (
                   <a
-                    href={order.receipt_url}
+                    href={`/api/orders/${order.id}/receipt`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block mt-2 text-xs font-bold text-[#C9A227] hover:underline"

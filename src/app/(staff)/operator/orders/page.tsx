@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Loader2,
   Search,
@@ -11,7 +11,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { createClient } from "@/src/utils/supabase/client";
-import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -27,6 +26,9 @@ import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
 import StaffPageHeader from "@/src/components/staff/StaffPageHeader";
 import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
+import OperatorOrderCard, {
+  type OperatorOrderCardTone,
+} from "@/src/components/staff/OperatorOrderCard";
 import { formatOrderMoney } from "@/src/components/staff/OrderExchangePair";
 import { isOrderExpiredByTtl, orderTtlStartedAt } from "@/src/utils/orders/ttl";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
@@ -81,6 +83,21 @@ type TabId =
   | "completed"
   | "cancelled";
 
+const ORDER_TABS: TabId[] = [
+  "new",
+  "in_work",
+  "awaiting",
+  "review",
+  "completed",
+  "cancelled",
+];
+
+function parseOrdersTab(value: string | null): TabId | null {
+  return value && ORDER_TABS.includes(value as TabId)
+    ? (value as TabId)
+    : null;
+}
+
 const PAGE_SIZE = 10;
 const TABLE_HEAD_CELL =
   "border-r border-zinc-200 px-2 py-2 whitespace-nowrap last:border-r-0";
@@ -88,6 +105,8 @@ const TABLE_CELL =
   "border-r border-zinc-200 px-2 py-2 align-top last:border-r-0";
 const ACTION_BTN =
   "rounded-lg h-auto min-h-7 w-full px-2 py-1 text-[11px] font-bold leading-tight whitespace-normal shadow-none cursor-pointer";
+const MOBILE_ACTION_BTN =
+  "rounded-xl h-10 w-full px-3 text-sm font-bold shadow-none cursor-pointer";
 
 function statusLabel(status: Order["status"]) {
   switch (status) {
@@ -103,6 +122,23 @@ function statusLabel(status: Order["status"]) {
       return "Выполнена";
     case "cancelled":
       return "Отменена";
+  }
+}
+
+function cardTone(status: Order["status"]): OperatorOrderCardTone {
+  switch (status) {
+    case "pending":
+      return "new";
+    case "processing":
+      return "processing";
+    case "awaiting_payment":
+      return "awaiting";
+    case "paid":
+      return "review";
+    case "completed":
+      return "completed";
+    default:
+      return "cancelled";
   }
 }
 
@@ -157,6 +193,7 @@ function AmountCell({
 export default function OperatorOrdersPage() {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, staffActive, role, canReassignOrders, isLoading: isAuthLoading } =
     useAuth();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
@@ -166,7 +203,9 @@ export default function OperatorOrdersPage() {
   const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabId>("new");
+  const [activeTab, setActiveTab] = useState<TabId>(
+    () => parseOrdersTab(searchParams.get("tab")) ?? "new",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
 
@@ -349,64 +388,36 @@ export default function OperatorOrdersPage() {
   useEffect(() => {
     if (!user?.id) return;
 
-    let pgChannel: ReturnType<typeof supabase.channel> | null = null;
-
-    const upsertPending = (order: Order) => {
-      const next = rememberClient(order);
-      setNewOrders((prev) => {
-        const without = prev.filter((item) => item.id !== next.id);
-        return next.status === "pending" ? [next, ...without] : without;
-      });
+    const reload = async () => {
+      try {
+        const res = await fetch("/api/orders/staff", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) return;
+        const pending = ((json.pending || []) as Order[]).map(rememberClient);
+        const mine = ((json.mine || []) as Order[]).map(rememberClient);
+        const team = ((json.teamInProgress || []) as Order[]).map(rememberClient);
+        const inWork = canReassignRef.current
+          ? (() => {
+              const byId = new Map(mine.map((order) => [order.id, order]));
+              for (const order of team) byId.set(order.id, order);
+              return [...byId.values()];
+            })()
+          : mine;
+        setNewOrders(pending);
+        setMyOrders(inWork);
+        setCancelledOrders(((json.cancelled || []) as Order[]).map(rememberClient));
+        setCompletedOrders(((json.completed || []) as Order[]).map(rememberClient));
+      } catch {
+        // ignore
+      }
     };
 
-    const inbox = subscribeOrdersInbox(supabase, (order, event) => {
-      if (event === "created" && order.status === "pending") {
-        upsertPending(order as Order);
-        return;
-      }
-      applyOrderUpdateRef.current(order as Order);
+    const inbox = subscribeOrdersInbox(supabase, () => {
+      void reload();
     });
-
-    void (async () => {
-      pgChannel = supabase
-        .channel(`live-orders-${user.id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "orders" },
-          (payload) => {
-            const currentUserId = userIdRef.current;
-            if (!currentUserId) return;
-
-            if (payload.eventType === "INSERT") {
-              const inserted = payload.new as Order;
-              if (inserted.status === "pending") {
-                upsertPending(inserted);
-              }
-            } else if (payload.eventType === "UPDATE") {
-              applyOrderUpdateRef.current(payload.new as Order);
-            } else if (payload.eventType === "DELETE") {
-              setNewOrders((prev) =>
-                prev.filter((o) => o.id !== payload.old.id),
-              );
-              setMyOrders((prev) =>
-                prev.filter((o) => o.id !== payload.old.id),
-              );
-              setCancelledOrders((prev) =>
-                prev.filter((o) => o.id !== payload.old.id),
-              );
-              setCompletedOrders((prev) =>
-                prev.filter((o) => o.id !== payload.old.id),
-              );
-            }
-          },
-        );
-
-      await subscribeWithAuth(supabase, pgChannel);
-    })();
 
     return () => {
       inbox.unsubscribe();
-      if (pgChannel) supabase.removeChannel(pgChannel);
     };
   }, [user?.id, supabase]);
 
@@ -482,6 +493,18 @@ export default function OperatorOrdersPage() {
   useEffect(() => {
     setPage(1);
   }, [activeTab, searchQuery]);
+
+  useEffect(() => {
+    const fromUrl = parseOrdersTab(searchParams.get("tab"));
+    if (fromUrl) setActiveTab(fromUrl);
+  }, [searchParams]);
+
+  const selectOrdersTab = (tab: TabId) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`/operator/orders?${params.toString()}`, { scroll: false });
+  };
 
   const openOrder = (orderId: string) => {
     router.push(`/operator/orders/${orderId}`);
@@ -668,20 +691,31 @@ export default function OperatorOrdersPage() {
   const isActiveStatus = (status: Order["status"]) =>
     ["pending", "processing", "awaiting_payment", "paid"].includes(status);
 
-  const renderRowActions = (order: Order) => {
+  const renderRowActions = (order: Order, layout: "table" | "mobile" = "table") => {
+    const isMobile = layout === "mobile";
+    const btn = isMobile ? MOBILE_ACTION_BTN : ACTION_BTN;
+    const stack = isMobile
+      ? "flex flex-col items-stretch gap-2 w-full"
+      : "flex flex-col items-stretch gap-1 w-full";
     const isForeign =
       canReassignOrders &&
       !!order.operator_id &&
       order.operator_id !== user?.id;
-    const openLabel = isActiveStatus(order.status) ? "Открыть" : "Подробнее";
+    const openLabel = isActiveStatus(order.status)
+      ? isMobile
+        ? "Открыть заявку"
+        : "Открыть"
+      : "Подробнее";
     const openButton = (
       <Button
         asChild
         size="sm"
-        className={`${ACTION_BTN} ${
+        className={`${btn} ${
           isActiveStatus(order.status)
             ? "bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900"
-            : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
+            : isMobile
+              ? "bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-800"
+              : "bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
         }`}
       >
         <Link href={`/operator/orders/${order.id}`}>{openLabel}</Link>
@@ -690,13 +724,8 @@ export default function OperatorOrdersPage() {
 
     if (activeTab === "new") {
       return (
-        <div className="flex flex-col items-stretch gap-1 w-full">
-          <Button
-            asChild
-            size="sm"
-            variant="outline"
-            className={ACTION_BTN}
-          >
+        <div className={stack}>
+          <Button asChild size="sm" variant="outline" className={btn}>
             <Link href={`/operator/orders/${order.id}`}>Открыть</Link>
           </Button>
           <Button
@@ -704,7 +733,7 @@ export default function OperatorOrdersPage() {
             size="sm"
             disabled={!staffActive}
             onClick={() => void handleClaimOrder(order.id)}
-            className={`${ACTION_BTN} bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 disabled:cursor-not-allowed`}
+            className={`${btn} bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 disabled:cursor-not-allowed`}
           >
             Взять в работу
           </Button>
@@ -719,13 +748,8 @@ export default function OperatorOrdersPage() {
       isForeign
     ) {
       return (
-        <div className="flex flex-col items-stretch gap-1 w-full">
-          <Button
-            asChild
-            size="sm"
-            variant="outline"
-            className={ACTION_BTN}
-          >
+        <div className={stack}>
+          <Button asChild size="sm" variant="outline" className={btn}>
             <Link href={`/operator/orders/${order.id}`}>Открыть</Link>
           </Button>
           <Button
@@ -733,7 +757,7 @@ export default function OperatorOrdersPage() {
             size="sm"
             disabled={!staffActive}
             onClick={() => void handleJoinOrder(order.id)}
-            className={`${ACTION_BTN} bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 disabled:cursor-not-allowed`}
+            className={`${btn} bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 disabled:cursor-not-allowed`}
           >
             Подключиться
           </Button>
@@ -743,13 +767,8 @@ export default function OperatorOrdersPage() {
 
     if (activeTab === "cancelled" && canReassignOrders) {
       return (
-        <div className="flex flex-col items-stretch gap-1 w-full">
-          <Button
-            asChild
-            size="sm"
-            variant="outline"
-            className={ACTION_BTN}
-          >
+        <div className={stack}>
+          <Button asChild size="sm" variant="outline" className={btn}>
             <Link href={`/operator/orders/${order.id}`}>Открыть</Link>
           </Button>
           <Button
@@ -757,7 +776,7 @@ export default function OperatorOrdersPage() {
             size="sm"
             disabled={!staffActive}
             onClick={() => void handleRestoreToWork(order.id)}
-            className={`${ACTION_BTN} bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 disabled:cursor-not-allowed`}
+            className={`${btn} bg-[#FFDD2D] hover:bg-[#e6c628] text-zinc-900 disabled:cursor-not-allowed`}
           >
             Вернуть в работу
           </Button>
@@ -765,11 +784,7 @@ export default function OperatorOrdersPage() {
       );
     }
 
-    return (
-      <div className="flex flex-col items-stretch w-full">
-        {openButton}
-      </div>
-    );
+    return <div className={stack}>{openButton}</div>;
   };
 
   return (
@@ -791,7 +806,7 @@ export default function OperatorOrdersPage() {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => selectOrdersTab(tab.id)}
               className={`text-xs font-bold rounded-xl h-8 px-3 sm:px-4 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 activeTab === tab.id
                   ? "bg-[#FFF4C2] text-zinc-900 hover:bg-[#FFF4C2]"
@@ -825,8 +840,8 @@ export default function OperatorOrdersPage() {
         </div>
       </div>
 
-      <Card className="rounded-2xl border border-zinc-200 bg-white shadow-none overflow-hidden p-0">
-        {tabOrders.length === 0 ? (
+      {tabOrders.length === 0 ? (
+        <Card className="rounded-2xl border border-zinc-200 bg-white shadow-none overflow-hidden p-0">
           <div className="p-10 md:p-14 text-center space-y-4">
             <div className="mx-auto w-14 h-14 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400">
               <ClipboardList className="w-7 h-7" />
@@ -838,8 +853,26 @@ export default function OperatorOrdersPage() {
               </p>
             </div>
           </div>
-        ) : (
-          <>
+        </Card>
+      ) : (
+        <>
+          <div className="md:hidden space-y-3">
+            {paginatedOrders.map((order) => (
+              <OperatorOrderCard
+                key={order.id}
+                order={order}
+                now={now}
+                tone={cardTone(order.status)}
+                statusText={statusLabel(order.status)}
+                showWallet={false}
+                showOperator
+                clientStacked
+                actions={renderRowActions(order, "mobile")}
+              />
+            ))}
+          </div>
+
+          <Card className="hidden md:block rounded-2xl border border-zinc-200 bg-white shadow-none overflow-hidden p-0">
             <div className="overflow-x-auto">
               <table className="w-full table-fixed border-collapse text-left text-sm">
                 <colgroup>
@@ -945,46 +978,46 @@ export default function OperatorOrdersPage() {
                 </tbody>
               </table>
             </div>
+          </Card>
 
-            {showPagination && (
-              <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-3 py-2">
-                <p className="text-xs font-semibold text-zinc-400">
-                  {(currentPage - 1) * PAGE_SIZE + 1}–
-                  {Math.min(currentPage * PAGE_SIZE, tabOrders.length)} из{" "}
-                  {tabOrders.length}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="h-8 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="text-xs font-bold text-zinc-700 min-w-[4.5rem] text-center">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage >= totalPages}
-                    onClick={() =>
-                      setPage((p) => Math.min(totalPages, p + 1))
-                    }
-                    className="h-8 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
+          {showPagination && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-100 bg-white px-3 py-2">
+              <p className="text-xs font-semibold text-zinc-400">
+                {(currentPage - 1) * PAGE_SIZE + 1}–
+                {Math.min(currentPage * PAGE_SIZE, tabOrders.length)} из{" "}
+                {tabOrders.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="h-8 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-xs font-bold text-zinc-700 min-w-[4.5rem] text-center">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() =>
+                    setPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  className="h-8 rounded-full px-3 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
               </div>
-            )}
-          </>
-        )}
-      </Card>
+            </div>
+          )}
+        </>
+      )}
       <ConfirmDialogHost />
     </div>
   );

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import Script from "next/script";
+import { cookies, headers } from "next/headers";
 import { Providers } from "./providers";
 import "./globals.css";
 import "./staff-theme.css";
 import { createClient } from "@/src/utils/supabase/server";
+import { parseStaffTheme, STAFF_THEME_COOKIE } from "@/src/utils/staff/theme";
 
 const AUTH_CALLBACK_BOOTSTRAP = `(function(){try{var p=location.pathname;if(p==="/auth/callback"||p==="/auth/confirm")return;var s=location.search;if(s.indexOf("code=")<0&&s.indexOf("token_hash=")<0)return;var u=new URL("/auth/callback"+s,location.origin);if(!u.searchParams.get("next")&&(p.indexOf("/auth/reset-password")===0||u.searchParams.get("type")==="recovery"))u.searchParams.set("next","/auth/reset-password");location.replace(u.pathname+u.search);}catch(e){}})();`;
 
@@ -48,8 +50,21 @@ export default async function RootLayout({
                 : "user";
     }
 
+    const headerList = await headers();
+    const cookieStore = await cookies();
+    const pathname = headerList.get("x-pathname") || "";
+    const onStaff =
+        pathname.startsWith("/operator") || pathname.startsWith("/admin");
+    const staffDark =
+        onStaff &&
+        parseStaffTheme(cookieStore.get(STAFF_THEME_COOKIE)?.value) === "dark";
+
     return (
-        <html lang="ru" className={`${roboto.variable} h-full antialiased`}>
+        <html
+            lang="ru"
+            suppressHydrationWarning
+            className={`${roboto.variable} h-full antialiased${staffDark ? " dark staff-dark" : ""}`}
+        >
             <body
                 className={`${roboto.className} font-sans min-h-full flex flex-col bg-white text-zinc-900`}
             >

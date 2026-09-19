@@ -17,6 +17,7 @@ import {
   loadStaffChatReadMap,
   markStaffChatRead,
 } from "@/src/utils/chat/staff-inbox";
+import { formatChatListStamp } from "@/src/utils/chat/format-time";
 
 function getUserLabel(conversation: ChatConversation) {
   const user = conversation.user;
@@ -50,6 +51,10 @@ function ConversationRow({
   subtitleClassName: string;
   onSelect: (id: string) => void;
 }) {
+  const stamp = formatChatListStamp(
+    conversation.last_message?.created_at || conversation.updated_at,
+  );
+
   return (
     <button
       type="button"
@@ -60,6 +65,12 @@ function ConversationRow({
           : "border-l-4 border-l-transparent"
       }`}
     >
+      <div
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white text-xs font-bold border border-emerald-400 shrink-0"
+        aria-hidden
+      >
+        К
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="text-sm font-bold text-zinc-900 truncate">
@@ -87,7 +98,15 @@ function ConversationRow({
           {preview}
         </p>
       </div>
-      <UnreadBadge count={unread} />
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        {stamp ? (
+          <span className="text-[10px] font-semibold text-zinc-400 leading-tight text-right tabular-nums">
+            <span className="block">{stamp.date}</span>
+            <span className="block">{stamp.time}</span>
+          </span>
+        ) : null}
+        <UnreadBadge count={unread} />
+      </div>
     </button>
   );
 }

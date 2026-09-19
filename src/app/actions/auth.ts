@@ -6,6 +6,17 @@ import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { verifyRecaptchaToken } from "@/src/utils/captcha/verify-recaptcha";
 import { validateEmail, validatePassword } from "@/src/utils/validation";
+import {
+  consumeRateLimit,
+  getIpFromHeaders,
+  rateLimitExceededResponse,
+} from "@/src/utils/rate-limit";
+
+async function consumeAuthRateLimit(action: string, limit: number) {
+  const headerList = await headers();
+  const ip = getIpFromHeaders(headerList);
+  return consumeRateLimit(`auth:${action}:${ip}`, limit, 60_000);
+}
 
 export async function loginAndGetRoute(
   email: string,
@@ -15,6 +26,10 @@ export async function loginAndGetRoute(
   const captcha = await verifyRecaptchaToken(captchaToken);
   if (!captcha.ok) {
     return { error: captcha.error };
+  }
+
+  if (!(await consumeAuthRateLimit("login", 10))) {
+    return rateLimitExceededResponse();
   }
 
   const supabase = await createClient();
@@ -61,6 +76,10 @@ export async function registerAccount(
   const captcha = await verifyRecaptchaToken(captchaToken);
   if (!captcha.ok) {
     return { error: captcha.error };
+  }
+
+  if (!(await consumeAuthRateLimit("register", 5))) {
+    return rateLimitExceededResponse();
   }
 
   const emailCheck = validateEmail(email);
@@ -161,6 +180,10 @@ export async function requestPasswordReset(
     }
     targetEmail = user.email;
     fromCabinet = true;
+  }
+
+  if (!(await consumeAuthRateLimit("reset", 3))) {
+    return rateLimitExceededResponse();
   }
 
   const origin = await getAuthRedirectOrigin();

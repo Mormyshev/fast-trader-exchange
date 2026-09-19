@@ -15,6 +15,7 @@ import {
   type StaffChatPeer,
 } from "@/src/utils/chat/staff-internal";
 import { broadcastStaffChatConversation } from "@/src/utils/supabase/broadcast-staff-chat";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 
 function tableMissingResponse() {
   return NextResponse.json(
@@ -69,6 +70,9 @@ export async function GET() {
     const staff = await requireStaff();
     if (!staff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(staff.profile)) {
+      return staffInactiveResponse();
     }
 
     const [groupRes, dmsRes, profilesRes] = await Promise.all([
@@ -155,6 +159,9 @@ export async function POST(request: Request) {
     const staff = await requireStaff();
     if (!staff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isStaffOnDuty(staff.profile)) {
+      return staffInactiveResponse();
     }
 
     const body = await request.json().catch(() => null);

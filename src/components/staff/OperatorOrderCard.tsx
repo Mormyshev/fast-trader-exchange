@@ -61,6 +61,7 @@ export default function OperatorOrderCard({
   walletLabel = "Реквизиты клиента",
   showWallet = true,
   showOperator = false,
+  clientStacked = false,
   actions,
   children,
 }: {
@@ -71,6 +72,7 @@ export default function OperatorOrderCard({
   walletLabel?: string;
   showWallet?: boolean;
   showOperator?: boolean;
+  clientStacked?: boolean;
   actions?: ReactNode;
   children?: ReactNode;
 }) {
@@ -134,7 +136,11 @@ export default function OperatorOrderCard({
 
       <div className="px-4 sm:px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">
         <div className="min-w-0 rounded-2xl bg-[#F4F5F7] px-3.5 py-3">
-          <StaffClientInfo client={order.client} compact />
+          <StaffClientInfo
+            client={order.client}
+            compact={!clientStacked}
+            stacked={clientStacked}
+          />
         </div>
         {showWallet ? (
           <div className="min-w-0 rounded-2xl bg-[#F4F5F7] px-3.5 py-3">

@@ -1,20 +1,15 @@
+import {
+  createSignedStorageUrl,
+  storageObjectPath,
+} from "@/src/utils/storage/signed-url";
+
 export function receiptsObjectPath(publicOrPath: string): string | null {
-  const raw = publicOrPath.trim();
-  if (!raw) return null;
+  return storageObjectPath("receipts", publicOrPath);
+}
 
-  if (!raw.includes("://") && !raw.includes("/object/")) {
-    return raw.replace(/^\/+/, "");
-  }
-
-  try {
-    const url = new URL(raw);
-    const match = url.pathname.match(
-      /\/object\/(?:public|sign)\/receipts\/(.+)$/,
-    );
-    if (match?.[1]) return decodeURIComponent(match[1]);
-  } catch {
-    return null;
-  }
-
-  return null;
+export async function createReceiptsSignedUrl(
+  admin: Parameters<typeof createSignedStorageUrl>[0],
+  stored: string | null | undefined,
+): Promise<string | null> {
+  return createSignedStorageUrl(admin, "receipts", stored);
 }

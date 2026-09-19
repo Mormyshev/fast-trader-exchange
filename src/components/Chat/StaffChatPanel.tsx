@@ -163,13 +163,11 @@ export default function StaffChatPanel({
     const inbox = subscribeStaffChatInbox(supabase, {
       onMessage: (payload) => {
         if (payload.conversationId !== conversationId) return;
-        upsertMessage(payload.message as StaffChatMessage);
+        void loadMessages(true);
       },
       onConversation: (payload) => {
-        const next = payload.conversation as StaffChatConversation | undefined;
-        if (next?.id === conversationId) {
-          onConversationChangeRef.current?.(next);
-        }
+        if (payload.conversationId !== conversationId) return;
+        void loadMessages(true);
       },
     });
 

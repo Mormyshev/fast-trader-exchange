@@ -1,17 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/src/utils/supabase/middleware";
 
+const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+
+function isAllowedApiOrigin(request: NextRequest): boolean {
+  const fetchSite = request.headers.get("sec-fetch-site")?.trim().toLowerCase();
+  if (fetchSite === "same-origin") return true;
+
+  const origin = request.headers.get("origin")?.trim();
+  const referer = request.headers.get("referer")?.trim();
+  const candidate = origin || referer;
+  if (!candidate) return false;
+  try {
+    const originHost = new URL(candidate).host;
+    const requestHost = request.headers.get("host");
+    if (requestHost && originHost === requestHost) return true;
+    const site = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+    if (site && new URL(site).host === originHost) return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestUrl = new URL(request.url);
 
-  // 1. ЖЕСТКАЯ ФИЛЬТРАЦИЯ (Senior-паттерн):
-  // Если запрос идет за данными (Fetch / XHR / API / Next.js Data / Realtime)
-  // или за статикой, мы СРАЗУ пропускаем его за 0 миллисекунд, минуя тяжелый getUser() в middleware.
+  if (pathname.startsWith("/api")) {
+    if (
+      MUTATING.has(request.method) &&
+      !pathname.startsWith("/api/cron/") &&
+      !isAllowedApiOrigin(request)
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.next();
+  }
+
   if (
     request.headers.get("x-nextjs-data") ||
     request.headers.get("accept")?.includes("application/json") ||
-    pathname.startsWith("/api") ||
     pathname.includes("_next")
   ) {
     return NextResponse.next();
@@ -52,6 +81,7 @@ export const config = {
      * а письмо сброса пароля часто открывает Site URL с ?code=.
      */
     "/",
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/api/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

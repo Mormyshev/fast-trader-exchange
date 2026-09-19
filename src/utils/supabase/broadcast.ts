@@ -42,7 +42,12 @@ export async function broadcastOrderEvent(
     await channel.send({
       type: "broadcast",
       event,
-      payload: { order },
+      payload: {
+        order: {
+          id: order.id ?? null,
+          status: order.status ?? null,
+        },
+      },
     });
   } catch (err) {
     console.warn("[broadcast]", event, err);

@@ -13,6 +13,11 @@ import {
   MAX_CHAT_ATTACHMENT_BYTES,
 } from "@/src/utils/chat/types";
 import {
+  chatAttachmentMetaFromBytes,
+  isAllowedChatAttachmentBytes,
+  signChatMessage,
+} from "@/src/utils/chat/attachment";
+import {
   isOrderNumberColumnMissing,
 } from "@/src/utils/orders/public-number";
 import {
@@ -83,19 +88,7 @@ async function insertChatMessage(
 }
 
 async function uploadAppealFile(
-  admin: {
-    from: (table: string) => any;
-    storage: {
-      from: (bucket: string) => {
-        upload: (
-          path: string,
-          buffer: Buffer,
-          options: { contentType: string; upsert: boolean },
-        ) => Promise<{ error: { message: string } | null }>;
-        getPublicUrl: (path: string) => { data: { publicUrl: string } };
-      };
-    };
-  },
+  admin: any,
   conversationId: string,
   userId: string,
   file: File,
@@ -107,36 +100,35 @@ async function uploadAppealFile(
     return { error: `Неподдерживаемый тип файла: ${file.name}` };
   }
 
-  const ext = file.name.split(".").pop() || "bin";
-  const path = `${conversationId}/${Date.now()}-${userId}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
+  if (!isAllowedChatAttachmentBytes(buffer)) {
+    return { error: `Неподдерживаемый тип файла: ${file.name}` };
+  }
+  const meta = chatAttachmentMetaFromBytes(buffer)!;
+  const path = `${conversationId}/${Date.now()}-${userId}.${meta.ext}`;
 
   const { error: uploadError } = await admin.storage
     .from("chat-attachments")
-    .upload(path, buffer, { contentType: file.type, upsert: false });
+    .upload(path, buffer, { contentType: meta.contentType, upsert: false });
 
   if (uploadError) {
     return { error: uploadError.message };
   }
 
-  const { data: publicUrlData } = admin.storage
-    .from("chat-attachments")
-    .getPublicUrl(path);
-
   const saved = await insertChatMessage(admin, {
     conversation_id: conversationId,
     sender_id: userId,
     body: null,
-    attachment_url: publicUrlData.publicUrl,
+    attachment_url: path,
     attachment_name: file.name,
-    attachment_type: file.type,
+    attachment_type: meta.contentType,
   });
 
   if (saved.error || !saved.data) {
     return { error: saved.error?.message ?? "Не удалось сохранить вложение" };
   }
 
-  return { message: saved.data };
+  return { message: await signChatMessage(admin, saved.data) };
 }
 
 export async function POST(request: Request) {

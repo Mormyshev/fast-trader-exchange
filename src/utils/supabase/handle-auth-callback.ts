@@ -2,17 +2,10 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { sessionHasRecoveryAmr } from "@/src/utils/supabase/recovery-session";
+import { safeInternalPath } from "@/src/utils/safe-path";
 
 function safeNextPath(next: string | null, fallback: string) {
-  if (
-    !next ||
-    !next.startsWith("/") ||
-    next.startsWith("//") ||
-    next.includes("\\")
-  ) {
-    return fallback;
-  }
-  return next;
+  return safeInternalPath(next, fallback);
 }
 
 function requestOrigin(request: NextRequest) {

@@ -7,6 +7,7 @@ import {
   isBlacklistColumnMissing,
   parseBlacklistReason,
 } from "@/src/utils/clients/blacklist";
+import { signStoredUrls } from "@/src/utils/storage/signed-url";
 
 const VERIFICATION_TABS = [
   "pending",
@@ -48,6 +49,9 @@ export async function GET(request: Request) {
     if (!actor) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (!isStaffOnDuty(actor.profile)) {
+      return staffInactiveResponse();
+    }
 
     const tab = parseTab(new URL(request.url).searchParams.get("tab"));
 
@@ -87,7 +91,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
 
-    return NextResponse.json({ requests: data ?? [], tab });
+    const requests = await Promise.all(
+      ((data ?? []) as Record<string, unknown>[]).map((row) =>
+        signStoredUrls(actor.admin, "verifications", row, [
+          "passport_url",
+          "selfie_url",
+          "extra_document_url",
+        ]),
+      ),
+    );
+
+    return NextResponse.json({ requests, tab });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

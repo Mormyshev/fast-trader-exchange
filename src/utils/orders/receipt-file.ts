@@ -1,37 +1,38 @@
+import { sniffFileKind, sniffedContentType, sniffedExt } from "@/src/utils/files/magic";
+
 export type ReceiptUploadKind = "pdf" | "crypto";
-
-const PDF = "application/pdf";
-const JPEG = new Set(["image/jpeg", "image/jpg"]);
-const PNG = "image/png";
-
-function fileExt(name: string): string {
-  return name.split(".").pop()?.toLowerCase() ?? "";
-}
-
-function isPdfFile(file: File): boolean {
-  return file.type === PDF || fileExt(file.name) === "pdf";
-}
-
-function isJpegFile(file: File): boolean {
-  const ext = fileExt(file.name);
-  return JPEG.has(file.type) || ext === "jpg" || ext === "jpeg";
-}
-
-function isPngFile(file: File): boolean {
-  return file.type === PNG || fileExt(file.name) === "png";
-}
 
 export function receiptUploadKind(isCryptoTransfer: boolean): ReceiptUploadKind {
   return isCryptoTransfer ? "crypto" : "pdf";
+}
+
+export function isAllowedReceiptBytes(
+  bytes: Uint8Array,
+  kind: ReceiptUploadKind,
+): boolean {
+  const sniffed = sniffFileKind(bytes);
+  if (!sniffed) return false;
+  if (sniffed === "pdf") return true;
+  return kind === "crypto" && (sniffed === "jpeg" || sniffed === "png");
 }
 
 export function isAllowedReceiptFile(
   file: File,
   kind: ReceiptUploadKind,
 ): boolean {
-  if (isPdfFile(file)) return true;
-  if (kind === "crypto" && (isJpegFile(file) || isPngFile(file))) {
-    return true;
+  const name = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const type = file.type;
+  if (type === "application/pdf" || name === "pdf") return true;
+  if (kind === "crypto") {
+    if (
+      type === "image/jpeg" ||
+      type === "image/jpg" ||
+      name === "jpg" ||
+      name === "jpeg"
+    ) {
+      return true;
+    }
+    if (type === "image/png" || name === "png") return true;
   }
   return false;
 }
@@ -52,22 +53,29 @@ export function receiptRejectMessage(kind: ReceiptUploadKind): string {
     : "Прикрепите чек в формате PDF";
 }
 
+export function receiptContentTypeFromBytes(bytes: Uint8Array): string {
+  const kind = sniffFileKind(bytes);
+  return kind ? sniffedContentType(kind) : "application/pdf";
+}
+
+export function receiptFileExtFromBytes(bytes: Uint8Array): string {
+  const kind = sniffFileKind(bytes);
+  return kind ? sniffedExt(kind) : "pdf";
+}
+
+/** Client-side hint only; server must use byte sniffing. */
 export function receiptContentType(file: File): string {
-  if (JPEG.has(file.type)) return "image/jpeg";
-  if (file.type === PNG) return PNG;
-  if (file.type === PDF) return PDF;
-  const ext = fileExt(file.name);
-  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
-  if (ext === "png") return PNG;
-  return file.type || PDF;
+  if (file.type === "image/jpeg" || file.type === "image/jpg") return "image/jpeg";
+  if (file.type === "image/png") return "image/png";
+  if (file.type === "application/pdf") return "application/pdf";
+  return file.type || "application/pdf";
 }
 
 export function receiptFileExt(file: File): string {
-  if (JPEG.has(file.type)) return "jpg";
-  if (file.type === PNG) return "png";
-  if (file.type === PDF) return "pdf";
-  const ext = fileExt(file.name);
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "jpeg") return "jpg";
   if (ext === "jpg" || ext === "png" || ext === "pdf") return ext;
+  if (file.type === "image/jpeg") return "jpg";
+  if (file.type === "image/png") return "png";
   return "pdf";
 }

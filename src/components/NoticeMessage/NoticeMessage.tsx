@@ -41,7 +41,7 @@ export default function NoticeMessage() {
                     Для оформления заявки заполните форму обмена ниже. Если
                     возникнут вопросы, напишите в онлайн-чат или{" "}
                     <a
-                        href="tg://resolve?domain=finex24cash"
+                        href="tg://resolve?domain=FastTraderTeam"
                         className="font-bold text-[#C9A227] hover:underline"
                     >
                         Telegram

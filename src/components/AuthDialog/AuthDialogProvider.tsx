@@ -15,6 +15,7 @@ import AuthModal from "@/src/components/AuthModal/AuthModal";
 import RegisterModal from "@/src/components/RegisterModal/RegisterModal";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
+import { isSafeInternalPath } from "@/src/utils/safe-path";
 
 type AuthView = "closed" | "gate" | "login" | "register";
 
@@ -80,7 +81,7 @@ export function AuthDialogProvider({ children }: { children: ReactNode }) {
   const requireAuth = useCallback(
     (next?: string) => {
       if (role !== "guest") return true;
-      setRedirectTo(next ?? null);
+      setRedirectTo(isSafeInternalPath(next) ? next : null);
       setView("gate");
       return false;
     },

@@ -253,10 +253,10 @@ type RateHit = { rate: number; source: string };
 
 /** Официальный USD/RUB ЦБ РФ. USDT на сайте считается по этому курсу, без спреда. */
 export async function fetchCbrUsdRubHit(): Promise<RateHit | null> {
-  const dated = `https://www.cbr.ru/scripts/XML_daily.asp?date_req=${encodeURIComponent(moscowDateReq())}`;
   const latest = "https://www.cbr.ru/scripts/XML_daily.asp";
+  const dated = `https://www.cbr.ru/scripts/XML_daily.asp?date_req=${moscowDateReq()}`;
 
-  for (const url of [dated, latest]) {
+  for (const url of [latest, dated]) {
     try {
       const rate = await fetchCbrXml(url);
       if (rate) return { rate, source: `ЦБ РФ (${url})` };

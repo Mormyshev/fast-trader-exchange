@@ -20,6 +20,11 @@ import {
   STAFF_PSEUDONYM_REQUIRED,
 } from "@/src/utils/chat/staff-chat";
 import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
+import {
+  chatAttachmentMetaFromBytes,
+  isAllowedChatAttachmentBytes,
+  signChatMessage,
+} from "@/src/utils/chat/attachment";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -118,21 +123,24 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const ext = file.name.split(".").pop() || "bin";
-    const path = `${id}/${Date.now()}-${actor.user.id}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (!isAllowedChatAttachmentBytes(buffer)) {
+      return NextResponse.json(
+        { error: "Неподдерживаемый тип файла" },
+        { status: 400 },
+      );
+    }
+
+    const meta = chatAttachmentMetaFromBytes(buffer)!;
+    const path = `${id}/${Date.now()}-${actor.user.id}.${meta.ext}`;
 
     const { error: uploadError } = await actor.admin.storage
       .from("chat-attachments")
-      .upload(path, buffer, { contentType: file.type, upsert: false });
+      .upload(path, buffer, { contentType: meta.contentType, upsert: false });
 
     if (uploadError) {
       return NextResponse.json({ error: uploadError.message }, { status: 503 });
     }
-
-    const { data: publicUrlData } = actor.admin.storage
-      .from("chat-attachments")
-      .getPublicUrl(path);
 
     const { data: message, error } = await withTimeout(
       actor.admin
@@ -141,9 +149,9 @@ export async function POST(request: Request, context: RouteContext) {
           conversation_id: id,
           sender_id: actor.user.id,
           body: caption || null,
-          attachment_url: publicUrlData.publicUrl,
+          attachment_url: path,
           attachment_name: file.name,
-          attachment_type: file.type,
+          attachment_type: meta.contentType,
         })
         .select(
           "id, created_at, conversation_id, sender_id, body, attachment_url, attachment_name, attachment_type",
@@ -180,8 +188,9 @@ export async function POST(request: Request, context: RouteContext) {
       }
     }
 
-    void broadcastChatMessage({ message, conversationId: id });
-    return NextResponse.json({ message });
+    const payload = await signChatMessage(actor.admin, message);
+    void broadcastChatMessage({ message: payload, conversationId: id });
+    return NextResponse.json({ message: payload });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });

@@ -26,6 +26,11 @@ import {
   canRestoreCancelledOrders,
 } from "@/src/utils/staff/permissions";
 import { attachPaymentIssuedAt, attachTtlStartedAt } from "@/src/utils/orders/payment-details";
+import {
+  consumeRateLimit,
+  getRequestIp,
+  rateLimitJsonResponse,
+} from "@/src/utils/rate-limit";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -85,6 +90,9 @@ export async function GET(_request: Request, context: RouteContext) {
     if (order.user_id !== actor.user.id && !actor.isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (actor.isStaff && !actor.staffActive) {
+      return staffInactiveResponse();
+    }
 
     const fresh = await expireOrderIfNeeded(actor.admin, order);
     const payload = actor.isStaff
@@ -107,6 +115,16 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (
+      !consumeRateLimit(
+        `orders:patch:${actor.user.id}:${getRequestIp(request)}`,
+        30,
+        60_000,
+      )
+    ) {
+      return rateLimitJsonResponse();
     }
 
     const body = await request.json().catch(() => null);
@@ -224,8 +242,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           body.status === "completed" &&
           isRubPayout(current.currency_to as string) &&
           !(current as { operator_receipt_url?: string | null })
-            .operator_receipt_url &&
-          !(typeof body.operator_receipt_url === "string" && body.operator_receipt_url)
+            .operator_receipt_url
         ) {
           return NextResponse.json(
             {
@@ -236,9 +253,6 @@ export async function PATCH(request: Request, context: RouteContext) {
           );
         }
         patch.status = body.status;
-      }
-      if (typeof body.operator_receipt_url === "string") {
-        patch.operator_receipt_url = body.operator_receipt_url;
       }
       if (typeof body.operator_id === "string" || body.operator_id === null) {
         if (typeof body.operator_id === "string") {
@@ -316,10 +330,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     if (isOwner) {
-      if (typeof body.receipt_url === "string") {
-        patch.receipt_url = body.receipt_url;
-      }
       if (body.status === "paid" && current.status === "awaiting_payment") {
+        if (!(current as { receipt_url?: string | null }).receipt_url) {
+          return NextResponse.json(
+            { error: "Сначала прикрепите чек об оплате" },
+            { status: 400 },
+          );
+        }
         patch.status = "paid";
       }
       if (body.status === "cancelled") {
@@ -376,16 +393,22 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
-    let { data: updated, error: updateError } = await withTimeout(
-      actor.admin
-        .from("orders")
-        .update(patch)
-        .eq("id", id)
-        .select("*")
-        .single(),
-      8000,
-      { data: null, error: { message: "Database timeout" } } as any,
-    );
+    const claiming =
+      typeof patch.operator_id === "string" && !current.operator_id;
+
+    const applyOrderPatch = (values: Record<string, unknown>) => {
+      let query = actor.admin.from("orders").update(values).eq("id", id);
+      if (claiming) {
+        query = query.is("operator_id", null);
+      }
+      return withTimeout(
+        query.select("*").maybeSingle(),
+        8000,
+        { data: null, error: { message: "Database timeout" } } as any,
+      );
+    };
+
+    let { data: updated, error: updateError } = await applyOrderPatch(patch);
 
     if (
       updateError &&
@@ -393,20 +416,23 @@ export async function PATCH(request: Request, context: RouteContext) {
       patch.payment_issued_at
     ) {
       const { payment_issued_at: _issued, ...withoutIssued } = patch;
-      ({ data: updated, error: updateError } = await withTimeout(
-        actor.admin
-          .from("orders")
-          .update(withoutIssued)
-          .eq("id", id)
-          .select("*")
-          .single(),
-        8000,
-        { data: null, error: { message: "Database timeout" } } as any,
+      ({ data: updated, error: updateError } = await applyOrderPatch(
+        withoutIssued,
       ));
     }
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 503 });
+    }
+
+    if (!updated) {
+      if (claiming) {
+        return NextResponse.json(
+          { error: "Эту заявку уже забрал другой оператор" },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     if (updated) {

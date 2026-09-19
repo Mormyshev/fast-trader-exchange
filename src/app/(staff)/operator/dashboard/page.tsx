@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
     Clock,
     CheckCircle2,
     AlertCircle,
     Search,
-    Loader2,
     ChevronLeft,
     ChevronRight,
     ClipboardList,
@@ -17,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/src/utils/supabase/client";
-import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import StaffOperatorLabel from "@/src/components/StaffOperatorLabel/StaffOperatorLabel";
 import StaffClientInfo from "@/src/components/StaffClientInfo/StaffClientInfo";
@@ -133,6 +131,135 @@ const ACTIVE_STATUSES: OrderStatus[] = [
     "paid",
 ];
 
+function Skeleton({ className = "" }: { className?: string }) {
+    return (
+        <div className={`animate-pulse rounded-lg bg-zinc-100 ${className}`} />
+    );
+}
+
+function StatCard({
+    label,
+    value,
+    hint,
+    icon,
+    href,
+}: {
+    label: string;
+    value: number;
+    hint?: string;
+    icon: ReactNode;
+    href: string;
+}) {
+    return (
+        <Link
+            href={href}
+            className="w-full rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem] text-left cursor-pointer transition-all hover:bg-[#FFFDF3] hover:shadow-[0_8px_28px_rgba(15,23,42,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFDD2D]"
+        >
+            <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-zinc-500 uppercase tracking-wide">
+                    {label}
+                </span>
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
+                    {icon}
+                </span>
+            </div>
+            <div>
+                <div className="text-4xl font-bold text-zinc-900">{value}</div>
+                {hint ? (
+                    <p className="mt-1 text-[11px] font-semibold text-zinc-400">
+                        {hint}
+                    </p>
+                ) : null}
+            </div>
+        </Link>
+    );
+}
+
+function DashboardOrdersSkeleton() {
+    return (
+        <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
+                {Array.from({ length: 3 }).map((_, index) => (
+                    <Card
+                        key={index}
+                        className="rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]"
+                    >
+                        <div className="flex items-center justify-between">
+                            <Skeleton className="h-4 w-28" />
+                            <Skeleton className="h-10 w-10 rounded-xl" />
+                        </div>
+                        <Skeleton className="h-10 w-16" />
+                    </Card>
+                ))}
+            </div>
+
+            <Card className="rounded-2xl border-none bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)] overflow-hidden">
+                <div className="flex items-center gap-2 min-w-0 p-3 sm:p-4 md:p-5 lg:p-6 pb-3 sm:pb-4 md:pb-5 border-b border-zinc-100">
+                    <div className="flex min-w-0 flex-1 gap-2">
+                        <Skeleton className="h-8 w-20 rounded-xl" />
+                        <Skeleton className="h-8 w-24 rounded-xl" />
+                        <Skeleton className="h-8 w-28 rounded-xl hidden sm:block" />
+                    </div>
+                    <Skeleton className="h-10 w-[7.5rem] sm:w-56 rounded-2xl" />
+                </div>
+                <div className="hidden md:block divide-y divide-zinc-100">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                        <div
+                            key={index}
+                            className="grid grid-cols-5 gap-4 px-5 py-4"
+                        >
+                            <div className="space-y-2">
+                                <Skeleton className="h-3 w-20" />
+                                <Skeleton className="h-4 w-28" />
+                            </div>
+                            <Skeleton className="h-10 w-full" />
+                            <div className="space-y-2">
+                                <Skeleton className="h-4 w-32" />
+                                <Skeleton className="h-3 w-24" />
+                            </div>
+                            <Skeleton className="h-6 w-24 rounded-full" />
+                            <Skeleton className="h-9 w-24 rounded-full justify-self-end" />
+                        </div>
+                    ))}
+                </div>
+                <div className="md:hidden p-3 sm:p-4 space-y-3">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                        <div
+                            key={index}
+                            className="rounded-2xl bg-zinc-50 p-4 space-y-3"
+                        >
+                            <div className="flex justify-between gap-3">
+                                <Skeleton className="h-5 w-24 rounded-full" />
+                                <Skeleton className="h-4 w-20" />
+                            </div>
+                            <Skeleton className="h-16 w-full rounded-2xl" />
+                            <Skeleton className="h-10 w-full rounded-xl" />
+                        </div>
+                    ))}
+                </div>
+            </Card>
+        </>
+    );
+}
+
+function DashboardPageSkeleton() {
+    return (
+        <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6 lg:space-y-8 text-zinc-900 font-sans">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="space-y-2">
+                    <Skeleton className="h-8 w-56 sm:w-72" />
+                    <Skeleton className="h-4 w-64 sm:w-96" />
+                </div>
+                <Skeleton className="h-8 w-36 rounded-full" />
+            </div>
+            <Skeleton className="h-16 w-full rounded-2xl" />
+            <Skeleton className="h-40 w-full rounded-2xl" />
+            <Skeleton className="h-24 w-full rounded-2xl" />
+            <DashboardOrdersSkeleton />
+        </div>
+    );
+}
+
 export default function OperatorDashboard() {
     const supabase = createClient();
     const {
@@ -233,92 +360,42 @@ export default function OperatorDashboard() {
     useEffect(() => {
         if (!user?.id) return;
 
-        let channel: ReturnType<typeof supabase.channel> | null = null;
-
-        const applyLiveOrder = (order: Order) => {
-            const currentUserId = userIdRef.current;
-            if (!currentUserId) return;
-            const next = rememberClient(order);
-
-            setPendingOrders((prev) => {
-                const without = prev.filter((o) => o.id !== next.id);
-                return next.status === "pending" ? [next, ...without] : without;
-            });
-
-            setMyOrders((prev) => {
-                const without = prev.filter((o) => o.id !== next.id);
-                const canSeeTeam = canReassignRef.current;
-                const inWork =
-                    IN_PROGRESS_STATUSES.includes(next.status) &&
-                    (canSeeTeam
-                        ? !!next.operator_id
-                        : next.operator_id === currentUserId);
-                return inWork ? [next, ...without] : without;
-            });
-
-            setCompletedOrders((prev) => {
-                const without = prev.filter((o) => o.id !== next.id);
-                const visibleCompleted =
-                    next.status === "completed" &&
-                    (canReassignRef.current ||
-                        next.operator_id === currentUserId);
-                return visibleCompleted ? [next, ...without] : without;
-            });
-
-            setCancelledOrders((prev) => {
-                const without = prev.filter((o) => o.id !== next.id);
-                const visible =
-                    next.status === "cancelled" &&
-                    (canReassignRef.current ||
-                        next.operator_id === currentUserId ||
-                        next.operator_id == null);
-                return visible ? [next, ...without] : without;
-            });
+        const reload = async () => {
+            try {
+                const res = await fetch("/api/orders/staff", {
+                    cache: "no-store",
+                });
+                const json = await res.json();
+                if (!res.ok) return;
+                setPendingOrders(
+                    ((json.pending || []) as Order[]).map(rememberClient),
+                );
+                const inWork = canReassignRef.current
+                    ? ((json.teamInProgress || json.mine || []) as Order[])
+                    : ((json.mine || []) as Order[]);
+                setMyOrders(inWork.map(rememberClient));
+                setCompletedOrders(
+                    ((json.completed || []) as Order[]).map(rememberClient),
+                );
+                setCancelledOrders(
+                    ((json.cancelled || []) as Order[]).map(rememberClient),
+                );
+                setCompletedCount(
+                    typeof json.completedCount === "number"
+                        ? json.completedCount
+                        : 0,
+                );
+            } catch {
+                // ignore
+            }
         };
 
-        const inbox = subscribeOrdersInbox(supabase, (order) => {
-            applyLiveOrder(order as Order);
+        const inbox = subscribeOrdersInbox(supabase, () => {
+            void reload();
         });
-
-        void (async () => {
-            channel = supabase
-                .channel(`dashboard-orders-${user.id}`)
-                .on(
-                    "postgres_changes",
-                    { event: "*", schema: "public", table: "orders" },
-                    (payload) => {
-                        const currentUserId = userIdRef.current;
-                        if (!currentUserId) return;
-
-                        if (
-                            payload.eventType === "INSERT" ||
-                            payload.eventType === "UPDATE"
-                        ) {
-                            applyLiveOrder(payload.new as Order);
-                        } else if (payload.eventType === "DELETE") {
-                            const id = payload.old.id as string;
-                            setPendingOrders((prev) =>
-                                prev.filter((o) => o.id !== id),
-                            );
-                            setMyOrders((prev) =>
-                                prev.filter((o) => o.id !== id),
-                            );
-                            setCompletedOrders((prev) =>
-                                prev.filter((o) => o.id !== id),
-                            );
-                            setCancelledOrders((prev) =>
-                                prev.filter((o) => o.id !== id),
-                            );
-                        }
-                    },
-                );
-
-            await subscribeWithAuth(supabase, channel);
-        })();
 
         return () => {
             inbox.unsubscribe();
-            if (channel) supabase.removeChannel(channel);
         };
     }, [user?.id, supabase]);
 
@@ -376,12 +453,8 @@ export default function OperatorDashboard() {
     );
     const showPagination = filteredOrders.length > PAGE_SIZE;
 
-    if (isAuthLoading || loading) {
-        return (
-            <div className="flex justify-center p-20">
-                <Loader2 className="w-8 h-8 animate-spin text-[#FFDD2D]" />
-            </div>
-        );
+    if (isAuthLoading) {
+        return <DashboardPageSkeleton />;
     }
 
     return (
@@ -408,62 +481,45 @@ export default function OperatorDashboard() {
             <StaffRatesBoard />
             <StaffRoster />
 
+            {loading ? (
+                <DashboardOrdersSkeleton />
+            ) : (
+            <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
-                <Card className="rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-zinc-500 uppercase tracking-wide">
-                            Новые заявки
-                        </span>
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
-                            <Clock className="w-5 h-5" />
-                        </span>
-                    </div>
-                    <div className="text-4xl font-bold text-zinc-900">
-                        {pendingOrders.length}
-                    </div>
-                </Card>
-
-                <Card className="rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem]">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-zinc-500 uppercase tracking-wide">
-                            В работе
-                        </span>
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
-                            <AlertCircle className="w-5 h-5" />
-                        </span>
-                    </div>
-                    <div>
-                        <div className="text-4xl font-bold text-zinc-900">
-                            {myOrders.length}
-                        </div>
-                        {canReassignOrders ? (
-                            <p className="mt-1 text-[11px] font-semibold text-zinc-400">
-                                все заявки команды в работе
-                            </p>
-                        ) : null}
-                    </div>
-                </Card>
-
-                <Card className="rounded-2xl border-none bg-white p-4 sm:p-5 lg:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between min-h-[6.5rem] sm:min-h-[7.5rem] sm:col-span-2 lg:col-span-1">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-zinc-500 uppercase tracking-wide">
-                            {canReassignOrders ? "Выполнено" : "Выполнено мной"}
-                        </span>
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF4C2] text-[#C9A227]">
-                            <CheckCircle2 className="w-5 h-5" />
-                        </span>
-                    </div>
-                    <div>
-                        <div className="text-4xl font-bold text-zinc-900">
-                            {completedCount}
-                        </div>
-                        {canReassignOrders ? (
-                            <p className="mt-1 text-[11px] font-semibold text-zinc-400">
-                                все выполненные заявки команды
-                            </p>
-                        ) : null}
-                    </div>
-                </Card>
+                <StatCard
+                    label="Новые заявки"
+                    value={pendingOrders.length}
+                    icon={<Clock className="w-5 h-5" />}
+                    href="/operator/orders?tab=new"
+                />
+                <StatCard
+                    label="В работе"
+                    value={myOrders.length}
+                    hint={
+                        canReassignOrders
+                            ? "все заявки команды в работе"
+                            : undefined
+                    }
+                    icon={<AlertCircle className="w-5 h-5" />}
+                    href="/operator/orders?tab=in_work"
+                />
+                <div className="sm:col-span-2 lg:col-span-1">
+                    <StatCard
+                        label={
+                            canReassignOrders
+                                ? "Выполнено"
+                                : "Выполнено мной"
+                        }
+                        value={completedCount}
+                        hint={
+                            canReassignOrders
+                                ? "все выполненные заявки команды"
+                                : undefined
+                        }
+                        icon={<CheckCircle2 className="w-5 h-5" />}
+                        href="/operator/orders?tab=completed"
+                    />
+                </div>
             </div>
 
             <Card className="rounded-2xl border-none bg-white shadow-[0_4px_24px_rgba(15,23,42,0.04)] overflow-hidden">
@@ -778,6 +834,8 @@ export default function OperatorDashboard() {
                     </div>
                 )}
             </Card>
+            </>
+            )}
         </div>
     );
 }

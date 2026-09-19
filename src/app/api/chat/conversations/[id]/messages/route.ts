@@ -17,6 +17,7 @@ import {
   STAFF_PSEUDONYM_REQUIRED,
 } from "@/src/utils/chat/staff-chat";
 import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
+import { signChatMessages } from "@/src/utils/chat/attachment";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -50,6 +51,9 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     if (staff) {
+      if (!isStaffOnDuty(staff.profile)) {
+        return staffInactiveResponse();
+      }
       const clientCheck = await assertClientConversation(
         actor.admin,
         String(row.user_id),
@@ -86,7 +90,7 @@ export async function GET(_request: Request, context: RouteContext) {
       conversation: staff
         ? conversation
         : hideInternalStaffNicks(conversation),
-      messages: messages ?? [],
+      messages: await signChatMessages(actor.admin, messages ?? []),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";

@@ -39,7 +39,7 @@ export async function broadcastVerificationEvent(
     await channel.send({
       type: "broadcast",
       event: VERIFICATION_UPDATED_EVENT,
-      payload: { profile },
+      payload: { profile: { id: profile.id ?? null } },
     });
   } catch (err) {
     console.warn("[broadcast]", VERIFICATION_UPDATED_EVENT, err);

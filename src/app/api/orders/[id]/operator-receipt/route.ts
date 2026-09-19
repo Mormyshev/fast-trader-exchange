@@ -8,13 +8,14 @@ import {
   broadcastOrderEvent,
   ORDER_UPDATED_EVENT,
 } from "@/src/utils/supabase/broadcast";
-import { receiptsObjectPath } from "@/src/utils/orders/receipt-path";
+import { createReceiptsSignedUrl } from "@/src/utils/orders/receipt-path";
 import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 import { isCryptoOrderCode } from "@/src/utils/validation/wallet";
 import {
   isAllowedReceiptFile,
-  receiptContentType,
-  receiptFileExt,
+  isAllowedReceiptBytes,
+  receiptContentTypeFromBytes,
+  receiptFileExtFromBytes,
   receiptRejectMessage,
   receiptUploadKind,
 } from "@/src/utils/orders/receipt-file";
@@ -36,7 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const admin = createAdminClient();
     const [{ data: order }, { data: profile }] = await Promise.all([
       admin.from("orders").select("*").eq("id", id).maybeSingle(),
-      admin.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+      admin.from("profiles").select("role, staff_active").eq("id", user.id).maybeSingle(),
     ]);
 
     if (!order) {
@@ -45,32 +46,26 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const isStaff =
       profile?.role === "operator" || profile?.role === "admin";
-    if (!isStaff) {
+    const isOwner = order.user_id === user.id;
+    const canViewAsClient =
+      isOwner && String(order.status) === "completed";
+    if (!canViewAsClient && isStaff && !isStaffOnDuty(profile)) {
+      return staffInactiveResponse();
+    }
+    if (!canViewAsClient && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const stored = order.operator_receipt_url as string | null;
-    if (!stored) {
+    const signedUrl = await createReceiptsSignedUrl(admin, stored);
+    if (!signedUrl) {
       return NextResponse.json(
         { error: "Подтверждение перевода ещё не прикреплено" },
         { status: 404 },
       );
     }
 
-    const path = receiptsObjectPath(stored);
-    if (!path) {
-      return NextResponse.redirect(stored);
-    }
-
-    const signed = await admin.storage
-      .from("receipts")
-      .createSignedUrl(path, 60 * 60);
-
-    if (signed.error || !signed.data?.signedUrl) {
-      return NextResponse.redirect(stored);
-    }
-
-    return NextResponse.redirect(signed.data.signedUrl);
+    return NextResponse.redirect(signedUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 503 });
@@ -154,13 +149,20 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const ext = receiptFileExt(file);
-    const filePath = `operator-${id}-${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (!isAllowedReceiptBytes(buffer, kind)) {
+      return NextResponse.json(
+        { error: receiptRejectMessage(kind) },
+        { status: 400 },
+      );
+    }
+
+    const ext = receiptFileExtFromBytes(buffer);
+    const filePath = `operator-${id}-${Date.now()}.${ext}`;
 
     const uploadResult = await withTimeout(
       admin.storage.from("receipts").upload(filePath, buffer, {
-        contentType: receiptContentType(file),
+        contentType: receiptContentTypeFromBytes(buffer),
         upsert: true,
       }),
       15000,
@@ -174,14 +176,10 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const {
-      data: { publicUrl },
-    } = admin.storage.from("receipts").getPublicUrl(filePath);
-
     const { data: updated, error: updateError } = await withTimeout(
       admin
         .from("orders")
-        .update({ operator_receipt_url: publicUrl })
+        .update({ operator_receipt_url: filePath })
         .eq("id", id)
         .select("*")
         .single(),

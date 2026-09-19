@@ -1,6 +1,7 @@
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import type { ChatConversation, ChatMessage } from "@/src/utils/chat/types";
 import { buildAssignedOperatorMeta, buildOperatorMeta } from "@/src/utils/chat/staff-chat";
+import { signChatMessage } from "@/src/utils/chat/attachment";
 
 function mapChatMessage(row: Record<string, unknown>): ChatMessage {
   return {
@@ -96,7 +97,8 @@ export async function enrichConversations(
     (profiles ?? []).map((p: Record<string, unknown>) => [String(p.id), p]),
   );
 
-  return rows.map((row) => {
+  return Promise.all(
+    rows.map(async (row) => {
     const user = byId.get(String(row.user_id));
     const operatorProfile = row.operator_id
       ? byId.get(String(row.operator_id))
@@ -127,11 +129,14 @@ export async function enrichConversations(
         : undefined,
       operator: buildOperatorMeta(row, operatorProfile),
       assigned_operator: buildAssignedOperatorMeta(row, operatorProfile),
-      last_message: lastMessage,
+      last_message: lastMessage
+        ? await signChatMessage(admin, lastMessage)
+        : null,
       unread: unanswered,
       client_message_tail: preview?.client_message_tail ?? [],
     };
-  });
+    }),
+  );
 }
 
 export async function enrichConversation(

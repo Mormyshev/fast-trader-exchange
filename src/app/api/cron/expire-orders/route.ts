@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/src/utils/supabase/admin";
 import { cancelExpiredOrders } from "@/src/utils/orders/expire-orders";
+import { cronUnauthorizedResponse, isCronAuthorized } from "@/src/utils/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
-  void request.headers.get("user-agent");
+  if (!isCronAuthorized(request)) {
+    return cronUnauthorizedResponse();
+  }
 
   try {
     const admin = createAdminClient();

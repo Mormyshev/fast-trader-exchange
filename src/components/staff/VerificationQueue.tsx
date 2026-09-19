@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/src/utils/supabase/client";
-import { subscribeWithAuth } from "@/src/utils/supabase/realtime";
 import { subscribeVerificationsInbox } from "@/src/utils/supabase/verifications-inbox";
 import {
   Check,
@@ -21,7 +20,6 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import StaffScrollTabs from "@/src/components/staff/StaffScrollTabs";
 import ReasonDialog from "@/src/components/staff/ReasonDialog";
-import { normalizeVerificationStatus } from "@/src/utils/verification";
 import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { STAFF_INACTIVE_ERROR } from "@/src/utils/staff/duty";
@@ -111,61 +109,16 @@ export default function VerificationQueue() {
     }
   }, []);
 
-  const applyProfile = useCallback(
-    (row: ProfileRequest) => {
-      if (!row?.id) return;
-      if (row.role && row.role !== "user") {
-        setRequests((prev) => prev.filter((req) => req.id !== row.id));
-        return;
-      }
-      const blacklisted = row.is_blacklisted === true;
-      const status = normalizeVerificationStatus(row.verification);
-      const belongsHere =
-        activeTab === "blacklisted" ? blacklisted : !blacklisted && status === activeTab;
-
-      if (belongsHere) {
-        setRequests((prev) => {
-          const without = prev.filter((req) => req.id !== row.id);
-          return [row, ...without];
-        });
-        return;
-      }
-
-      setRequests((prev) => prev.filter((req) => req.id !== row.id));
-    },
-    [activeTab],
-  );
-
   useEffect(() => {
     let cancelled = false;
-    let pgChannel: ReturnType<typeof supabase.channel> | null = null;
 
     setLoading(true);
     void fetchRequests(activeTab);
     if (cancelled) return;
 
-    const inboxChannel = subscribeVerificationsInbox(supabase, (profile) => {
-      applyProfile(profile as unknown as ProfileRequest);
+    const inboxChannel = subscribeVerificationsInbox(supabase, () => {
+      void fetchRequests(activeTab);
     });
-
-    void (async () => {
-      pgChannel = supabase
-        .channel("admin-verifications-channel")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "profiles",
-          },
-          (payload) => {
-            const updatedRow = payload.new as ProfileRequest;
-            applyProfile(updatedRow);
-          },
-        );
-
-      await subscribeWithAuth(supabase, pgChannel);
-    })();
 
     const onFocus = () => {
       void fetchRequests(activeTab);
@@ -181,9 +134,8 @@ export default function VerificationQueue() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
       supabase.removeChannel(inboxChannel);
-      if (pgChannel) supabase.removeChannel(pgChannel);
     };
-  }, [supabase, activeTab, fetchRequests, applyProfile]);
+  }, [supabase, activeTab, fetchRequests]);
 
   const submitVerdict = async (
     id: string,

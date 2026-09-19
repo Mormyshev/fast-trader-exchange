@@ -6,6 +6,10 @@ import {
   MAX_CHAT_ATTACHMENT_BYTES,
 } from "@/src/utils/chat/types";
 import {
+  chatAttachmentMetaFromBytes,
+  isAllowedChatAttachmentBytes,
+} from "@/src/utils/chat/attachment";
+import {
   attachSendersToMessages,
   buildStaffConversation,
   canAccessStaffConversation,
@@ -21,6 +25,7 @@ import {
   broadcastStaffChatConversation,
   broadcastStaffChatMessage,
 } from "@/src/utils/supabase/broadcast-staff-chat";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -79,6 +84,9 @@ export async function POST(request: Request, context: RouteContext) {
     if (!staff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (!isStaffOnDuty(staff.profile)) {
+      return staffInactiveResponse();
+    }
 
     const { data: row, error } = await loadStaffConversation(staff.admin, id);
     if (error) {
@@ -89,20 +97,22 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const ext = file.name.split(".").pop() || "bin";
-    const path = `staff/${id}/${Date.now()}-${staff.user.id}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (!isAllowedChatAttachmentBytes(buffer)) {
+      return NextResponse.json(
+        { error: "Неподдерживаемый тип файла" },
+        { status: 400 },
+      );
+    }
+    const meta = chatAttachmentMetaFromBytes(buffer)!;
+    const path = `staff/${id}/${Date.now()}-${staff.user.id}.${meta.ext}`;
 
     const { error: uploadError } = await staff.admin.storage
       .from("chat-attachments")
-      .upload(path, buffer, { contentType: file.type, upsert: false });
+      .upload(path, buffer, { contentType: meta.contentType, upsert: false });
     if (uploadError) {
       return NextResponse.json({ error: uploadError.message }, { status: 503 });
     }
-
-    const { data: publicUrlData } = staff.admin.storage
-      .from("chat-attachments")
-      .getPublicUrl(path);
 
     const { data: message, error: insertError } = await withTimeout(
       staff.admin
@@ -111,9 +121,9 @@ export async function POST(request: Request, context: RouteContext) {
           conversation_id: id,
           sender_id: staff.user.id,
           body: caption || null,
-          attachment_url: publicUrlData.publicUrl,
+          attachment_url: path,
           attachment_name: file.name,
-          attachment_type: file.type,
+          attachment_type: meta.contentType,
         })
         .select(MESSAGE_SELECT)
         .single(),

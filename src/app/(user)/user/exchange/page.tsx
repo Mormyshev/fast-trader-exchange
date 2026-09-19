@@ -4,7 +4,6 @@ import OrderForm from "../../../components/ExchangePage/OrderForm/OrderForm";
 import ExchangeNotice from "@/src/components/ExchangeNotice/ExchangeNotice";
 import ExchangeRates from "@/src/components/ExchangeRates/ExchangeRates";
 import ExchangeHowItWorks from "@/src/components/ExchangeHowItWorks/ExchangeHowItWorks";
-import Reviews from "../../../../components/Reviews/Reviews";
 
 function ExchangeFormFallback() {
   return (
@@ -33,7 +32,6 @@ export default function ExchangePage() {
         >
           <ExchangeRates />
           <ExchangeHowItWorks />
-          <Reviews />
         </aside>
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { subscribeOrdersInbox } from "@/src/utils/supabase/orders-inbox";
 import { createClient } from "@/src/utils/supabase/client";
 import { useAuth } from "@/src/app/context/AuthContext";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
@@ -16,35 +17,19 @@ export default function OperatorDashboard() {
   // Состояния для ввода реквизитов (ключ — id заявки)
   const [detailsInput, setDetailsInput] = useState<{ [key: string]: string }>({});
 
-  // Загрузка заявок из базы
   const loadOrders = async () => {
     if (!user) return;
 
-    // 1. Новые заявки (свободные)
-    const { data: pending, error: pendingError } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
-
-    if (pendingError) {
-      console.error("Ошибка загрузки новых заявок:", pendingError.message);
+    const res = await fetch("/api/orders/staff", { credentials: "include" });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      console.error("Ошибка загрузки заявок:", json?.error || res.statusText);
+      setLoading(false);
+      return;
     }
 
-    // 2. Заявки в работе у текущего оператора
-    const { data: processing, error: processingError } = await supabase
-      .from("orders")
-      .select("*")
-      .in("status", ["processing", "awaiting_payment"])
-      .eq("operator_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (processingError) {
-      console.error("Ошибка загрузки моих заявок:", processingError.message);
-    }
-
-    if (pending) setNewOrders(pending);
-    if (processing) setMyOrders(processing);
+    setNewOrders(json.pending ?? []);
+    setMyOrders(json.mine ?? []);
     setLoading(false);
   };
   useEffect(() => {
@@ -58,59 +43,40 @@ export default function OperatorDashboard() {
 
     loadOrders();
 
-    // Подписка на Realtime изменения таблицы заявок
-    const channel = supabase
-      .channel("operator-panel")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => {
-          // При любом изменении в таблице обновляем списки
-          loadOrders();
-        },
-      )
-      .subscribe();
+    const inbox = subscribeOrdersInbox(supabase, () => {
+      void loadOrders();
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      inbox.unsubscribe();
     };
   }, [user, role]);
 
-  // Функция: Взять заявку в работу (с защитой от одновременного перехвата)
   const handleClaimOrder = async (orderId: string) => {
     if (!user) return;
 
     try {
-      // Делаем атомарный запрос: обновляем только если operator_id СЕЙЧАС равен null
-      const { data, error } = await supabase
-        .from("orders")
-        .update({
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           operator_id: user.id,
-          status: "processing", // Переводим в статус "В обработке"
-        })
-        .eq("id", orderId)
-        .is("operator_id", null)
-        .select(); // Добавляем select, чтобы проверить, применились ли изменения
-
-      if (error) {
-        alert("Ошибка при взятии заявки: " + error.message);
+          status: "processing",
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        alert(json?.error || "Ошибка при взятии заявки");
         return;
       }
-
-      // Если данные не вернулись, значит кто-то другой успел нажать раньше (eq.is не сработал)
-      if (!data || data.length === 0) {
-        alert("Эту заявку уже забрал другой оператор!");
-        return;
-      }
-
-      console.log("Заявка успешно перехвачена оператором:", user.id);
+      await loadOrders();
     } catch (err) {
       console.error(err);
       alert("Произошла системная ошибка.");
     }
   };
 
-  // Функция: Отправить реквизиты пользователю
   const handleSendDetails = async (orderId: string) => {
     const details = detailsInput[orderId];
     if (!details || details.trim() === "") {
@@ -118,19 +84,21 @@ export default function OperatorDashboard() {
       return;
     }
 
-    const { error } = await supabase
-      .from("orders")
-      .update({
+    const res = await fetch(`/api/orders/${orderId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         payment_details: details,
-        status: "awaiting_payment", // Меняем статус на "Ожидание оплаты"
-      })
-      .eq("id", orderId);
-
-    if (error) {
-      alert("Не удалось отправить реквизиты: " + error.message);
+        status: "awaiting_payment",
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      alert(json?.error || "Не удалось отправить реквизиты");
     } else {
-      // Очищаем инпут для этой заявки
       setDetailsInput((prev) => ({ ...prev, [orderId]: "" }));
+      await loadOrders();
     }
   };
 

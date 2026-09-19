@@ -5,10 +5,13 @@ import { getUserFast } from "@/src/utils/supabase/get-user-fast";
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import { clientPaysWithCrypto } from "@/src/utils/orders/payment-details";
 import { stripOrderInternalFields } from "@/src/utils/orders/operator-snapshot";
+import { createReceiptsSignedUrl } from "@/src/utils/orders/receipt-path";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 import {
   isAllowedReceiptFile,
-  receiptContentType,
-  receiptFileExt,
+  isAllowedReceiptBytes,
+  receiptContentTypeFromBytes,
+  receiptFileExtFromBytes,
   receiptRejectMessage,
   receiptUploadKind,
 } from "@/src/utils/orders/receipt-file";
@@ -16,6 +19,51 @@ import {
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
+
+export async function GET(_request: Request, context: RouteContext) {
+  try {
+    const { id } = await context.params;
+    const supabase = await createClient();
+    const user = await getUserFast(supabase);
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const admin = createAdminClient();
+    const [{ data: order }, { data: profile }] = await Promise.all([
+      admin.from("orders").select("*").eq("id", id).maybeSingle(),
+      admin.from("profiles").select("role, staff_active").eq("id", user.id).maybeSingle(),
+    ]);
+
+    if (!order) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const isStaff =
+      profile?.role === "operator" || profile?.role === "admin";
+    const isOwner = order.user_id === user.id;
+    if (!isOwner && isStaff && !isStaffOnDuty(profile)) {
+      return staffInactiveResponse();
+    }
+    if (!isOwner && !isStaff) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const signedUrl = await createReceiptsSignedUrl(
+      admin,
+      order.receipt_url as string | null,
+    );
+    if (!signedUrl) {
+      return NextResponse.json({ error: "Чек не найден" }, { status: 404 });
+    }
+
+    return NextResponse.redirect(signedUrl);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
+}
 
 export async function POST(request: Request, context: RouteContext) {
   try {
@@ -72,13 +120,20 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const ext = receiptFileExt(file);
-    const filePath = `${id}-${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (!isAllowedReceiptBytes(buffer, kind)) {
+      return NextResponse.json(
+        { error: receiptRejectMessage(kind) },
+        { status: 400 },
+      );
+    }
+
+    const ext = receiptFileExtFromBytes(buffer);
+    const filePath = `${id}-${Date.now()}.${ext}`;
 
     const uploadResult = await withTimeout(
       admin.storage.from("receipts").upload(filePath, buffer, {
-        contentType: receiptContentType(file),
+        contentType: receiptContentTypeFromBytes(buffer),
         upsert: true,
       }),
       15000,
@@ -92,14 +147,10 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const {
-      data: { publicUrl },
-    } = admin.storage.from("receipts").getPublicUrl(filePath);
-
     const { data: updated, error: updateError } = await withTimeout(
       admin
         .from("orders")
-        .update({ receipt_url: publicUrl })
+        .update({ receipt_url: filePath })
         .eq("id", id)
         .select("*")
         .single(),

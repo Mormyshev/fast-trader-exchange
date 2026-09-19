@@ -11,6 +11,7 @@ import {
 import { isRecaptchaEnabled } from "@/src/utils/captcha/site-key";
 import { lockPageScroll, unlockPageScroll } from "@/src/utils/lenis-bridge";
 import PasswordInput from "@/src/components/PasswordInput/PasswordInput";
+import { isSafeInternalPath } from "@/src/utils/safe-path";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -109,7 +110,7 @@ export default function AuthModal({
         setIsLoading(false);
         onClose();
         const next =
-          redirectTo &&
+          isSafeInternalPath(redirectTo) &&
           (result.route === "/user/orders" || result.route === "/user/dashboard")
             ? redirectTo
             : result.route;

@@ -118,7 +118,7 @@ export function stripOrderInternalFields<T extends Record<string, unknown>>(
   | "operator_pseudonym_snapshot"
   | "client"
   | "operator_receipt_url"
-> {
+> & { has_payout_receipt: boolean } {
   const {
     operator_id: _operatorId,
     operator_pseudonym_snapshot: _snapshot,
@@ -126,13 +126,17 @@ export function stripOrderInternalFields<T extends Record<string, unknown>>(
     operator_receipt_url: _operatorReceipt,
     ...rest
   } = order;
-  return rest as Omit<
+  return {
+    ...rest,
+    has_payout_receipt:
+      Boolean(_operatorReceipt) && String(order.status) === "completed",
+  } as Omit<
     T,
     | "operator_id"
     | "operator_pseudonym_snapshot"
     | "client"
     | "operator_receipt_url"
-  >;
+  > & { has_payout_receipt: boolean };
 }
 
 export function formatStaffOperatorLabel(

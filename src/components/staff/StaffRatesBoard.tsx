@@ -41,7 +41,7 @@ export default function StaffRatesBoard() {
   const [saveError, setSaveError] = useState("");
 
   const load = async () => {
-    const res = await fetch("/api/crypto-rates?fresh=1", {
+    const res = await fetch("/api/crypto-rates", {
       cache: "no-store",
     });
     const data = await res.json();

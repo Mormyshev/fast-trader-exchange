@@ -1,5 +1,6 @@
 import { withTimeout } from "@/src/utils/supabase/with-timeout";
 import type { ChatMessage } from "@/src/utils/chat/types";
+import { signChatMessages } from "@/src/utils/chat/attachment";
 
 export const STAFF_TEAM_CHAT_READ_EVENT = "staff-team-chat-read";
 
@@ -230,6 +231,11 @@ export async function loadLatestStaffMessages(
       map.set(unique[index], result.data as StaffChatMessage);
     }
   });
+
+  const signed = await signChatMessages(admin, [...map.values()]);
+  signed.forEach((message) => {
+    map.set(message.conversation_id, message);
+  });
   return map;
 }
 
@@ -274,7 +280,10 @@ export async function attachSendersToMessages(
     { data: [], error: null } as any,
   );
   const profiles = staffProfilesMap((data ?? []) as StaffChatPeer[]);
-  return messages.map((message) => attachMessageSender(message, profiles));
+  return signChatMessages(
+    admin,
+    messages.map((message) => attachMessageSender(message, profiles)),
+  );
 }
 
 export { MESSAGE_SELECT };

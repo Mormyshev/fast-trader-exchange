@@ -9,11 +9,15 @@ import { getOrCreateClientConversation } from "@/src/utils/chat/client-conversat
 import { broadcastChatConversation } from "@/src/utils/supabase/broadcast-support";
 import { enrichConversations } from "@/src/utils/chat/enrich-conversation";
 import { hideInternalStaffNicks } from "@/src/utils/chat/staff-chat";
+import { isStaffOnDuty, staffInactiveResponse } from "@/src/utils/staff/duty";
 
 export async function GET() {
   try {
     const staff = await requireStaff();
     if (staff) {
+      if (!isStaffOnDuty(staff.profile)) {
+        return staffInactiveResponse();
+      }
       const { data, error } = await withTimeout(
         staff.admin
           .from("chat_conversations")
