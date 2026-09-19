@@ -24,7 +24,7 @@ const advantages = [
 export default function Advantages() {
   return (
     <section className="w-full">
-      <h2 className="text-center text-2xl sm:text-[28px] font-bold tracking-tight text-zinc-900">
+      <h2 className="text-center text-2xl sm:text-[28px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
         Почему выбирают FastTraderExchange
       </h2>
 
@@ -34,15 +34,15 @@ export default function Advantages() {
           return (
             <article
               key={item.title}
-              className="flex flex-col items-center rounded-2xl bg-white px-6 py-8 text-center shadow-[0_4px_24px_rgba(15,23,42,0.04)]"
+              className="flex flex-col items-center rounded-2xl bg-white px-6 py-8 text-center shadow-[0_4px_24px_rgba(15,23,42,0.04)] dark:bg-zinc-900"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFF4C2]">
                 <Icon className="h-6 w-6 text-[#C9A227] stroke-[1.75]" />
               </div>
-              <h3 className="mt-5 text-[15px] font-bold tracking-tight text-zinc-900">
+              <h3 className="mt-5 text-[15px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
                 {item.title}
               </h3>
-              <p className="mt-2 max-w-[16rem] text-sm font-medium leading-relaxed text-zinc-600">
+              <p className="mt-2 max-w-[16rem] text-sm font-medium leading-relaxed text-zinc-600 dark:text-zinc-400">
                 {item.description}
               </p>
             </article>

@@ -88,8 +88,8 @@ export default function ExchangeRates() {
   const hiddenCount = rows.length - VISIBLE_COUNT;
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-      <h3 className="text-zinc-900 font-bold text-xl mb-4">Курсы</h3>
+    <div className="bg-white p-6 rounded-2xl shadow-[0_4px_24px_rgba(15,23,42,0.04)] dark:bg-zinc-900">
+      <h3 className="text-zinc-900 font-bold text-xl mb-4 dark:text-zinc-50">Курсы</h3>
 
       <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-[11px] font-bold text-zinc-400 px-1 mb-2">
         <span>Актив</span>
@@ -101,7 +101,7 @@ export default function ExchangeRates() {
         {visibleRows.map((row) => (
           <div
             key={row.id}
-            className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center rounded-2xl px-2 py-2.5 hover:bg-zinc-50 transition-colors"
+            className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center rounded-2xl px-2 py-2.5 hover:bg-zinc-50 transition-colors dark:hover:bg-zinc-800"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <CurrencyIcon src={row.iconSrc} alt={row.code} size={28} />

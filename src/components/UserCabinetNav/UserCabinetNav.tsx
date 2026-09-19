@@ -56,7 +56,7 @@ export default function UserCabinetNav() {
               className={`inline-flex h-10 items-center rounded-full px-3 lg:px-4 text-sm font-semibold transition-colors ${
                 active
                   ? "bg-[#FFF4C2] text-zinc-900"
-                  : "text-gray-700 hover:bg-zinc-50 hover:text-zinc-900"
+                  : "text-gray-700 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
               }`}
             >
               {item.label}

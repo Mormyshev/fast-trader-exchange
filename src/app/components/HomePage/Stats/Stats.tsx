@@ -10,7 +10,7 @@ const stats = [
 export default function Stats() {
   return (
     <section className="w-full">
-      <h2 className="text-center text-2xl sm:text-[28px] font-bold tracking-tight text-zinc-900">
+      <h2 className="text-center text-2xl sm:text-[28px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
         FastTraderExchange в цифрах
       </h2>
 
@@ -18,9 +18,9 @@ export default function Stats() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-2xl bg-white px-3 py-6 text-center shadow-[0_4px_24px_rgba(15,23,42,0.04)]"
+            className="rounded-2xl bg-white px-3 py-6 text-center shadow-[0_4px_24px_rgba(15,23,42,0.04)] dark:bg-zinc-900"
           >
-            <p className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 tabular-nums">
+            <p className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 tabular-nums dark:text-zinc-50">
               {stat.value}
             </p>
             <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-400 leading-snug">

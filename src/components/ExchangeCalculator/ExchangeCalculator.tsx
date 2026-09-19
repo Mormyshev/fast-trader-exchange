@@ -256,7 +256,7 @@ export default function ExchangeCalculator() {
     `no-spin h-14 w-full rounded-full border-2 px-6 text-xl font-bold tabular-nums outline-none transition-colors ${
       invalid
         ? "border-rose-400 bg-rose-50 text-rose-600 focus:ring-2 focus:ring-rose-200"
-        : "border-[#FFDD2D] bg-[#FFFEEB] text-zinc-900 focus:ring-2 focus:ring-[#FFDD2D]/40 dark:text-zinc-100"
+        : "border-[#FFDD2D] bg-[#FFFEEB] text-zinc-900 focus:ring-2 focus:ring-[#FFDD2D]/40"
     }`;
 
   return (

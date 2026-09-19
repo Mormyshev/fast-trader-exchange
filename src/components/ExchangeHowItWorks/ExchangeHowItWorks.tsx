@@ -19,8 +19,8 @@ const STEPS = [
 
 export default function ExchangeHowItWorks() {
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-      <h3 className="text-zinc-900 font-bold text-xl mb-4">Как проходит обмен</h3>
+    <div className="bg-white p-6 rounded-2xl shadow-[0_4px_24px_rgba(15,23,42,0.04)] dark:bg-zinc-900">
+      <h3 className="text-zinc-900 font-bold text-xl mb-4 dark:text-zinc-50">Как проходит обмен</h3>
 
       <ol className="space-y-4">
         {STEPS.map((step, index) => (
@@ -29,7 +29,7 @@ export default function ExchangeHowItWorks() {
               {index + 1}
             </span>
             <div className="min-w-0 pt-0.5">
-              <div className="text-sm font-bold text-zinc-900 leading-snug">
+              <div className="text-sm font-bold text-zinc-900 leading-snug dark:text-zinc-50">
                 {step.title}
               </div>
               <p className="text-xs font-medium text-zinc-500 leading-relaxed mt-1">

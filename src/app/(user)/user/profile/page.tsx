@@ -26,7 +26,7 @@ const FILE_ACCEPT = ".gif,.jpg,.jpeg,.jpe,.png,image/gif,image/jpeg,image/png";
 const FILE_HINT = "(.GIF, .JPG, .JPEG, .JPE, .PNG, макс. 20 МБ)";
 
 const INPUT_CLASS =
-    "mt-1 block h-12 w-full rounded-xl border-2 border-[#FFDD2D] bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#e6c628] focus:ring-2 focus:ring-[#FFDD2D]/40 disabled:cursor-not-allowed disabled:opacity-60";
+    "mt-1 block h-12 w-full rounded-xl border-2 border-[#FFDD2D] bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#e6c628] focus:ring-2 focus:ring-[#FFDD2D]/40 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-900 dark:text-zinc-100";
 
 function inputClass(hasError: boolean) {
     return hasError
@@ -56,6 +56,19 @@ function statusLabel(status: VerificationStatus) {
     }
 }
 
+function verificationStatusBadgeClass(status: VerificationStatus) {
+    switch (status) {
+        case "pending":
+            return "bg-amber-100 text-amber-800";
+        case "verified":
+            return "bg-emerald-100 text-emerald-800";
+        case "rejected":
+            return "bg-rose-100 text-rose-800";
+        default:
+            return "bg-zinc-100 text-zinc-700";
+    }
+}
+
 function FilePicker({
     label,
     required,
@@ -81,7 +94,7 @@ function FilePicker({
         <div
             className={`flex h-full min-h-0 flex-col justify-center rounded-xl border-2 px-3 py-2.5 ${
                 error
-                    ? "border-rose-400 bg-rose-50/40"
+                    ? "border-rose-400 bg-rose-50/40 dark:bg-rose-950/30"
                     : "border-[#FFDD2D] bg-[#FFFEF6]"
             }`}
         >
@@ -106,7 +119,7 @@ function FilePicker({
                             />
                         </div>
                     ) : null}
-                    <label className="inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-[#FFDD2D] bg-white px-4 text-xs font-bold text-zinc-900 transition-colors hover:bg-[#FFF8D6]">
+                    <label className="inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-[#FFDD2D] bg-[#FFDD2D] px-4 text-xs font-bold text-zinc-900 transition-colors hover:bg-[#e6c628]">
                         Выбрать файл
                         <input
                             type="file"
@@ -826,8 +839,12 @@ export default function ProfilePage() {
                                               })
                                             : "—"}
                                     </td>
-                                    <td className="px-5 py-3.5 font-semibold text-zinc-800">
-                                        {statusLabel(verificationStatus)}
+                                    <td className="px-5 py-3.5">
+                                        <span
+                                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${verificationStatusBadgeClass(verificationStatus)}`}
+                                        >
+                                            {statusLabel(verificationStatus)}
+                                        </span>
                                     </td>
                                 </tr>
                             ) : (

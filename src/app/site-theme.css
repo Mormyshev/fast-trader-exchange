@@ -1,0 +1,128 @@
+html.dark:not(.staff-dark) {
+  color-scheme: dark;
+}
+
+html.dark:not(.staff-dark) .bg-white,
+html.dark:not(.staff-dark) .bg-white\/80,
+html.dark:not(.staff-dark) .bg-white\/90,
+html.dark:not(.staff-dark) .bg-white\/95 {
+  background-color: rgb(24 24 27);
+}
+
+html.dark:not(.staff-dark) .bg-\[\#F4F5F7\] {
+  background-color: rgb(9 9 11);
+}
+
+html.dark:not(.staff-dark) .bg-zinc-50,
+html.dark:not(.staff-dark) .bg-zinc-50\/80,
+html.dark:not(.staff-dark) .bg-zinc-50\/50,
+html.dark:not(.staff-dark) .bg-zinc-100,
+html.dark:not(.staff-dark) .bg-zinc-100\/70,
+html.dark:not(.staff-dark) .bg-gray-50,
+html.dark:not(.staff-dark) .bg-gray-50\/50 {
+  background-color: rgb(39 39 42);
+}
+
+html.dark:not(.staff-dark) .bg-\[\#FFFEEB\],
+html.dark:not(.staff-dark) .bg-\[\#FFFDE7\],
+html.dark:not(.staff-dark) .bg-\[\#FFF8D6\],
+html.dark:not(.staff-dark) .bg-\[\#FFFDF3\],
+html.dark:not(.staff-dark) .bg-\[\#FFF3B0\],
+html.dark:not(.staff-dark) .bg-\[\#FFFEF6\],
+html.dark:not(.staff-dark) .bg-\[\#FFF9CE\] {
+  background-color: rgb(39 35 24);
+}
+
+html.dark:not(.staff-dark) .hover\:bg-zinc-50:hover,
+html.dark:not(.staff-dark) .hover\:bg-zinc-50\/80:hover,
+html.dark:not(.staff-dark) .hover\:bg-zinc-100:hover,
+html.dark:not(.staff-dark) .hover\:bg-white:hover,
+html.dark:not(.staff-dark) .hover\:bg-gray-50:hover,
+html.dark:not(.staff-dark) .hover\:bg-\[\#FFF8D6\]:hover,
+html.dark:not(.staff-dark) .hover\:bg-\[\#FFF4C2\]:hover {
+  background-color: rgb(63 63 70);
+}
+
+html.dark:not(.staff-dark) .text-zinc-900,
+html.dark:not(.staff-dark) .text-zinc-800,
+html.dark:not(.staff-dark) .text-gray-900,
+html.dark:not(.staff-dark) .text-gray-800,
+html.dark:not(.staff-dark) .text-\[\#2A2A2A\] {
+  color: rgb(244 244 245);
+}
+
+html.dark:not(.staff-dark) .hover\:text-zinc-900:hover,
+html.dark:not(.staff-dark) .hover\:text-gray-900:hover {
+  color: rgb(244 244 245);
+}
+
+html.dark:not(.staff-dark) .text-zinc-700,
+html.dark:not(.staff-dark) .text-gray-700 {
+  color: rgb(228 228 231);
+}
+
+html.dark:not(.staff-dark) .text-zinc-600,
+html.dark:not(.staff-dark) .text-gray-600 {
+  color: rgb(212 212 216);
+}
+
+html.dark:not(.staff-dark) .text-zinc-500,
+html.dark:not(.staff-dark) .text-gray-500 {
+  color: rgb(161 161 170);
+}
+
+/* Brand yellow stays yellow — keep dark type on it. */
+html.dark:not(.staff-dark) :is(.bg-\[\#FFDD2D\], .bg-\[\#FFF4C2\]).text-zinc-900,
+html.dark:not(.staff-dark) :is(.bg-\[\#FFDD2D\], .bg-\[\#FFF4C2\]).text-zinc-800,
+html.dark:not(.staff-dark) :is(.bg-\[\#FFDD2D\], .bg-\[\#FFF4C2\]).text-zinc-700,
+html.dark:not(.staff-dark) :is(.bg-\[\#FFDD2D\], .bg-\[\#FFF4C2\]).text-zinc-600,
+html.dark:not(.staff-dark) :is(.bg-\[\#FFDD2D\], .bg-\[\#FFF4C2\])
+  :is(
+    .text-zinc-900,
+    .text-zinc-800,
+    .text-zinc-700,
+    .text-zinc-600,
+    .text-gray-900
+  ) {
+  color: rgb(24 24 27);
+}
+
+html.dark:not(.staff-dark) .bg-\[\#FFDD2D\] .text-zinc-900\/40 {
+  color: rgb(24 24 27 / 0.4);
+}
+
+html.dark:not(.staff-dark) .bg-\[\#FFDD2D\] .text-zinc-900\/45 {
+  color: rgb(24 24 27 / 0.45);
+}
+
+html.dark:not(.staff-dark) .bg-\[\#FFDD2D\] .text-zinc-900\/55 {
+  color: rgb(24 24 27 / 0.55);
+}
+
+html.dark:not(.staff-dark) .bg-\[\#FFDD2D\] .decoration-zinc-900\/25,
+html.dark:not(.staff-dark) .bg-\[\#FFDD2D\] .hover\:decoration-zinc-900:hover {
+  text-decoration-color: rgb(24 24 27);
+}
+
+html.dark:not(.staff-dark) .border-zinc-100,
+html.dark:not(.staff-dark) .border-zinc-200,
+html.dark:not(.staff-dark) .border-zinc-200\/80,
+html.dark:not(.staff-dark) .border-gray-100,
+html.dark:not(.staff-dark) .border-gray-200,
+html.dark:not(.staff-dark) .divide-zinc-100 > :not([hidden]) ~ :not([hidden]),
+html.dark:not(.staff-dark) .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(63 63 70);
+}
+
+html.dark:not(.staff-dark) table tbody tr:hover {
+  background-color: transparent !important;
+}
+
+html.dark:not(.staff-dark) table tbody tr:hover > td,
+html.dark:not(.staff-dark) table tbody tr:hover > th {
+  background-color: rgb(72 72 80);
+}
+
+html.dark:not(.staff-dark) table :is(td, th, tr)[class*="border"] {
+  border-color: rgb(113 113 122);
+}

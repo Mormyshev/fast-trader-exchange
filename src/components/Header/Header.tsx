@@ -17,6 +17,7 @@ import {
 import UserCabinetNav, {
     USER_NAV_ITEMS,
 } from "@/src/components/UserCabinetNav/UserCabinetNav";
+import SiteThemeSelect from "@/src/components/SiteTheme/SiteThemeSelect";
 
 function getStaffHome(role: string) {
     return {
@@ -70,7 +71,8 @@ export default function Header() {
                             </div>
                         </NextLink>
 
-                        <div className="hidden md:flex items-center space-x-6">
+                        <div className="hidden md:flex items-center space-x-4 lg:space-x-6">
+                            <SiteThemeSelect />
                             {role === "guest" ? (
                                 <div className="flex items-center space-x-3">
                                     <Button
@@ -107,6 +109,7 @@ export default function Header() {
                         </div>
 
                         <div className="flex items-center space-x-2 md:hidden">
+                            <SiteThemeSelect />
                             <Sheet open={isOpen} onOpenChange={setIsOpen}>
                                 <SheetTrigger asChild>
                                     <Button

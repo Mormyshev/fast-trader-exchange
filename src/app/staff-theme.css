@@ -28,9 +28,83 @@
 }
 
 :is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-zinc-50:hover,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-zinc-50\/80:hover,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-zinc-50\/50:hover,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-gray-50\/50:hover,
 :is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-white:hover,
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-zinc-100:hover {
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-zinc-100:hover,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-zinc-200:hover,
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-\[\#FFFDF3\]:hover {
   background-color: rgb(39 39 42);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-amber-50\/70:hover {
+  background-color: rgb(120 53 15 / 0.5);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-blue-50\/70:hover {
+  background-color: rgb(30 58 138 / 0.45);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-violet-50\/70:hover {
+  background-color: rgb(76 29 149 / 0.45);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-teal-50\/70:hover {
+  background-color: rgb(19 78 74 / 0.5);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-emerald-50\/40 {
+  background-color: rgb(6 78 59 / 0.35);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-emerald-50\/70:hover {
+  background-color: rgb(6 78 59 / 0.55);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-rose-50\/40 {
+  background-color: rgb(136 19 55 / 0.32);
+}
+
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .hover\:bg-rose-50\/70:hover {
+  background-color: rgb(136 19 55 / 0.5);
+}
+
+.staff-app.dark table :is(td, th, tr)[class*="border"] {
+  border-color: rgb(113 113 122);
+}
+
+.staff-app.dark table tbody tr:hover {
+  background-color: transparent !important;
+}
+
+.staff-app.dark table tbody tr:hover > td,
+.staff-app.dark table tbody tr:hover > th {
+  background-color: rgb(72 72 80);
+}
+
+.staff-app.dark table tbody tr.hover\:bg-amber-50\/70:hover > td {
+  background-color: rgb(120 53 15 / 0.5);
+}
+
+.staff-app.dark table tbody tr.hover\:bg-blue-50\/70:hover > td {
+  background-color: rgb(30 58 138 / 0.45);
+}
+
+.staff-app.dark table tbody tr.hover\:bg-violet-50\/70:hover > td {
+  background-color: rgb(76 29 149 / 0.45);
+}
+
+.staff-app.dark table tbody tr.hover\:bg-teal-50\/70:hover > td {
+  background-color: rgb(19 78 74 / 0.5);
+}
+
+.staff-app.dark table tbody tr.hover\:bg-emerald-50\/70:hover > td {
+  background-color: rgb(6 78 59 / 0.55);
+}
+
+.staff-app.dark table tbody tr.hover\:bg-rose-50\/70:hover > td {
+  background-color: rgb(136 19 55 / 0.5);
 }
 
 :is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .focus\:bg-white:focus,
@@ -88,42 +162,9 @@
   background-color: rgb(234 179 8 / 0.22);
 }
 
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-200,
 :is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-200\/80,
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-200\/50,
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-100 {
+:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-amber-200\/50 {
   border-color: rgb(245 158 11 / 0.35);
-}
-
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-emerald-50 {
-  background-color: rgb(6 78 59 / 0.45);
-}
-
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-emerald-700,
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-emerald-600 {
-  color: rgb(110 231 183);
-}
-
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-emerald-100 {
-  border-color: rgb(16 185 129 / 0.28);
-}
-
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-rose-50,
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-rose-100 {
-  background-color: rgb(136 19 55 / 0.4);
-}
-
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-rose-700,
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .text-rose-600 {
-  color: rgb(251 113 133);
-}
-
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .border-rose-200 {
-  border-color: rgb(244 63 94 / 0.35);
-}
-
-:is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-amber-50 {
-  background-color: rgb(120 53 15 / 0.35);
 }
 
 :is(.staff-app.dark, html.staff-dark [data-slot="dialog-content"]) .bg-\[\#FFDD2D\],
